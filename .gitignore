@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# User templates, formulas and generated office files
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+*.doc
+*.docx
+~$*
+
+# Optional local logs and artifacts
+*.log
