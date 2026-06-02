@@ -74,6 +74,15 @@ F24 value is read from merged cells in row 17 on `Strona 3`:
 For `CC-04`, type is read from merged cells in row 14 (`S:T14`, then right by 2 columns).
 Detected tags: `LG`, `LD`, `PD`, `PG`.
 
+For `CC-04`, data filling in working sheets is also adjusted:
+
+- `D15:D19` comes from column `O` (rows per block, e.g. `O20:O24`).
+- `C15:C19` column depends on the detected type:
+   - `LG` -> column `K`
+   - `PG` -> column `L`
+   - `LD` -> column `M`
+   - `PD` -> column `N`
+
 Per working sheet (excluding `Wyniki`) the script fills:
 
 - `LG` -> `K11=Pt100-09`, `K12=1586A-02`, `K13=101`, `K17=CC-04-L`

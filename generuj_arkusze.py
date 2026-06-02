@@ -71,7 +71,7 @@ NR_SW_POCZATKOWY    = 780   # numer świadectwa pierwszej kopii (771, 772, ... d
 #                       korzysta z juz istniejacych kopii (gdy GENERUJ_WORD=True).
 # - GENERUJ_WORD=False : pomija Etap 7 (Word).
 GENERUJ_EXCEL = True
-GENERUJ_WORD  = True
+GENERUJ_WORD  = False
 
 # Pliki linkowane wymagane do przeliczenia formul kalibracyjnych (D246/F246/G246).
 # Muszą być otwarte w tej samej sesji Excel — podaj dokładne nazwy z rozszerzeniem.
@@ -99,6 +99,17 @@ MAPOWANIE_TYPU_CC04 = {
     "PD": {"K11": "Pt100-18", "K12": "1586A-02", "K13": "107", "K17": "CC-04-P"},
     "PG": {"K11": "Pt100-13", "K12": "1586A-02", "K13": "103", "K17": "CC-04-P"},
 }
+
+# Dla CC-04:
+# - C15:C19 bierzemy z kolumny zależnej od typu (LG/PG/LD/PD),
+# - D15:D19 bierzemy z kolumny O (15).
+MAPOWANIE_KOLUMNY_C_CC04 = {
+    "LG": 11,  # K
+    "PG": 12,  # L
+    "LD": 13,  # M
+    "PD": 14,  # N
+}
+KOLUMNA_D_CC04_S3 = 15  # O
 
 # Filtr kolorow danych z arkusza Strona 3:
 # - komorki zielone (#CCFFCC) sa brane,
@@ -661,21 +672,42 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
             for j in range(n_kopii):
                 col_e = start_col_e_eff + j * krok
                 col_f = start_col_f_eff + j * krok
+                col_c_cc04 = None
+                col_d_cc04 = KOLUMNA_D_CC04_S3
 
                 if protokol_cc04 and j < len(dane_s2):
                     raw_typ = _wartosc_z_scalonej_komorki_xlwings(ws3.cells(WIERSZ_TYPU_CC04_S3, col_e))
                     dane_s2[j]["CC04_RAW"] = _cell_to_str(raw_typ)
                     dane_s2[j]["CC04_TAG"] = _wykryj_tag_cc04(raw_typ)
+                    tag = dane_s2[j]["CC04_TAG"]
+                    if tag:
+                        col_c_cc04 = MAPOWANIE_KOLUMNY_C_CC04.get(str(tag).upper())
 
                 zakl = []
                 for i in range(n_zakladek):
                     r0 = start_s3 + i * blok
                     e_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, col_e)) for k in range(blok)]
                     f_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, col_f)) for k in range(blok)]
-                    zakl.append({
-                        "E_dane": e_dane,
-                        "F_dane": f_dane,
-                    })
+
+                    if protokol_cc04:
+                        # Dla CC-04 C i D sa rowniez zalezne od kopii (po typie z wiersza 14).
+                        if col_c_cc04 is None:
+                            # Bez rozpoznanego typu zachowaj bezpieczny fallback do L.
+                            c_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, 12)) for k in range(blok)]
+                        else:
+                            c_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, col_c_cc04)) for k in range(blok)]
+                        d_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, col_d_cc04)) for k in range(blok)]
+                        zakl.append({
+                            "C_dane": c_dane,
+                            "D_dane": d_dane,
+                            "E_dane": e_dane,
+                            "F_dane": f_dane,
+                        })
+                    else:
+                        zakl.append({
+                            "E_dane": e_dane,
+                            "F_dane": f_dane,
+                        })
                 dane_ef.append(zakl)
 
         # --- Strona 3: F24 dla arkusza Wyniki, per kopia (wiersz 17) ---
@@ -1078,28 +1110,40 @@ def dostosuj_zakladki_i_wypelnij(sciezka_pliku, dane_zakladek, dane_ef_kopia, ch
     for i, ws_name in enumerate(working_final):
         ws = wb[ws_name]
         zd = dane_zakladek[i]
+        ef = dane_ef_kopia[i] if i < len(dane_ef_kopia) else None
 
-        # C15:C19 ← L_dane (stałe dla wszystkich kopii)
+        # C15:C19 ← domyslnie L_dane; dla CC-04 mozliwe per-kopia C_dane.
         for offset, addr in enumerate(ADRESY_C):
-            val = zd["L_dane"][offset]
+            val = None
+            if isinstance(ef, dict):
+                c_dane = ef.get("C_dane")
+                if isinstance(c_dane, list) and offset < len(c_dane):
+                    val = c_dane[offset]
+            if val is None:
+                val = zd["L_dane"][offset]
             if val is not None:
                 ws[addr] = val
 
-        # D15:D19 ← M_dane (stałe dla wszystkich kopii)
+        # D15:D19 ← domyslnie M_dane; dla CC-04 mozliwe per-kopia D_dane.
         for offset, addr in enumerate(ADRESY_D):
-            val = zd["M_dane"][offset]
+            val = None
+            if isinstance(ef, dict):
+                d_dane = ef.get("D_dane")
+                if isinstance(d_dane, list) and offset < len(d_dane):
+                    val = d_dane[offset]
+            if val is None:
+                val = zd["M_dane"][offset]
             if val is not None:
                 ws[addr] = val
 
         # E15:E19 i F15:F19 ← dane zależne od numeru kopii
-        if i < len(dane_ef_kopia):
-            ef = dane_ef_kopia[i]
+        if isinstance(ef, dict):
             for offset, addr in enumerate(ADRESY_E):
-                val = ef["E_dane"][offset]
+                val = ef.get("E_dane", [None] * len(ADRESY_E))[offset]
                 if val is not None:
                     ws[addr] = val
             for offset, addr in enumerate(ADRESY_F):
-                val = ef["F_dane"][offset]
+                val = ef.get("F_dane", [None] * len(ADRESY_F))[offset]
                 if val is not None:
                     ws[addr] = val
 
@@ -1189,25 +1233,39 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         for i, ws_name in enumerate(working_final):
             ws = wb.sheets[ws_name]
             zd = dane_zakladek[i]
+            ef = dane_ef_kopia[i] if i < len(dane_ef_kopia) else None
 
             for offset in range(5):
-                val = zd["L_dane"][offset]
+                val = None
+                if isinstance(ef, dict):
+                    c_dane = ef.get("C_dane")
+                    if isinstance(c_dane, list) and offset < len(c_dane):
+                        val = c_dane[offset]
+                if val is None:
+                    val = zd["L_dane"][offset]
                 if val is not None:
                     ws.cells(15 + offset, 3).value = val   # C15:C19
 
             for offset in range(5):
-                val = zd["M_dane"][offset]
+                val = None
+                if isinstance(ef, dict):
+                    d_dane = ef.get("D_dane")
+                    if isinstance(d_dane, list) and offset < len(d_dane):
+                        val = d_dane[offset]
+                if val is None:
+                    val = zd["M_dane"][offset]
                 if val is not None:
                     ws.cells(15 + offset, 4).value = val   # D15:D19
 
-            if i < len(dane_ef_kopia):
-                ef = dane_ef_kopia[i]
+            if isinstance(ef, dict):
+                e_dane = ef.get("E_dane")
+                f_dane = ef.get("F_dane")
                 for offset in range(5):
-                    val = ef["E_dane"][offset]
+                    val = e_dane[offset] if isinstance(e_dane, list) and offset < len(e_dane) else None
                     if val is not None:
                         ws.cells(15 + offset, 5).value = val  # E15:E19
                 for offset in range(5):
-                    val = ef["F_dane"][offset]
+                    val = f_dane[offset] if isinstance(f_dane, list) and offset < len(f_dane) else None
                     if val is not None:
                         ws.cells(15 + offset, 6).value = val  # F15:F19
 
