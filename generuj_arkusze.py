@@ -43,7 +43,7 @@ except ImportError:
 FOLDER           = r"."   # folder z plikami xlsx; "." = ten sam co skrypt
                            # możesz podać pełną ścieżkę, np. r"C:\Moje\Pliki"
 
-PROTOKOL_PLIK    = "116_LA_TH_2026 - protokół CC.xlsx"
+PROTOKOL_PLIK    = "150_LA_TH_2026 - protokół CC-04 D.xlsx"
 SZABLON_PLIK     = "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.11 z 29.08.2025 - 1 - RH (CC).xlsx"
 
 ARKUSZ_STRONA2   = "Strona 2"   # arkusz z listą kopii do wygenerowania
@@ -64,7 +64,14 @@ PODPISUJACY_1    = "Artsiom Azhdzer"  # B230:C230 (scalona) — podpisujacy z le
 PODPISUJACY_2    = "Marek Szpakowski" # H230:I230 (scalona) — podpisujacy z prawej
 
 SZABLON_WORD        = "xxx_yyy_LA_TH_2026 - tylko temp.docx"  # szablon Word; "" = pomiń Etap 7
-NR_SW_POCZATKOWY    = 770   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
+NR_SW_POCZATKOWY    = 780   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
+
+# Sterowanie etapami:
+# - GENERUJ_EXCEL=False: nie tworzy/nie modyfikuje kopii Excel,
+#                       korzysta z juz istniejacych kopii (gdy GENERUJ_WORD=True).
+# - GENERUJ_WORD=False : pomija Etap 7 (Word).
+GENERUJ_EXCEL = True
+GENERUJ_WORD  = True
 
 # Pliki linkowane wymagane do przeliczenia formul kalibracyjnych (D246/F246/G246).
 # Muszą być otwarte w tej samej sesji Excel — podaj dokładne nazwy z rozszerzeniem.
@@ -72,6 +79,38 @@ PLIKI_LINKOWANE     = [
     "Obliczenia tdp, RH, C.xls",
     "Wzory.xls",
 ]
+
+# Docelowe sciezki serwerowe dla linkow zewnetrznych, ktore maja byc
+# przywrocone na koncu (po wypelnieniu i odczycie kalibracji).
+LINKI_SERWEROWE = {
+    "Obliczenia tdp, RH, C.xls": r"\\plum4\LabPomiarowe\Obliczenia tdp, RH, C.xls",
+    "Wzory.xls": r"\\plum4\LabPomiarowe\Wzory.xls",
+}
+
+# Dla protokolow CC-04 dane E/F startuja od S/T zamiast Q/R.
+PRZESUNIECIE_STARTU_KOL_CC04 = 2
+WIERSZ_TYPU_CC04_S3 = 14
+
+# Mapowanie typu z S14:T14 (kolejne kopie: U14:V14, W14:X14, ...)
+# na stale wartosci zapisywane do K11/K12/K13/K17 w zakladkach roboczych.
+MAPOWANIE_TYPU_CC04 = {
+    "LG": {"K11": "Pt100-09", "K12": "1586A-02", "K13": "101", "K17": "CC-04-L"},
+    "LD": {"K11": "Pt100-01", "K12": "1586A-02", "K13": "105", "K17": "CC-04-L"},
+    "PD": {"K11": "Pt100-18", "K12": "1586A-02", "K13": "107", "K17": "CC-04-P"},
+    "PG": {"K11": "Pt100-13", "K12": "1586A-02", "K13": "103", "K17": "CC-04-P"},
+}
+
+# Filtr kolorow danych z arkusza Strona 3:
+# - komorki zielone (#CCFFCC) sa brane,
+# - komorki szare (#BFBFBF) sa pomijane,
+# - pozostale kolory wg BIERZ_INNE_KOLORY_S3.
+FILTRUJ_KOLOR_S3      = True
+KOLOR_AKTYWNY_S3      = "#CCFFCC"
+KOLOR_POMIJANY_S3     = "#BFBFBF"
+BIERZ_INNE_KOLORY_S3  = False
+# Jesli True, kopia dostaje tylko te zakladki, ktore maja dane E/F
+# (po filtracji kolorow) dla konkretnej kopii.
+USUWAJ_PUSTE_BLOKI_KOPII_S3 = True
 
 # =============================================================================
 # FUNKCJE POMOCNICZE
@@ -90,6 +129,256 @@ def _cell_to_str(value):
     if isinstance(value, float):
         return str(int(value)) if value == int(value) else str(value)
     return str(value).strip()
+
+
+def _excel_color_to_hex(ole_color):
+    """Konwertuje kolor COM Excela (OLE BGR int) do postaci #RRGGBB."""
+    if ole_color in (None, ""):
+        return None
+    try:
+        kolor = int(ole_color)
+    except (TypeError, ValueError):
+        return None
+
+    r = kolor & 0xFF
+    g = (kolor >> 8) & 0xFF
+    b = (kolor >> 16) & 0xFF
+    return f"#{r:02X}{g:02X}{b:02X}"
+
+
+def _kolor_komorki_hex_xlwings(cell):
+    """Zwraca kolor komorki jako #RRGGBB (DisplayFormat->Interior fallback)."""
+    try:
+        ole_color = cell.api.DisplayFormat.Interior.Color
+    except Exception:
+        try:
+            ole_color = cell.api.Interior.Color
+        except Exception:
+            ole_color = None
+    return _excel_color_to_hex(ole_color)
+
+
+def _czy_bierz_dane_po_kolorze(hex_color):
+    """Decyduje czy pobierac wartosc komorki na podstawie koloru."""
+    if not FILTRUJ_KOLOR_S3:
+        return True
+
+    if hex_color is None:
+        return BIERZ_INNE_KOLORY_S3
+
+    kolor = str(hex_color).upper()
+    if kolor == KOLOR_AKTYWNY_S3.upper():
+        return True
+    if kolor == KOLOR_POMIJANY_S3.upper():
+        return False
+    return BIERZ_INNE_KOLORY_S3
+
+
+def _wartosc_s3_po_kolorze_xlwings(cell):
+    """Zwraca wartosc komorki tylko gdy kolor jest dozwolony przez konfiguracje."""
+    if _czy_bierz_dane_po_kolorze(_kolor_komorki_hex_xlwings(cell)):
+        return cell.value
+    return None
+
+
+def _wartosc_z_scalonej_komorki_xlwings(cell):
+    """Zwraca wartosc z obszaru scalonego (top-left), fallback: zwykla wartosc."""
+    try:
+        if cell.api.MergeCells:
+            return cell.api.MergeArea.Cells(1, 1).Value
+    except Exception:
+        pass
+    return cell.value
+
+
+def _czy_wartosc_niepusta(value):
+    """True dla wartosci, ktore traktujemy jako realne dane pomiarowe."""
+    if value is None:
+        return False
+    if isinstance(value, str) and value.strip() == "":
+        return False
+    return True
+
+
+def _czy_blok_ef_aktywny(ef_blok):
+    """Sprawdza czy blok ma co najmniej jedna niepusta wartosc w E/F."""
+    if not isinstance(ef_blok, dict):
+        return False
+
+    for key in ("E_dane", "F_dane"):
+        for value in (ef_blok.get(key) or []):
+            if _czy_wartosc_niepusta(value):
+                return True
+    return False
+
+
+def _wybierz_aktywne_bloki_kopii(dane_zakladek, dane_ef_kopia):
+    """
+    Zwraca aktywne bloki dla jednej kopii.
+    Aktywny blok = ma przynajmniej jedna wartosc E/F po filtracji kolorow.
+    """
+    aktywne_idx = [i for i, ef in enumerate(dane_ef_kopia) if _czy_blok_ef_aktywny(ef)]
+    dane_zakladek_kopia = [dane_zakladek[i] for i in aktywne_idx if i < len(dane_zakladek)]
+    dane_ef_kopia_aktywne = [dane_ef_kopia[i] for i in aktywne_idx]
+    return aktywne_idx, dane_zakladek_kopia, dane_ef_kopia_aktywne
+
+
+def _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef):
+    """Buduje liste zakladek roboczych osobno dla kazdej kopii."""
+    wynik = []
+    for dane_ef_kopia_surowe in dane_ef:
+        if USUWAJ_PUSTE_BLOKI_KOPII_S3:
+            _, dane_zakladek_kopia, _ = _wybierz_aktywne_bloki_kopii(
+                dane_zakladek,
+                dane_ef_kopia_surowe,
+            )
+        else:
+            dane_zakladek_kopia = list(dane_zakladek)
+        wynik.append(dane_zakladek_kopia)
+    return wynik
+
+
+def _formatuj_zakresy_wierszy_s3(indeksy, start_row, blok):
+    """Formatuje indeksy blokow do postaci zakresow wierszy, np. 20-24."""
+    zakresy = []
+    for i in indeksy:
+        r0 = start_row + i * blok
+        zakresy.append(f"{r0}-{r0 + blok - 1}")
+    return ", ".join(zakresy)
+
+
+def _przywroc_linki_serwerowe_xlwings(app, sciezka_pliku, linki_serwerowe):
+    """Przywraca linki zewnetrzne w skoroszycie do sciezek UNC z konfiguracji."""
+    if not linki_serwerowe:
+        return
+
+    # Mapowanie po samej nazwie pliku (case-insensitive).
+    linki_po_nazwie = {k.lower(): v for k, v in linki_serwerowe.items()}
+
+    wb = app.books.open(sciezka_pliku)
+    try:
+        try:
+            sources = wb.api.LinkSources(1)  # 1 = xlLinkTypeExcelLinks
+        except Exception as exc:
+            print(f"    [UWAGA] LinkSources: {exc}")
+            return
+
+        if not sources:
+            return
+
+        if isinstance(sources, str):
+            sources = [sources]
+
+        zmienione = 0
+        for src in sources:
+            src_str = str(src)
+            src_norm = src_str.replace("/", "\\")
+            nazwa = os.path.basename(src_norm)
+            docelowy = linki_po_nazwie.get(nazwa.lower())
+            if not docelowy:
+                continue
+
+            if src_str.lower() == docelowy.lower():
+                continue
+
+            try:
+                wb.api.ChangeLink(Name=src_str, NewName=docelowy, Type=1)
+                zmienione += 1
+                print(f"    [Link] {nazwa} -> {docelowy}")
+            except Exception as exc:
+                print(f"    [UWAGA] Nie mozna przywrocic linku '{src_str}': {exc}")
+
+        if zmienione:
+            wb.save()
+    finally:
+        wb.close()
+
+
+def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, chroniony):
+    """Czyta kalibracje z juz istniejacych kopii Excel (bez etapu tworzenia kopii)."""
+    n = len(nazwy_kopii)
+    dane_kalibracji = []
+
+    app = xw.App(visible=False, add_book=False)
+    app.api.AutomationSecurity = 1
+    app.api.DisplayAlerts = False
+    app.api.AskToUpdateLinks = False
+    try:
+        linked_wbs = []
+        for plik_link in PLIKI_LINKOWANE:
+            sciezka_link = os.path.join(folder, plik_link)
+            if os.path.exists(sciezka_link):
+                try:
+                    linked_wbs.append(app.books.open(sciezka_link))
+                    print(f"  Otwarto plik linkowany: {plik_link}")
+                except Exception as exc:
+                    print(f"  [UWAGA] Nie mozna otworzyc pliku linkowanego: {plik_link} — {exc}")
+            else:
+                print(f"  [UWAGA] Brak pliku linkowanego w folderze: {plik_link}")
+
+        for j, nazwa in enumerate(nazwy_kopii, start=1):
+            sciezka = os.path.join(folder, nazwa)
+            print(f"    [Kalibracja {j:>{len(str(n))}}/{n}] {nazwa}")
+            kal = _odczytaj_kalibracje_xlwings(app, sciezka, chroniony, enable_diag=(j == 1))
+            dane_kalibracji.append(kal or [])
+
+        for lwb in linked_wbs:
+            try:
+                lwb.close()
+            except Exception:
+                pass
+    finally:
+        app.quit()
+
+    return dane_kalibracji
+
+
+def _czy_protokol_cc04(sciezka):
+    """Wykrywa nowy typ protokolu na podstawie nazwy pliku (CC-04)."""
+    nazwa = os.path.basename(str(sciezka or ""))
+    return "CC-04" in nazwa.upper()
+
+
+def _wykryj_tag_cc04(wartosc):
+    """Wykrywa tag typu CC-04: LG/LD/PD/PG."""
+    if wartosc is None:
+        return None
+
+    tekst = str(wartosc).strip().upper()
+    if not tekst:
+        return None
+
+    compact = "".join(ch for ch in tekst if ch.isalnum())
+    dozwolone = ("LG", "LD", "PD", "PG")
+
+    if compact in dozwolone:
+        return compact
+
+    if "CC04" in compact:
+        tail = compact.split("CC04", 1)[1]
+        for tag in dozwolone:
+            if tail.startswith(tag):
+                return tag
+
+    for tag in dozwolone:
+        if compact.endswith(tag) and len(compact) <= 8:
+            return tag
+
+    return None
+
+
+def _parametry_typu_cc04(rekord):
+    """Zwraca mapowanie komorek K11/K12/K13/K17 dla kopii CC-04."""
+    if not isinstance(rekord, dict):
+        return None
+
+    tag = rekord.get("CC04_TAG")
+    if not tag:
+        tag = _wykryj_tag_cc04(rekord.get("CC04_RAW"))
+    if not tag:
+        return None
+
+    return MAPOWANIE_TYPU_CC04.get(str(tag).upper())
 
 
 def _round_half_away_from_zero(value):
@@ -310,6 +599,11 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
     try:
         wb = app.books.open(sciezka)
 
+        protokol_cc04 = _czy_protokol_cc04(sciezka)
+        przesuniecie_cc04 = PRZESUNIECIE_STARTU_KOL_CC04 if protokol_cc04 else 0
+        start_col_e_eff = start_col_e + przesuniecie_cc04
+        start_col_f_eff = start_col_f + przesuniecie_cc04
+
         # --- Strona 2: lista kopii ---
         ws2 = wb.sheets[ark_s2]
         dane_s2 = []
@@ -333,6 +627,9 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                 "B": val_B,
                 "D": val_D,
                 "K": val_K,
+                "IS_CC04_PROTO": protokol_cc04,
+                "CC04_RAW": "",
+                "CC04_TAG": None,
             })
             row += 1
 
@@ -348,11 +645,9 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
             val_b = _cell_to_sheet_name_part(ws3.cells(r0, 2).value)
             val_c = _cell_to_sheet_name_part(ws3.cells(r0, 3).value)
             nazwa = f"{val_b}, {val_c}"
-            # Odczyt całego bloku kolumny L i M naraz (szybszy COM)
-            L_range = ws3.range(ws3.cells(r0, 12), ws3.cells(r0 + blok - 1, 12)).value
-            M_range = ws3.range(ws3.cells(r0, 13), ws3.cells(r0 + blok - 1, 13)).value
-            L_dane = L_range if isinstance(L_range, list) else [L_range]
-            M_dane = M_range if isinstance(M_range, list) else [M_range]
+            # Dane L/M pobieramy tylko z komorek o dozwolonym kolorze.
+            L_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, 12)) for k in range(blok)]
+            M_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, 13)) for k in range(blok)]
             k4_val = ws3.cells(r0 + 1, 5).value  # E(r0+1): 2. wiersz bloku, kol. E -> K4 kopii
             dane_zakladek.append({"nazwa": nazwa, "L_dane": L_dane, "M_dane": M_dane, "K4_val": k4_val})
             blok_idx += 1
@@ -363,35 +658,33 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
         dane_ef = []
 
         if n_kopii > 0 and n_zakladek > 0:
-            total_rows = n_zakladek * blok
             for j in range(n_kopii):
-                col_e = start_col_e + j * krok
-                col_f = start_col_f + j * krok
-                # Odczyt całej kolumny E i F dla tej kopii naraz
-                e_range = ws3.range(
-                    ws3.cells(start_s3, col_e),
-                    ws3.cells(start_s3 + total_rows - 1, col_e)
-                ).value
-                f_range = ws3.range(
-                    ws3.cells(start_s3, col_f),
-                    ws3.cells(start_s3 + total_rows - 1, col_f)
-                ).value
-                e_vals = e_range if isinstance(e_range, list) else [e_range]
-                f_vals = f_range if isinstance(f_range, list) else [f_range]
+                col_e = start_col_e_eff + j * krok
+                col_f = start_col_f_eff + j * krok
+
+                if protokol_cc04 and j < len(dane_s2):
+                    raw_typ = _wartosc_z_scalonej_komorki_xlwings(ws3.cells(WIERSZ_TYPU_CC04_S3, col_e))
+                    dane_s2[j]["CC04_RAW"] = _cell_to_str(raw_typ)
+                    dane_s2[j]["CC04_TAG"] = _wykryj_tag_cc04(raw_typ)
+
                 zakl = []
                 for i in range(n_zakladek):
-                    start = i * blok
+                    r0 = start_s3 + i * blok
+                    e_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, col_e)) for k in range(blok)]
+                    f_dane = [_wartosc_s3_po_kolorze_xlwings(ws3.cells(r0 + k, col_f)) for k in range(blok)]
                     zakl.append({
-                        "E_dane": e_vals[start:start + blok],
-                        "F_dane": f_vals[start:start + blok],
+                        "E_dane": e_dane,
+                        "F_dane": f_dane,
                     })
                 dane_ef.append(zakl)
 
         # --- Strona 3: F24 dla arkusza Wyniki, per kopia (wiersz 17) ---
+        # Wymaganie: czytaj wartosc ze scalonej komorki Q:R17 (lub S:T17 dla CC-04),
+        # z kolejnymi kopiami co 2 kolumny w prawo.
         f24_per_kopia = []
         for j in range(n_kopii):
-            col = start_col_e + j * krok
-            f24_per_kopia.append(ws3.cells(17, col).value)
+            col = start_col_e_eff + j * krok
+            f24_per_kopia.append(_wartosc_z_scalonej_komorki_xlwings(ws3.cells(17, col)))
 
         wb.close()
         return dane_s2, dane_zakladek, dane_ef, f24_per_kopia
@@ -631,7 +924,8 @@ def generuj_nazwe_word(nr_sw, prefiks, rok):
 
 
 def utworz_kopie_word(folder, szablon_word, dane_s2, kopie_excel,
-                      dane_zakladek, dane_kalibracji, nr_sw_poczatkowy):
+                      dane_zakladek, dane_kalibracji, nr_sw_poczatkowy,
+                      dane_zakladek_per_kopia=None):
     """
     Dla kazdej kopii Excel tworzy kopie dokumentu Word i wypelnia placeholdery:
       [data]             aktualna data ('DD miesiaca YYYY r.')
@@ -656,15 +950,18 @@ def utworz_kopie_word(folder, szablon_word, dane_s2, kopie_excel,
     dzis = datetime.datetime.now()
     data_str = _formatuj_date(dzis)
 
-    # Daty wzorcowania wspolne dla calego protokolu (z K4_val zakładek)
-    daty_k4 = [zd.get("K4_val") for zd in dane_zakladek]
-    data_wzorcowania = _formatuj_daty_wzorcowania(daty_k4)
-
     for j, (rekord, nowa_nazwa_xlsx) in enumerate(zip(dane_s2, kopie_excel)):
         nr_sw = nr_sw_poczatkowy + j
         prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
         nowa_nazwa_docx = generuj_nazwe_word(nr_sw, prefiks, rok)
         sciezka_docx = os.path.join(folder, nowa_nazwa_docx)
+
+        if dane_zakladek_per_kopia is not None and j < len(dane_zakladek_per_kopia):
+            zakladki_do_daty = dane_zakladek_per_kopia[j]
+        else:
+            zakladki_do_daty = dane_zakladek
+        daty_k4 = [zd.get("K4_val") for zd in zakladki_do_daty]
+        data_wzorcowania = _formatuj_daty_wzorcowania(daty_k4)
 
         shutil.copy2(szablon_path, sciezka_docx)
         doc = DocxDocument(sciezka_docx)
@@ -829,50 +1126,65 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
     try:
         wykluczone = {chroniony, ARKUSZ_WNIOSKI}
         working = [s.name for s in wb.sheets if s.name not in wykluczone]
+        N = len(dane_zakladek)
 
-        if not working:
+        if not working and N > 0:
             print("  [BLAD] Brak zakladek roboczych — pomijam.")
             return
-        if not dane_zakladek:
-            return
 
-        N = len(dane_zakladek)
-        first_ws_name = working[0]
+        if N == 0:
+            # Dla kopii bez aktywnych blokow usuwamy wszystkie zakladki robocze.
+            wszystkie_nazwy = {s.name for s in wb.sheets}
+            if chroniony in wszystkie_nazwy:
+                for ws_name in list(working):
+                    wb.sheets[ws_name].delete()
+            else:
+                # Gdy brak arkusza chronionego, nie usuwamy ostatniej zakladki,
+                # bo Excel nie pozwoli zapisac skoroszytu bez zadnego arkusza.
+                for ws_name in list(working[:-1]):
+                    wb.sheets[ws_name].delete()
+            working_final = [s.name for s in wb.sheets if s.name not in wykluczone]
+        else:
+            first_ws_name = working[0]
 
-        # --- Dopasuj liczbe zakladek ---
-        if len(working) > N:
-            for ws_name in working[N:]:
-                wb.sheets[ws_name].delete()
-            working = working[:N]
+            # --- Dopasuj liczbe zakladek ---
+            if len(working) > N:
+                for ws_name in working[N:]:
+                    wb.sheets[ws_name].delete()
+                working = working[:N]
 
-        elif len(working) < N:
-            for _ in range(N - len(working)):
-                before = {s.name for s in wb.sheets}
-                src = wb.sheets[first_ws_name]
-                if chroniony in {s.name for s in wb.sheets}:
-                    src.api.Copy(Before=wb.sheets[chroniony].api)
-                else:
-                    src.api.Copy(After=wb.sheets[-1].api)
-                after = {s.name for s in wb.sheets}
-                new_name = (after - before).pop()
-                working.append(new_name)
+            elif len(working) < N:
+                for _ in range(N - len(working)):
+                    before = {s.name for s in wb.sheets}
+                    src = wb.sheets[first_ws_name]
+                    if chroniony in {s.name for s in wb.sheets}:
+                        src.api.Copy(Before=wb.sheets[chroniony].api)
+                    else:
+                        src.api.Copy(After=wb.sheets[-1].api)
+                    after = {s.name for s in wb.sheets}
+                    new_name = (after - before).pop()
+                    working.append(new_name)
 
-        working = [s.name for s in wb.sheets if s.name not in wykluczone]
+            working = [s.name for s in wb.sheets if s.name not in wykluczone]
 
-        # --- Zmien nazwy przez tymczasowe (unika konfliktow) ---
-        for i, ws_name in enumerate(working):
-            wb.sheets[ws_name].name = f"__tmp_{i}__"
+            # --- Zmien nazwy przez tymczasowe (unika konfliktow) ---
+            for i, ws_name in enumerate(working):
+                wb.sheets[ws_name].name = f"__tmp_{i}__"
 
-        docelowe_nazwy = _unikalne_nazwy_zakladek(dane_zakladek)
-        working_tmp = [s.name for s in wb.sheets if s.name not in wykluczone]
-        for i, ws_name in enumerate(working_tmp):
-            wb.sheets[ws_name].name = docelowe_nazwy[i]
+            docelowe_nazwy = _unikalne_nazwy_zakladek(dane_zakladek)
+            working_tmp = [s.name for s in wb.sheets if s.name not in wykluczone]
+            for i, ws_name in enumerate(working_tmp):
+                wb.sheets[ws_name].name = docelowe_nazwy[i]
 
-        # --- Wypelnij komorki ---
-        working_final = [s.name for s in wb.sheets if s.name not in wykluczone]
+            # --- Wypelnij komorki ---
+            working_final = [s.name for s in wb.sheets if s.name not in wykluczone]
 
         prefiks, rok, nr_fab, _ = _parsuj_nazwe_pliku(nowa_nazwa)
         dzis = datetime.datetime.now()
+        parametry_cc04 = _parametry_typu_cc04(rekord)
+        if rekord.get("IS_CC04_PROTO") and parametry_cc04 is None:
+            raw = _cell_to_str(rekord.get("CC04_RAW"))
+            print(f"  [UWAGA] Nieznany typ CC-04 dla kopii '{nowa_nazwa}': '{raw}'.")
 
         for i, ws_name in enumerate(working_final):
             ws = wb.sheets[ws_name]
@@ -911,6 +1223,14 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws.range("E6").value = rekord["D"]
             if rekord.get("K") is not None:
                 ws.range("H57").value = rekord["K"]
+
+            # Dla protokolow CC-04 wpisz stale parametry przyrzadu.
+            if parametry_cc04 is not None:
+                ws.range("K11").value = parametry_cc04["K11"]
+                ws.range("K12").value = parametry_cc04["K12"]
+                ws.range("K13").value = parametry_cc04["K13"]
+                ws.range("K17").value = parametry_cc04["K17"]
+
             ws.range("B228").value = dzis
             ws.range("H228").value = dzis
             ws.range("B230").value = PODPISUJACY_1
@@ -1004,11 +1324,13 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
     Dla każdego rekordu z Strona 2:
       1. Generuje nazwę kopii i kopiuje szablon (shutil.copy2).
       2. Modyfikuje kopie przez xlwings (jeden proces Excel dla wszystkich).
+            3. Przywraca w kopiach sciezki linkow zewnetrznych do serwera.
     Zwraca listę nazw utworzonych kopii.
     """
     sciezka_szablonu = os.path.join(folder, szablon_plik)
     n = len(dane)
     kopie = []
+    dane_zakladek_per_kopia = []
 
     # Krok 1: utwórz wszystkie kopie (szybkie kopiowanie pliku)
     for j, rekord in enumerate(dane):
@@ -1045,9 +1367,25 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
 
         for j, nowa_nazwa, sciezka_kopii, rekord in kopie:
             print(f"[{j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
-            dane_ef_kopia = dane_ef[j] if j < len(dane_ef) else []
+            dane_ef_kopia_surowe = dane_ef[j] if j < len(dane_ef) else []
+
+            if USUWAJ_PUSTE_BLOKI_KOPII_S3:
+                aktywne_idx, dane_zakladek_kopia, dane_ef_kopia = _wybierz_aktywne_bloki_kopii(
+                    dane_zakladek,
+                    dane_ef_kopia_surowe,
+                )
+                if aktywne_idx:
+                    zakresy = _formatuj_zakresy_wierszy_s3(aktywne_idx, START_ROW_S3, BLOK_S3)
+                    print(f"    Aktywne bloki Strona 3 (wiersze): {zakresy}")
+                else:
+                    print("    [UWAGA] Brak aktywnych blokow Strona 3 dla tej kopii — zostanie tylko arkusz Wyniki.")
+            else:
+                dane_zakladek_kopia = list(dane_zakladek)
+                dane_ef_kopia = list(dane_ef_kopia_surowe)
+
+            dane_zakladek_per_kopia.append(dane_zakladek_kopia)
             f24_val = f24_per_kopia[j] if j < len(f24_per_kopia) else None
-            _dostosuj_xlwings(app, sciezka_kopii, dane_zakladek, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val)
+            _dostosuj_xlwings(app, sciezka_kopii, dane_zakladek_kopia, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val)
 
         print("  Odczyt kalibracji po zakonczeniu wypelniania wszystkich kopii...")
         dane_kalibracji = []
@@ -1055,6 +1393,11 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
             print(f"    [Kalibracja {j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
             kal = _odczytaj_kalibracje_xlwings(app, sciezka_kopii, chroniony, enable_diag=(j == 0))
             dane_kalibracji.append(kal or [])
+
+        print("  Przywracam linki zewnetrzne do sciezek serwerowych...")
+        for j, nowa_nazwa, sciezka_kopii, _ in kopie:
+            print(f"    [Linki {j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
+            _przywroc_linki_serwerowe_xlwings(app, sciezka_kopii, LINKI_SERWEROWE)
 
         for lwb in linked_wbs:
             try:
@@ -1065,7 +1408,7 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
         app.quit()
 
     nazwy = [nazwa for (_, nazwa, _, _) in kopie]
-    return nazwy, dane_kalibracji
+    return nazwy, dane_kalibracji, dane_zakladek_per_kopia
 
 
 # =============================================================================
@@ -1079,10 +1422,14 @@ def main():
     SEP = "=" * 65
 
     # --- Walidacja plików wejściowych ---
+    if not GENERUJ_EXCEL and not GENERUJ_WORD:
+        print("[UWAGA] GENERUJ_EXCEL=False i GENERUJ_WORD=False — brak etapow do wykonania.")
+        return
+
     if not os.path.exists(protokol):
         print(f"[BŁĄD] Plik protokołu nie istnieje:\n  {protokol}")
         return
-    if not os.path.exists(szablon):
+    if GENERUJ_EXCEL and not os.path.exists(szablon):
         print(f"[BŁĄD] Plik szablonu nie istnieje:\n  {szablon}")
         return
 
@@ -1124,27 +1471,60 @@ def main():
     print(f"  Wczytano dane E/F: {len(dane_ef)} kopii × {len(dane_zakladek)} zakładek.")
     print(f"  Wczytano dane F24 (Wyniki): {len(f24_per_kopia)} wartości.")
 
-    # --- Tworzenie i przetwarzanie kopii ---
-    print(SEP)
-    print("ETAP 1+2+3+4  Tworzenie kopii i dostosowanie zakładek")
-    print(SEP)
+    dane_zakladek_per_kopia = _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef)
+    nazwy = []
+    dane_kalibracji = []
 
-    nazwy, dane_kalibracji = utworz_kopie(
-        FOLDER, SZABLON_PLIK,
-        dane_s2, dane_zakladek, dane_ef,
-        ARKUSZ_CHRONIONY,
-        f24_per_kopia,
-    )
+    # --- Tworzenie i przetwarzanie kopii Excel ---
+    if GENERUJ_EXCEL:
+        print(SEP)
+        print("ETAP 1+2+3+4  Tworzenie kopii i dostosowanie zakładek")
+        print(SEP)
 
-    print(SEP)
-    print(
-        f"Zakończono etapy Excel. Utworzono {len(nazwy)} kopii, "
-        f"każda z {len(dane_zakladek)} zakładkami + {ARKUSZ_CHRONIONY}."
-    )
-    print(SEP)
+        nazwy, dane_kalibracji, dane_zakladek_per_kopia = utworz_kopie(
+            FOLDER, SZABLON_PLIK,
+            dane_s2, dane_zakladek, dane_ef,
+            ARKUSZ_CHRONIONY,
+            f24_per_kopia,
+        )
+
+        if USUWAJ_PUSTE_BLOKI_KOPII_S3:
+            liczby_zakladek = [len(z) for z in dane_zakladek_per_kopia]
+            if liczby_zakladek:
+                min_z = min(liczby_zakladek)
+                max_z = max(liczby_zakladek)
+                print(f"  Aktywne zakladki robocze per kopia: min={min_z}, max={max_z}.")
+
+        print(SEP)
+        print(
+            f"Zakończono etapy Excel. Utworzono {len(nazwy)} kopii. "
+            f"Liczba zakładek roboczych jest dobierana per kopia + {ARKUSZ_CHRONIONY}."
+        )
+        print(SEP)
+    else:
+        print(SEP)
+        print("ETAP Excel pominięty (GENERUJ_EXCEL=False)")
+        print(SEP)
+
+        nazwy = [generuj_nazwe_pliku(SZABLON_PLIK, rekord["O"], rekord["E"]) for rekord in dane_s2]
+        brakujace = [nazwa for nazwa in nazwy if not os.path.exists(os.path.join(FOLDER, nazwa))]
+        if brakujace:
+            print("[BŁĄD] Brak gotowych kopii Excel wymaganych do dalszych etapów:")
+            for nazwa in brakujace:
+                print(f"  - {nazwa}")
+            return
+
+        print("  Odczyt kalibracji z istniejacych kopii Excel...")
+        dane_kalibracji = _odczytaj_kalibracje_dla_istniejacych_kopii(
+            FOLDER,
+            nazwy,
+            ARKUSZ_CHRONIONY,
+        )
 
     # --- Etap 7: dokumenty Word (świadectwa wzorcowania) ---
-    if SZABLON_WORD:
+    if not GENERUJ_WORD:
+        print("[INFO] Etap 7 pominięty (GENERUJ_WORD=False).")
+    elif SZABLON_WORD:
         szablon_word_path = os.path.join(FOLDER, SZABLON_WORD)
         if not os.path.exists(szablon_word_path):
             print(f"[UWAGA] Plik szablonu Word nie istnieje: {SZABLON_WORD} — pomijam Etap 7")
@@ -1155,6 +1535,7 @@ def main():
             nazwy_word = utworz_kopie_word(
                 FOLDER, SZABLON_WORD, dane_s2, nazwy,
                 dane_zakladek, dane_kalibracji, NR_SW_POCZATKOWY,
+                dane_zakladek_per_kopia=dane_zakladek_per_kopia,
             )
             print(SEP)
             print(f"Zakończono Etap 7. Utworzono {len(nazwy_word)} dokumentów Word.")

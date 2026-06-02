@@ -38,3 +38,45 @@ Examples of excluded files:
 
 - The script automates Excel via xlwings/COM.
 - For linked formulas, required linked workbooks must be available in your local environment.
+
+## Run Modes
+
+In the configuration section of `generuj_arkusze.py` you can control stages independently:
+
+- `GENERUJ_EXCEL = True/False`
+- `GENERUJ_WORD = True/False`
+
+Behavior:
+
+- `True/True`  -> full workflow (Excel + Word)
+- `True/False` -> only Excel stages
+- `False/True` -> Word generation from already existing Excel copies
+- `False/False` -> no processing
+
+## Protocol Variants
+
+The script supports both classic `protokol CC` and `protokol CC-04` naming variants.
+
+### E/F source columns on Strona 3
+
+- Classic protocol: first copy uses `Q/R` (rows `20-24`), next copies move right by 2 columns.
+- `CC-04` protocol: first copy uses `S/T` (rows `20-24`), next copies move right by 2 columns.
+
+### F24 source for sheet Wyniki
+
+F24 value is read from merged cells in row 17 on `Strona 3`:
+
+- Classic protocol: `Q:R17`, then `S:T17`, `U:V17`, ...
+- `CC-04` protocol: `S:T17`, then `U:V17`, `W:X17`, ...
+
+### CC-04 type mapping (row 14)
+
+For `CC-04`, type is read from merged cells in row 14 (`S:T14`, then right by 2 columns).
+Detected tags: `LG`, `LD`, `PD`, `PG`.
+
+Per working sheet (excluding `Wyniki`) the script fills:
+
+- `LG` -> `K11=Pt100-09`, `K12=1586A-02`, `K13=101`, `K17=CC-04-L`
+- `LD` -> `K11=Pt100-01`, `K12=1586A-02`, `K13=105`, `K17=CC-04-L`
+- `PD` -> `K11=Pt100-18`, `K12=1586A-02`, `K13=107`, `K17=CC-04-P`
+- `PG` -> `K11=Pt100-13`, `K12=1586A-02`, `K13=103`, `K17=CC-04-P`
