@@ -1,24 +1,28 @@
-# Excel / Word files
-*.xlsx
-*.xls
-*.xlsm
-*.docx
-*.doc
-
-# Temporary Excel lock files
-~$*
-
-# Python cache
+.venv/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+
+# Excel / Word files
+*.xls
+*.xlsx
+*.xlsm
+*.xlsb
+*.doc
+*.docx
+
+# Temporary Excel lock files
+~$*
 
 # Debug / diagnostic dumps
 _diagnose*.py
 _verify.py
 _dump*.txt
+*.log
 
 # Other
 start.txt
 script-protokol-arkusz-cc-clean/
 archiwum/
+archiwium/
