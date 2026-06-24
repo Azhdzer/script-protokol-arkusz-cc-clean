@@ -49,7 +49,7 @@ except ImportError:
 FOLDER           = r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"   # folder z plikami xlsx; "." = ten sam co skrypt  r"." 
                            # możesz podać pełną ścieżkę, np. r"C:\Moje\Pliki"
 
-PROTOKOL_PLIK    = "116_LA_TH_2026 - protokół CC - 1.xlsx"
+PROTOKOL_PLIK    = "119-141-147-149-164_LA_TH_2026 - protokół CC.xlsx"
 SZABLON_PLIK     = "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx"
 
 ARKUSZ_STRONA2   = "Strona 2"   # arkusz z listą kopii do wygenerowania
@@ -72,7 +72,7 @@ PODPISUJACY_2    = "Marek Szpakowski" # H230:I230 (scalona) — podpisujacy z pr
 SZABLON_WORD_TYLKO_TEMP = "xxx_yyy_LA_TH_2026 - tylko temp.docx"      # szablon Word, gdy brak aktywnej wilgotnosci
 SZABLON_WORD_Z_RH       = "xxx_yyy_LA_TH_2026 - zakres.docx"          # szablon Word, gdy WSZYSTKIE zakladki maja aktywna wilgotnosc
 SZABLON_WORD_MIESZANY   = "xxx_yyy_LA_TH_2026 - zakres + temp.docx"   # szablon Word, gdy CZESC zakladek ma wilgotnosc, a czesc nie (dwie tabele)
-NR_SW_POCZATKOWY    = 948   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
+NR_SW_POCZATKOWY    = 956   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
 
 NR_POMIESZCZENIA = 9          # numer pomieszczenia środowiskowego
 MODEL_CZUJNIKA   = "MX1101-02"  # model czujnika środowiskowego
@@ -1365,6 +1365,140 @@ def _zastap_tekst_w_tabeli(table, placeholder, value):
                         r.text = ""
 
 
+def _zastap_tekst_w_tabeli_z_sup_po(table, placeholder, value, sup_text):
+    """Like _zastap_tekst_w_tabeli but appends sup_text as superscript run after replaced value."""
+    value_str = str(value) if value is not None else ""
+
+    def _dodaj_run_sup(after_run):
+        new_r = OxmlElement('w:r')
+        src_rPr = after_run._r.find(qn('w:rPr'))
+        new_rPr = deepcopy(src_rPr) if src_rPr is not None else OxmlElement('w:rPr')
+        for va in new_rPr.findall(qn('w:vertAlign')):
+            new_rPr.remove(va)
+        va_el = OxmlElement('w:vertAlign')
+        va_el.set(qn('w:val'), 'superscript')
+        new_rPr.append(va_el)
+        new_r.append(new_rPr)
+        wt = OxmlElement('w:t')
+        wt.text = sup_text
+        if sup_text and sup_text[0] == ' ':
+            wt.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        new_r.append(wt)
+        after_run._r.addnext(new_r)
+
+    for row in table.rows:
+        for cell in row.cells:
+            for para in cell.paragraphs:
+                if placeholder not in para.text:
+                    continue
+                zmieniono = False
+                for run in para.runs:
+                    if placeholder in run.text:
+                        run.text = run.text.replace(placeholder, value_str)
+                        _dodaj_run_sup(run)
+                        zmieniono = True
+                        break
+                if zmieniono:
+                    continue
+                pelny = "".join(r.text for r in para.runs)
+                if placeholder in pelny and para.runs:
+                    para.runs[0].text = pelny.replace(placeholder, value_str)
+                    for r in para.runs[1:]:
+                        r.text = ""
+                    _dodaj_run_sup(para.runs[0])
+
+
+def _zastap_histereza_w_dok(doc, punkty):
+    """Replaces [histereza] with superscript '1)' + note text about hysteresis measurement.
+    Finds the hysteresis point (nazwa ending in ' (N)') in punkty, rounds T to integer
+    and RH to nearest 10, then builds: ^1) Punkt (T °C, H %rh) powtórzony...
+    If no hysteresis point, removes the placeholder."""
+    PLACEHOLDER = "[histereza]"
+    hist = next((p for p in punkty if _to_jest_powtorka_kolizji(p.get("nazwa"))), None)
+
+    if hist is None:
+        _zastap_tekst_w_dok(doc, PLACEHOLDER, "")
+        return
+
+    try:
+        temp_r = int(_round_half_away_from_zero(float(hist.get("wartosc_odn"))))
+    except (TypeError, ValueError):
+        temp_r = "?"
+    try:
+        rh_r = int(_round_half_away_from_zero(float(hist.get("wartosc_odn_RH")) / 10)) * 10
+    except (TypeError, ValueError):
+        rh_r = "?"
+
+    tekst_glowny = (
+        f" Punkt ({temp_r} °C, {rh_r} %rh) powtórzony"
+        f" w celu wyznaczenia wartości histerezy wskazań"
+        f" wzorcowanego przyrządu."
+    )
+
+    def _podmien_w_para(para):
+        if PLACEHOLDER not in para.text:
+            return
+        for run in para.runs:
+            if PLACEHOLDER not in run.text:
+                continue
+            before = run.text[:run.text.index(PLACEHOLDER)]
+            after = run.text[run.text.index(PLACEHOLDER) + len(PLACEHOLDER):]
+            run.text = before + "1)"
+            run.font.superscript = True
+            main_r = OxmlElement('w:r')
+            src_rPr = run._r.find(qn('w:rPr'))
+            main_rPr = deepcopy(src_rPr) if src_rPr is not None else OxmlElement('w:rPr')
+            for va in main_rPr.findall(qn('w:vertAlign')):
+                main_rPr.remove(va)
+            main_r.append(main_rPr)
+            wt = OxmlElement('w:t')
+            wt.text = tekst_glowny + after
+            wt.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+            main_r.append(wt)
+            run._r.addnext(main_r)
+            return
+        pelny = "".join(r.text for r in para.runs)
+        if PLACEHOLDER not in pelny or not para.runs:
+            return
+        pos = pelny.index(PLACEHOLDER)
+        before = pelny[:pos]
+        after = pelny[pos + len(PLACEHOLDER):]
+        for r in para.runs:
+            r.text = ""
+        r0 = para.runs[0]
+        r0.text = before + "1)"
+        r0.font.superscript = True
+        main_r = OxmlElement('w:r')
+        src_rPr = r0._r.find(qn('w:rPr'))
+        main_rPr = deepcopy(src_rPr) if src_rPr is not None else OxmlElement('w:rPr')
+        for va in main_rPr.findall(qn('w:vertAlign')):
+            main_rPr.remove(va)
+        main_r.append(main_rPr)
+        wt = OxmlElement('w:t')
+        wt.text = tekst_glowny + after
+        wt.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        main_r.append(wt)
+        r0._r.addnext(main_r)
+
+    def _zastap_w_kontenerze(kontener):
+        for para in kontener.paragraphs:
+            _podmien_w_para(para)
+        for table in kontener.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        _podmien_w_para(para)
+
+    _zastap_w_kontenerze(doc)
+    for section in doc.sections:
+        for hdr_ftr in (
+            section.header, section.footer,
+            section.even_page_header, section.even_page_footer,
+            section.first_page_header, section.first_page_footer,
+        ):
+            _zastap_w_kontenerze(hdr_ftr)
+
+
 _WZORZEC_PLACEHOLDER_PIERWSZY = re.compile(r'\[(?:wartość_odn|wartosc_odn)_1\]')
 _WZORZEC_PLACEHOLDER_PIERWSZY_RH = re.compile(r'\[(?:wartość_odn|wartosc_odn)_1_RH\]')
 
@@ -1619,6 +1753,7 @@ def _wypelnij_jedna_tabele_kalibracji(cal_table, punkty):
         val_zmi_rh = _fmt(punkt.get("zmierzona_RH"))
         val_pop_rh = _fmt(punkt.get("poprawka_RH"))
         val_nie_rh = _fmt(punkt.get("niepewnosc_RH"))
+        is_hist = _to_jest_powtorka_kolizji(punkt.get("nazwa"))
         # Probujemy obie wersje: z polskimi znakami i bez (ASCII), dla pewnosci
         for placeholder, wartosc in [
             (f"[wartość_odn_{idx}]", val_odn),
@@ -1634,7 +1769,13 @@ def _wypelnij_jedna_tabele_kalibracji(cal_table, punkty):
             (f"[niepewność_{idx}_RH]",  val_nie_rh),
             (f"[niepewnosc_{idx}_RH]",   val_nie_rh),
         ]:
-            _zastap_tekst_w_tabeli(cal_table, placeholder, wartosc)
+            # Dla punktu histerezy: wartość odn. RH dostaje 3 spacje + górny indeks " 1)"
+            if is_hist and placeholder in (
+                f"[wartość_odn_{idx}_RH]", f"[wartosc_odn_{idx}_RH]"
+            ):
+                _zastap_tekst_w_tabeli_z_sup_po(cal_table, placeholder, "   " + wartosc, " 1)")
+            else:
+                _zastap_tekst_w_tabeli(cal_table, placeholder, wartosc)
 
 
 def generuj_nazwe_word(nr_sw, prefiks, rok):
@@ -1723,6 +1864,7 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
 
         punkty = dane_kalibracji[j] if j < len(dane_kalibracji) else []
         _uzupelnij_tabele_kalibracji(doc, punkty)
+        _zastap_histereza_w_dok(doc, punkty)
 
         zakresy = warunki_per_kopia[j] if warunki_per_kopia and j < len(warunki_per_kopia) else None
         if zakresy is None:
@@ -2318,7 +2460,10 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
 
             o25 = zd.get("o25_val")
             if o25 is not None:
-                ws.range("O25").value = o25
+                try:
+                    ws.range("O25").value = o25
+                except Exception:
+                    pass
 
             ws.range("B228").value = dzis
             ws.range("H228").value = dzis
@@ -2358,7 +2503,14 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         except Exception:
             pass
 
-        wb.save()  # zapisuje plik
+        # wb.save() opakowuje zapis w kontekst display_alerts=False — gdy Excel ma
+        # otwarty modal (dialog aktualizacji linkow, walidacja itp.) ustawienie
+        # DisplayAlerts rzuca COM-error zanim w ogole dojdzie do zapisu.
+        # wb.api.Save() omija ten wrapper i wywoluje zapis bezposrednio przez COM.
+        try:
+            wb.save()
+        except Exception:
+            wb.api.Save()
     finally:
         wb.close()
     return zakresy_srodowiskowe
@@ -2756,7 +2908,6 @@ def main():
         print(SEP)
         print(f"Zakończono Etap 7. Utworzono {len(nazwy_word)} dokumentów Word.")
         print(SEP)
-
 
 if __name__ == "__main__":
     main()
