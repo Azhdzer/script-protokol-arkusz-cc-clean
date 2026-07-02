@@ -33,6 +33,43 @@ from itertools import groupby
 import openpyxl
 import xlwings as xw
 
+# ---------------------------------------------------------------------------
+# Wizualne helpers logowania
+# ---------------------------------------------------------------------------
+def _warn(msg, indent="  "):
+    """Ostrzezenie — wyroznia sie w logu, ale wykonanie trwa dalej."""
+    print(f"{indent}{'!':->3} UWAGA {'!':->3}  {msg}")
+
+def _err(msg, indent="  "):
+    """Blad krytyczny — akcja nie wykonala sie."""
+    sep = "!" * max(60, len(msg) + 12)
+    print(f"{indent}{sep}")
+    print(f"{indent}!!! BLAD: {msg}")
+    print(f"{indent}{sep}")
+
+def _ok(msg, indent="  "):
+    """Potwierdzenie pomyslnej operacji."""
+    print(f"{indent}[OK] {msg}")
+
+def _open_book_hidden(app, path, **kwargs):
+    """
+    Otwiera skoroszyt i przywraca ustawienia COM po evencie Workbook_Open.
+    Makra moga resetowac Visible/DisplayAlerts — ustawiamy je z powrotem.
+    """
+    wb = app.books.open(path, **kwargs)
+    try:
+        app.api.Visible = False
+        app.api.DisplayAlerts = False
+        app.api.AskToUpdateLinks = False
+    except Exception:
+        pass
+    return wb
+
+def _info_serwer(nazwa_pliku):
+    """Zwraca sciezke serwerowa dla danego pliku (do wyswietlenia w logach)."""
+    return LINKI_SERWEROWE.get(nazwa_pliku, LINKI_SERWEROWE.get(nazwa_pliku.lower(), "nieznana"))
+# ---------------------------------------------------------------------------
+
 try:
     from docx import Document as DocxDocument
     from docx.oxml import OxmlElement
@@ -49,7 +86,7 @@ except ImportError:
 FOLDER           = r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"   # folder z plikami xlsx; "." = ten sam co skrypt  r"." 
                            # możesz podać pełną ścieżkę, np. r"C:\Moje\Pliki"
 
-PROTOKOL_PLIK    = "119-141-147-149-164_LA_TH_2026 - protokół CC.xlsx"
+PROTOKOL_PLIK    = "11_LA_TH_2026 - protokół CC-04.xlsx"
 SZABLON_PLIK     = "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx"
 
 ARKUSZ_STRONA2   = "Strona 2"   # arkusz z listą kopii do wygenerowania
@@ -72,7 +109,7 @@ PODPISUJACY_2    = "Marek Szpakowski" # H230:I230 (scalona) — podpisujacy z pr
 SZABLON_WORD_TYLKO_TEMP = "xxx_yyy_LA_TH_2026 - tylko temp.docx"      # szablon Word, gdy brak aktywnej wilgotnosci
 SZABLON_WORD_Z_RH       = "xxx_yyy_LA_TH_2026 - zakres.docx"          # szablon Word, gdy WSZYSTKIE zakladki maja aktywna wilgotnosc
 SZABLON_WORD_MIESZANY   = "xxx_yyy_LA_TH_2026 - zakres + temp.docx"   # szablon Word, gdy CZESC zakladek ma wilgotnosc, a czesc nie (dwie tabele)
-NR_SW_POCZATKOWY    = 956   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
+NR_SW_POCZATKOWY    = 957   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
 
 NR_POMIESZCZENIA = 9          # numer pomieszczenia środowiskowego
 MODEL_CZUJNIKA   = "MX1101-02"  # model czujnika środowiskowego
@@ -98,6 +135,14 @@ LINKI_SERWEROWE = {
     "Wzory.xls": r"\\plum4\LabPomiarowe\Wzory.xls",
 }
 
+# --- Sprzatanie plikow autoodzyskiwania Excela (%AppData%\Microsoft\Excel) ---
+# Te pliki (.xar + migawki .xlsb/.xls) zostaja po awariach Excela i potrafia sie
+# nazbierac do setek MB, przez co Excel przy starcie probuje je odzyskac i pada.
+# Skrypt czysci je PRZED uruchomieniem, ale tylko starsze niz prog ponizej —
+# dzieki temu ewentualne dzisiejsze odzyskiwanie RECZNEJ pracy nie zostanie usuniete.
+CZYSC_AUTORECOVER = True              # False = nie ruszaj folderu autoodzyskiwania
+CZYSC_AUTORECOVER_STARSZE_NIZ_DNI = 1  # usuwaj tylko starsze niz tyle dni; 0 = czysc wszystko
+
 # Dla protokolow CC-04 dane E/F startuja od S/T zamiast Q/R.
 PRZESUNIECIE_STARTU_KOL_CC04 = 2
 WIERSZ_TYPU_CC04_S3 = 14
@@ -105,10 +150,10 @@ WIERSZ_TYPU_CC04_S3 = 14
 # Mapowanie typu z S14:T14 (kolejne kopie: U14:V14, W14:X14, ...)
 # na stale wartosci zapisywane do K11/K12/K13/K17 w zakladkach roboczych.
 MAPOWANIE_TYPU_CC04 = {
-    "LG": {"K11": "Pt100-09", "K12": "1586A-02", "K13": "101", "K17": "CC-04-L"},
-    "LD": {"K11": "Pt100-01", "K12": "1586A-02", "K13": "105", "K17": "CC-04-L"},
-    "PD": {"K11": "Pt100-18", "K12": "1586A-02", "K13": "107", "K17": "CC-04-P"},
-    "PG": {"K11": "Pt100-13", "K12": "1586A-02", "K13": "103", "K17": "CC-04-P"},
+    "LG": {"K11": "Pt100-09", "K12": "1586A-02", "K13": "101", "K17": "CC-04-LG"},
+    "LD": {"K11": "Pt100-01", "K12": "1586A-02", "K13": "105", "K17": "CC-04-LD"},
+    "PD": {"K11": "Pt100-18", "K12": "1586A-02", "K13": "107", "K17": "CC-04-PD"},
+    "PG": {"K11": "Pt100-13", "K12": "1586A-02", "K13": "103", "K17": "CC-04-PG"},
 }
 
 # Dla CC-04:
@@ -238,7 +283,7 @@ def _parse_time_s3(val):
     return None
 
 
-def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model):
+def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model, _cache_fg=None):
     """
     Uses dates/times from dane_zakladek (read from the PROTOCOL's Strona 3) to look
     up T/H from the environmental sensor file, writes T/H into F/G cells of the
@@ -261,12 +306,13 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model):
                     wb_protokol_s3 = bk
                     break
             if wb_protokol_s3 is None and os.path.exists(protokol_sciezka):
-                wb_protokol_s3 = app.books.open(protokol_sciezka)
+                wb_protokol_s3 = _open_book_hidden(app, protokol_sciezka, update_links=False)
             if wb_protokol_s3 is not None and ARKUSZ_STRONA3 in {s.name for s in wb_protokol_s3.sheets}:
                 ws_s3 = wb_protokol_s3.sheets[ARKUSZ_STRONA3]
                 print(f"    [Srodowisko] Brak Strona 3 w kopii — F/G zapisywane do protokolu.")
         except Exception as _e:
-            print(f"    [UWAGA] Nie mozna otworzyc protokolu do zapisu F/G: {_e}")
+            _warn(f"Nie mozna otworzyc protokolu do zapisu F/G: {protokol_sciezka}\n"
+                  f"        {type(_e).__name__}: {_e}", indent="    ")
 
     cache_czujnika = {}
 
@@ -296,12 +342,22 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model):
         row_base = START_ROW_S3 + block_idx * BLOK_S3
 
         # Jesli F/G juz wpisane w protokole — czytaj z nich i pomijaj wyszukiwanie czujnika.
+        # Dane F/G sa identyczne dla wszystkich kopii — po pierwszym odczycie uzywamy cache.
+        if _cache_fg is not None and block_idx in _cache_fg:
+            f2, g2, f3, g3 = _cache_fg[block_idx]
+            for t, h in [(f2, g2), (f3, g3)]:
+                if t is not None:
+                    dane_th.append((t, h))
+            continue
+
         if ws_s3 is not None:
             f2 = ws_s3.range(f"F{row_base + 2}").value
             f3 = ws_s3.range(f"F{row_base + 3}").value
             g2 = ws_s3.range(f"G{row_base + 2}").value
             g3 = ws_s3.range(f"G{row_base + 3}").value
             if f2 is not None and f3 is not None:
+                if _cache_fg is not None:
+                    _cache_fg[block_idx] = (f2, g2, f3, g3)
                 print(f"      blok {blk}: F/G juz wypelnione ({f2}/{g2}, {f3}/{g3}), pomijam czujnik")
                 for t, h in [(f2, g2), (f3, g3)]:
                     if t is not None:
@@ -377,7 +433,12 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model):
             ws_env.range(f"B{115 + i}").value = temp
             if hum is not None:
                 ws_env.range(f"C{115 + i}").value = hum
-        app.api.CalculateFullRebuild()
+        app.api.DisplayAlerts = False
+        app.api.AskToUpdateLinks = False
+        app.api.EnableEvents = False
+        for _ws in wb.sheets:
+            _ws.api.Calculate()
+        app.api.EnableEvents = True
         temp_min = ws_env.range("L137").value
         temp_max = ws_env.range("N137").value
         wilg_min = ws_env.range("L138").value
@@ -430,25 +491,37 @@ def _oblicz_zakresy_srodowiskowe_z_istniejacych_kopii(folder, nazwy, dane_zaklad
     app.api.AutomationSecurity = 1
     app.api.DisplayAlerts = False
     app.api.AskToUpdateLinks = False
+    app.api.Visible = False
+    try:
+        app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
+    except Exception:
+        pass
     try:
         for plik_link in PLIKI_LINKOWANE:
             sciezka_link = os.path.join(folder, plik_link)
             if os.path.exists(sciezka_link):
                 try:
-                    app.books.open(sciezka_link)
-                    print(f"  Otwarto plik linkowany: {plik_link}")
+                    _open_book_hidden(app, sciezka_link, update_links=False)
+                    _ok(f"Otwarto plik linkowany: {plik_link}")
                 except Exception as exc:
-                    print(f"  [UWAGA] Nie mozna otworzyc: {plik_link} — {exc}")
+                    _warn(f"Nie mozna otworzyc pliku linkowanego: {plik_link}\n"
+                          f"      Sciezka lokalna: {sciezka_link}\n"
+                          f"      Blad: {type(exc).__name__}: {exc}")
         for j, nazwa in enumerate(nazwy):
             print(f"    [Srodowisko {j+1:>{len(str(n))}}/{n}] {nazwa}")
             sciezka = os.path.join(folder, nazwa)
             dane_zak = dane_zakladek_per_kopia[j] if j < len(dane_zakladek_per_kopia) else []
-            wb = app.books.open(sciezka)
+            wb = _open_book_hidden(app, sciezka, update_links=False)
             zakresy = None
             try:
                 zakresy = _oblicz_warunki_srodowiskowe(app, wb, dane_zak, NR_POMIESZCZENIA, MODEL_CZUJNIKA)
                 if zakresy is not None:
-                    app.api.CalculateFullRebuild()
+                    app.api.DisplayAlerts = False
+                    app.api.AskToUpdateLinks = False
+                    app.api.EnableEvents = False
+                    for _ws in wb.sheets:
+                        _ws.api.Calculate()
+                    app.api.EnableEvents = True
                     wb.save()
             except Exception as e:
                 print(f"    [UWAGA] Blad obliczen srodowiskowych dla '{nazwa}': {e}")
@@ -628,16 +701,22 @@ def _nazwa_pliku_z_linku(target):
     return baza
 
 
-def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe):
+def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe, cicho=False):
     """
     Zmienia sciezki linkow zewnetrznych bezposrednio w XML pliku xlsx
     (bez otwierania przez Excel), dzieki czemu zakeszowane wartosci formul
     pozostaja nienaruszone i sa widoczne po otwarciu pliku bez aktualizacji linkow.
 
+    Uzywane dwukierunkowo:
+      - na koncu: sciezki serwerowe (UNC plum4) — przywrocenie do publikacji,
+      - PRZED otwarciem kopii: sciezki lokalne — zeby Excel NIE szukal serwera
+        (niedostepny serwer => zawieszenie SMB => RPC crash przy Open).
+
     Dlaczego nie uzywamy ChangeLink przez xlwings:
     ChangeLink() wymusza przeliczenie formul. Jesli nowa sciezka UNC jest
     niedostepna z maszyny ze skryptem, Excel zapisuje bledy jako cache —
     i inne osoby widza puste komorki po kliknieciu 'Nie' w dialogu linkow.
+    cicho=True wycisza logowanie (przy masowym przepisywaniu przed otwarciem).
     """
     if not linki_serwerowe:
         return
@@ -645,6 +724,7 @@ def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe):
     linki_po_nazwie = {k.lower(): v for k, v in linki_serwerowe.items()}
     sciezka_tmp = sciezka_pliku + "._xltmp_"
     zmienione_pliki = 0
+    zmiany_log = []  # (stara_sciezka, nowa_sciezka)
 
     try:
         with zipfile.ZipFile(sciezka_pliku, 'r') as zin, \
@@ -663,6 +743,7 @@ def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe):
                         t_basename = _nazwa_pliku_z_linku(target)
                         nowa = linki_po_nazwie.get(t_basename.lower()) if t_basename else None
                         if nowa:
+                            zmiany_log.append((target, nowa))
                             return f'Target="{nowa}"'
                         return m.group(0)
 
@@ -674,15 +755,23 @@ def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe):
                 zout.writestr(item, data)
 
         os.replace(sciezka_tmp, sciezka_pliku)
-        if zmienione_pliki:
-            print(f"    [XML] Przywrocono sciezki linkow w {zmienione_pliki} plik(ach) relacji.")
+        if not cicho:
+            if zmienione_pliki:
+                _ok(f"Przywrocono linki zewnetrzne ({zmienione_pliki} rel) w: "
+                    f"{os.path.basename(sciezka_pliku)}", indent="    ")
+                for stara, nowa in zmiany_log:
+                    print(f"        stara: {stara}")
+                    print(f"        nowa:  {nowa}")
+            else:
+                print(f"    [XML] Brak linkow do zastapienia w: {os.path.basename(sciezka_pliku)}")
     except Exception as exc:
         if os.path.exists(sciezka_tmp):
             try:
                 os.remove(sciezka_tmp)
             except Exception:
                 pass
-        print(f"    [UWAGA] Nie mozna zmienic linkow XML w '{os.path.basename(sciezka_pliku)}': {exc}")
+        _warn(f"Nie mozna zmienic linkow XML w '{os.path.basename(sciezka_pliku)}'\n"
+              f"      {type(exc).__name__}: {exc}", indent="    ")
 
 
 def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, chroniony):
@@ -695,6 +784,11 @@ def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, chroniony):
     app.api.AutomationSecurity = 1
     app.api.DisplayAlerts = False
     app.api.AskToUpdateLinks = False
+    app.api.Visible = False
+    try:
+        app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
+    except Exception:
+        pass
     try:
         linked_wbs = []
         sciezki_linkowane = {}
@@ -702,14 +796,18 @@ def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, chroniony):
             sciezka_link = os.path.join(folder, plik_link)
             if os.path.exists(sciezka_link):
                 try:
-                    lwb = app.books.open(sciezka_link)
+                    lwb = _open_book_hidden(app, sciezka_link, update_links=False)
                     linked_wbs.append(lwb)
                     sciezki_linkowane[plik_link.lower()] = lwb.fullname
-                    print(f"  Otwarto plik linkowany: {plik_link}")
+                    _ok(f"Otwarto plik linkowany: {plik_link}")
                 except Exception as exc:
-                    print(f"  [UWAGA] Nie mozna otworzyc pliku linkowanego: {plik_link} — {exc}")
+                    _warn(f"Nie mozna otworzyc pliku linkowanego: {plik_link}\n"
+                          f"      Sciezka lokalna: {sciezka_link}\n"
+                          f"      Blad: {type(exc).__name__}: {exc}")
             else:
-                print(f"  [UWAGA] Brak pliku linkowanego w folderze: {plik_link}")
+                _warn(f"Brak pliku linkowanego w folderze roboczym: {plik_link}\n"
+                      f"      Sciezka serwerowa: {_info_serwer(plik_link)}\n"
+                      f"      Oczekiwano w: {sciezka_link}")
 
         for j, nazwa in enumerate(nazwy_kopii, start=1):
             sciezka = os.path.join(folder, nazwa)
@@ -993,9 +1091,14 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
     app = xw.App(visible=False, add_book=False)
     app.api.AutomationSecurity = 1   # msoAutomationSecurityLow — wlacza makra bez pytania
     app.api.DisplayAlerts = False
-    app.api.AskToUpdateLinks = False  # aktualizuj linki zewnetrzne bez pytania
+    app.api.AskToUpdateLinks = False
+    app.api.Visible = False
     try:
-        wb = app.books.open(sciezka)
+        app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
+    except Exception:
+        pass
+    try:
+        wb = _open_book_hidden(app, sciezka, update_links=False)
 
         protokol_cc04 = _czy_protokol_cc04(sciezka)
         przesuniecie_cc04 = PRZESUNIECIE_STARTU_KOL_CC04 if protokol_cc04 else 0
@@ -1546,11 +1649,8 @@ def _punkty_temp_only_zdeduplikowane(punkty):
             temp = _round_half_away_from_zero(float(p.get("wartosc_odn")))
         except (TypeError, ValueError):
             continue
-        rh = p.get("wartosc_odn_RH")
-        try:
-            rh = float(rh)
-        except (TypeError, ValueError):
-            rh = None
+        # Nominal RH z nazwy zakladki (pewniejszy niz odczyt) — do wyboru ~50%.
+        rh = _rh_z_nazwy_zakladki(p.get("nazwa"))
         powtorka = _to_jest_powtorka_kolizji(p.get("nazwa"))
         wpisy.append((temp, rh, powtorka, p))
     return _wybierz_reprezentantow_temp(wpisy)
@@ -2074,23 +2174,49 @@ def _to_jest_powtorka_kolizji(nazwa):
     return bool(nazwa) and bool(_WZORZEC_POWTORKI_NAZWY.search(nazwa))
 
 
-def _wybierz_reprezentantow_temp(wpisy):
+def _rh_z_nazwy_zakladki(nazwa):
+    """
+    Parsuje NOMINALNA wilgotnosc z nazwy zakladki 'temp, rh' (np. '25, 51' -> 51.0,
+    '10, 52 (2)' -> 52.0). Zwraca None gdy brak RH ('5, -') lub nie da sie sparsowac.
+    Nazwa zakladki to najpewniejsze zrodlo nominalu RH — komorki F15:F19 (odczyt
+    wilgotnosci) bywaja puste w zapisanych kopiach, wiec nie nadaja sie do wyboru
+    reprezentanta 'najblizszego 50%'.
+    """
+    if not nazwa:
+        return None
+    baza = _WZORZEC_POWTORKI_NAZWY.sub('', str(nazwa)).strip()   # usun sufiks ' (N)'
+    czesci = baza.split(',')
+    if len(czesci) < 2:
+        return None
+    try:
+        return float(czesci[1].strip().replace(',', '.'))
+    except ValueError:
+        return None
+
+
+def _wybierz_reprezentantow_temp(wpisy, tol_temp=1.0):
     """
     wpisy: lista (temp_zaokr, rh_lub_None, czy_powtorka, payload).
-    Z grupy wpisow majacych ta sama zaokraglona temperature wybiera JEDEN
-    reprezentatywny 'payload' — do uzycia w tabelach/sekcjach 'tylko temperatura'
-    (Excel O1:R9, Word — tabela bez kolumn RH), gdzie wielokrotne pomiary tej samej
-    temperatury przy roznych wilgotnosciach (typowe dla wzorcowania RH) bylyby
-    nadmiarowe. W obrebie tej samej temperatury preferowane sa zakladki bez sufiksu
-    powtorki histerezy ' (N)', a z nich ta o wilgotnosci najblizszej 50%.
+    Grupuje wpisy o ZBLIZONEJ temperaturze (roznica <= tol_temp °C — np. 60 i 61
+    to jeden punkt, ktory zakolebal sie na roznej wilgotnosci) i z kazdej grupy
+    wybiera JEDEN reprezentatywny 'payload' — do tabel 'tylko temperatura'
+    (Excel O1:R9, Word — tabela bez kolumn RH). W obrebie grupy preferowane sa
+    zakladki bez sufiksu powtorki histerezy ' (N)', a z nich ta o WILGOTNOSCI
+    NAJBLIZSZEJ 50%.
     Zwraca liste wybranych 'payload' (bez okreslonej kolejnosci).
     """
-    grupy = {}
-    for temp, rh, powtorka, payload in wpisy:
-        grupy.setdefault(temp, []).append((rh, powtorka, payload))
+    # Klastrowanie po temperaturze z tolerancja (kotwica = najnizsza temp w grupie).
+    posortowane = sorted(wpisy, key=lambda x: x[0])
+    grupy = []   # lista [kotwica_temp, [wpisy...]]
+    for wp in posortowane:
+        if grupy and abs(wp[0] - grupy[-1][0]) <= tol_temp:
+            grupy[-1][1].append(wp)
+        else:
+            grupy.append([wp[0], [wp]])
 
     wynik = []
-    for kandydaci in grupy.values():
+    for _kotwica, grupa in grupy:
+        kandydaci = [(rh, powtorka, payload) for (_t, rh, powtorka, payload) in grupa]
         bez_powtorki = [k for k in kandydaci if not k[1]]
         pool = bez_powtorki if bez_powtorki else kandydaci
         z_rh = [k for k in pool if k[0] is not None]
@@ -2245,7 +2371,7 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
     valid_bi_sorted = sorted((w for w in valid if w["ma_rh"]), key=_klucz_bi)
 
     wpisy_or = [
-        (_temp_zaokr(w), w.get("rh_ref"), w["powtorka"], w)
+        (_temp_zaokr(w), _rh_z_nazwy_zakladki(w.get("arkusz")), w["powtorka"], w)
         for w in valid if _temp_zaokr(w) is not None
     ]
     reprezentanci_or = _wybierz_reprezentantow_temp(wpisy_or)
@@ -2268,7 +2394,7 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
     return last_row - LAST_ROW_DEFAULT
 
 
-def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val, sciezki_linkowane=None):
+def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val, sciezki_linkowane=None, _pierwsza_kopia=True, _cache_fg=None):
     """
     Otwiera kopie xlsx przez xlwings (COM Excel):
       1. Dopasowuje liczbe zakladek roboczych do len(dane_zakladek).
@@ -2281,7 +2407,26 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
     Uzycie COM Excel gwarantuje zachowanie wszystkich formul w arkuszu.
     Zwraca: slownik {"temp_min", "temp_max", "wilg_min", "wilg_max"} lub None.
     """
-    wb = app.books.open(sciezka_pliku)
+    # KLUCZOWE: przed otwarciem przepisujemy linki w XML na LOKALNE pliki.
+    # Inaczej kopia wskazuje na \\plum4\... — Excel przy Open() szuka tego pliku
+    # w sieci, a gdy serwer jest niedostepny SMB-lookup zawiesza sie i po kilku
+    # kopiach RPC Excela pada (-2147023174). Lokalne pliki istnieja i sa otwarte
+    # w tej sesji → Excel resolwuje natychmiast, bez dotykania serwera.
+    # Linki serwerowe przywracamy na koncu (finally w utworz_kopie).
+    if sciezki_linkowane:
+        _przywroc_linki_w_xml(sciezka_pliku, sciezki_linkowane, cicho=True)
+
+    # EnableEvents=False: blokuje Application.WorkbookOpen/SheetActivate/
+    # BeforeSave/BeforeClose w Obliczenia.xls/Wzory.xls → \\plum4 → crash.
+    # xlManual: tylko na czas Open() — blokuje auto-przeliczenie UDF podczas open.
+    # Natychmiast po open przywracamy xlAutomatic, zeby UDF dzialaly normalnie.
+    app.api.EnableEvents = False
+    app.api.Calculation = -4135  # xlCalculationManual — tylko na czas Open()
+    wb = _open_book_hidden(app, sciezka_pliku, update_links=False)
+    try:
+        app.api.Calculation = -4105  # przywroc xlAutomatic natychmiast po otwarciu
+    except Exception:
+        pass
     # Przekieruj linki zewnetrzne na lokalnie otwarte pliki (Obliczenia, Wzory).
     # Bez tego formuly lancuchujace do =[Obliczenia]!te_6(...) zwracaja None/blad
     # nawet gdy Obliczenia jest otwarte, bo Excel nie moze dopasowac zapisanej
@@ -2302,10 +2447,20 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                     if _nowa:
                         try:
                             wb.api.ChangeLink(Name=_src, NewName=_nowa, Type=1)
-                        except Exception:
-                            pass
-        except Exception:
-            pass
+                            if _pierwsza_kopia:
+                                print(f"    [ChangeLink] {_nazwa}: lokalny plik OK")
+                        except Exception as _ce:
+                            _warn(f"ChangeLink nie powiodl sie dla: {_nazwa}\n"
+                                  f"        stary link: {_src}\n"
+                                  f"        nowy  link: {_nowa}\n"
+                                  f"        Blad: {type(_ce).__name__}: {_ce}", indent="    ")
+                    else:
+                        _warn(f"Link '{_nazwa}' — brak lokalnej kopii w folderze roboczym\n"
+                              f"        Sciezka serwerowa: {_info_serwer(_nazwa)}\n"
+                              f"        Pelny link w pliku: {_src}", indent="    ")
+        except Exception as _le:
+            _warn(f"LinkSources() — nie mozna odczytac linkow z pliku\n"
+                  f"      {type(_le).__name__}: {_le}")
     try:
         wykluczone = {chroniony, ARKUSZ_WNIOSKI}
         working = [s.name for s in wb.sheets if s.name not in wykluczone]
@@ -2470,7 +2625,12 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             ws.range("B230").value = PODPISUJACY_1
             ws.range("H230").value = PODPISUJACY_2
 
-        app.api.CalculateFullRebuild()  # przelicz formuly (w tym odwolania do plikow linkowanych) przed porzadkowaniem Wyniki
+        app.api.DisplayAlerts = False
+        app.api.AskToUpdateLinks = False
+        app.api.EnableEvents = False
+        for _ws in wb.sheets:
+            _ws.api.Calculate()   # przelicz tylko kopie (nie Obliczenia/Wzory) — blokuje Worksheet_Calculate w .xls
+        app.api.EnableEvents = True
 
         # --- Etap 6: arkusz Wyniki ---
         extra_rows = 0
@@ -2486,13 +2646,17 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
 
         # --- Etap 7: warunki środowiskowe (Strona 3 F/G + Wzory.xls) ---
         zakresy_srodowiskowe = _oblicz_warunki_srodowiskowe(
-            app, wb, dane_zakladek, NR_POMIESZCZENIA, MODEL_CZUJNIKA
+            app, wb, dane_zakladek, NR_POMIESZCZENIA, MODEL_CZUJNIKA, _cache_fg=_cache_fg
         )
 
         # Przelicz i zapisz — wb.save() utrwala obliczone wartosci jako cache Excela.
         # Dzieki temu po otwarciu kopii bez plikow linkowanych (Obliczenia, Wzory)
         # i odrzuceniu aktualizacji linkow Excel pokazuje te zakeszowane wartosci.
-        app.api.CalculateFullRebuild()  # przelicz formuly przed zapisem
+        app.api.DisplayAlerts = False
+        app.api.AskToUpdateLinks = False
+        for _ws in wb.sheets:
+            _ws.api.Calculate()   # przelicz tylko kopie przed zapisem
+        # EnableEvents pozostaje False (ustawione przed open, przywrocone w finally)
 
         # Przewin pasek zakladek do pierwszej zakladki, aktywna (widoczna) pozostaje Wyniki.
         # Dzieki temu po otwarciu pliku zakladki nie sa "schowane" za strzalka.
@@ -2503,16 +2667,26 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         except Exception:
             pass
 
-        # wb.save() opakowuje zapis w kontekst display_alerts=False — gdy Excel ma
-        # otwarty modal (dialog aktualizacji linkow, walidacja itp.) ustawienie
-        # DisplayAlerts rzuca COM-error zanim w ogole dojdzie do zapisu.
-        # wb.api.Save() omija ten wrapper i wywoluje zapis bezposrednio przez COM.
+        app.api.DisplayAlerts = False
+        app.api.AskToUpdateLinks = False
+        # EnableEvents pozostaje False — BeforeSave/AfterSave nie strzela
         try:
             wb.save()
         except Exception:
             wb.api.Save()
     finally:
-        wb.close()
+        try:
+            wb.close()
+        except Exception:
+            pass
+        try:
+            app.api.Calculation = -4105  # xlCalculationAutomatic
+        except Exception:
+            pass
+        try:
+            app.api.EnableEvents = True
+        except Exception:
+            pass
     return zakresy_srodowiskowe
 
 
@@ -2536,7 +2710,23 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, chroniony, enable_diag=Fals
     Kazdy wpis 'kalibracja' zawiera dodatkowo "nazwa" (nazwa zakladki) — uzywane
     przy wyborze reprezentantow tej samej temperatury w tabeli 'tylko temp'.
     """
-    wb = app.books.open(sciezka_pliku)
+    # Przed otwarciem przepisujemy linki na LOKALNE pliki — tak samo jak w
+    # _dostosuj_xlwings. Zapobiega szukaniu \\plum4 w sieci podczas Open()
+    # (niedostepny serwer => zawieszenie SMB => RPC crash).
+    if sciezki_linkowane:
+        _przywroc_linki_w_xml(sciezka_pliku, sciezki_linkowane, cicho=True)
+
+    # Application.WorkbookOpen/BeforeClose w Obliczenia.xls strzela przy kazdej
+    # operacji na dowolnym workbooku i probuje dostac sie do \\plum4 → RPC crash.
+    # xlManual tylko na czas Open() — po otwarciu natychmiast przywracamy xlAutomatic
+    # zeby UDF dzialaly normalnie podczas pozniejszego Calculate().
+    app.api.EnableEvents = False
+    app.api.Calculation = -4135  # xlCalculationManual — tylko na czas Open()
+    wb = _open_book_hidden(app, sciezka_pliku, update_links=False)
+    try:
+        app.api.Calculation = -4105  # przywroc xlAutomatic natychmiast po otwarciu
+    except Exception:
+        pass
     kalibracja = []
     try:
         # Przekieruj linki zewnetrzne na lokalnie otwarte pliki PLIKI_LINKOWANE
@@ -2550,6 +2740,7 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, chroniony, enable_diag=Fals
             if sources:
                 for src in sources:
                     nowa_sciezka = None
+                    nazwa = None
                     if sciezki_linkowane:
                         nazwa = _nazwa_pliku_z_linku(src)
                         if nazwa:
@@ -2557,16 +2748,30 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, chroniony, enable_diag=Fals
                     try:
                         if nowa_sciezka:
                             wb.api.ChangeLink(Name=src, NewName=nowa_sciezka, Type=1)
+                            if enable_diag:
+                                print(f"    [ChangeLink] {nazwa}: lokalny plik OK")
                         else:
-                            wb.api.UpdateLink(Name=src, Type=1)
+                            # Brak lokalnej kopii — pomijamy (serwer niedostepny,
+                            # wartosci z _dostosuj_xlwings sa juz w cache pliku).
+                            _warn(f"Link '{nazwa or src}' — brak lokalnej kopii\n"
+                                  f"        Sciezka serwerowa: {_info_serwer(nazwa or '')}\n"
+                                  f"        Pelny link w pliku: {src}\n"
+                                  f"        (pomijamy — cache z _dostosuj_xlwings wystarczy)", indent="    ")
                     except Exception as exc:
-                        print(f"    [UWAGA] ChangeLink/UpdateLink ({src}): {exc}")
+                        _warn(f"ChangeLink nie powiodl sie dla: {nazwa or src}\n"
+                              f"        Nowa sciezka: {nowa_sciezka}\n"
+                              f"        Blad: {type(exc).__name__}: {exc}", indent="    ")
         except Exception as exc:
-            print(f"    [UWAGA] LinkSources: {exc}")
+            _warn(f"LinkSources() — nie mozna odczytac linkow z pliku\n"
+                  f"      {type(exc).__name__}: {exc}")
 
         wykluczone = {chroniony, ARKUSZ_WNIOSKI}
 
-        app.api.CalculateFullRebuild()
+        app.api.DisplayAlerts = False
+        app.api.AskToUpdateLinks = False
+        for _ws in wb.sheets:
+            _ws.api.Calculate()
+        # EnableEvents pozostaje False (ustawione przed open, przywrocone w finally)
 
         def _brak_wartosci(v):
             return v is None or (isinstance(v, str) and v.strip() == "")
@@ -2662,6 +2867,14 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, chroniony, enable_diag=Fals
                 })
     finally:
         wb.close()
+        try:
+            app.api.Calculation = -4105  # xlCalculationAutomatic
+        except Exception:
+            pass
+        try:
+            app.api.EnableEvents = True
+        except Exception:
+            pass
     return kalibracja, klasa_wilgotnosci
 
 
@@ -2698,7 +2911,12 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
     app = xw.App(visible=False, add_book=False)
     app.api.AutomationSecurity = 1   # msoAutomationSecurityLow — wlacza makra bez pytania
     app.api.DisplayAlerts = False
-    app.api.AskToUpdateLinks = False  # aktualizuj linki zewnetrzne bez pytania
+    app.api.AskToUpdateLinks = False
+    app.api.Visible = False
+    try:
+        app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
+    except Exception:
+        pass
     try:
         # Otwieramy pliki linkowane PRZED modyfikacja kopii.
         # Dzieki temu formuly odwolujace sie do tych plikow oblicza sie
@@ -2709,15 +2927,20 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
             sciezka_link = os.path.join(folder, plik_link)
             if os.path.exists(sciezka_link):
                 try:
-                    lwb = app.books.open(sciezka_link)
+                    lwb = _open_book_hidden(app, sciezka_link, update_links=False)
                     linked_wbs.append(lwb)
                     sciezki_linkowane[plik_link.lower()] = lwb.fullname
-                    print(f"  Otwarto plik linkowany: {plik_link}")
+                    _ok(f"Otwarto plik linkowany: {plik_link}")
                 except Exception as exc:
-                    print(f"  [UWAGA] Nie mozna otworzyc pliku linkowanego: {plik_link} — {exc}")
+                    _warn(f"Nie mozna otworzyc pliku linkowanego: {plik_link}\n"
+                          f"      Sciezka lokalna: {sciezka_link}\n"
+                          f"      Blad: {type(exc).__name__}: {exc}")
             else:
-                print(f"  [UWAGA] Brak pliku linkowanego w folderze: {plik_link}")
+                _warn(f"Brak pliku linkowanego w folderze roboczym: {plik_link}\n"
+                      f"      Sciezka serwerowa: {_info_serwer(plik_link)}\n"
+                      f"      Oczekiwano w: {sciezka_link}")
 
+        _cache_fg = {}
         for j, nowa_nazwa, sciezka_kopii, rekord in kopie:
             print(f"[{j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
             dane_ef_kopia_surowe = dane_ef[j] if j < len(dane_ef) else []
@@ -2738,7 +2961,7 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
 
             dane_zakladek_per_kopia.append(dane_zakladek_kopia)
             f24_val = f24_per_kopia[j] if j < len(f24_per_kopia) else None
-            zakresy_srod = _dostosuj_xlwings(app, sciezka_kopii, dane_zakladek_kopia, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val, sciezki_linkowane=sciezki_linkowane)
+            zakresy_srod = _dostosuj_xlwings(app, sciezka_kopii, dane_zakladek_kopia, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val, sciezki_linkowane=sciezki_linkowane, _pierwsza_kopia=(j == 0), _cache_fg=_cache_fg)
             zakresy_per_kopia.append(zakresy_srod)
 
         print("  Odczyt kalibracji po zakonczeniu wypelniania wszystkich kopii...")
@@ -2757,17 +2980,32 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
             except Exception:
                 pass
     finally:
-        app.quit()
+        # app.quit() opakowane w try/except: jeśli Excel padł przez RPC crash,
+        # quit() też rzuca wyjątek — bez tego maskowałby oryginalny błąd
+        # i uniemożliwiał wykonanie przywracania linków poniżej.
+        try:
+            app.quit()
+        except Exception as _eq:
+            _err(f"Excel prawdopodobnie padl (RPC crash) — app.quit() nie powiodlo sie.\n"
+                 f"      {type(_eq).__name__}: {_eq}")
 
-    # Przywracanie linkow przez XML — po zamknieciu Excel, bez ryzyka utraty cache.
-    # ChangeLink() przez xlwings wymuszaloby przeliczenie z nowa sciezka UNC;
-    # jesli serwer jest niedostepny z tej maszyny, Excel zapisuje bledy jako cache
-    # i inne osoby nie widza wartosci po kliknieciu "Nie" w dialogu aktualizacji.
-    if LINKI_SERWEROWE:
-        print("  Przywracam linki zewnetrzne do sciezek serwerowych (XML)...")
-        for j, nowa_nazwa, sciezka_kopii, _ in kopie:
-            print(f"    [Linki {j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
-            _przywroc_linki_w_xml(sciezka_kopii, LINKI_SERWEROWE)
+        # Przywracanie linkow przez XML — tutaj w finally, żeby wykonało się
+        # zawsze (nawet przy crash Excel podczas odczytu kalibracji).
+        # ChangeLink() przez xlwings wymuszałoby przeliczenie z nową ścieżką UNC;
+        # jeśli serwer jest niedostępny, Excel zapisuje błędy jako cache
+        # i inne osoby nie widzą wartości po kliknięciu "Nie" w dialogu aktualizacji.
+        if LINKI_SERWEROWE:
+            serwery = list(LINKI_SERWEROWE.values())
+            print(f"  === Przywracam linki serwerowe w {len(kopie)} plik(ach) ===")
+            for s in serwery:
+                print(f"      -> {s}")
+            for j, nowa_nazwa, sciezka_kopii, _ in kopie:
+                print(f"    [{j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
+                try:
+                    _przywroc_linki_w_xml(sciezka_kopii, LINKI_SERWEROWE)
+                except Exception as exc:
+                    _warn(f"Blad przywracania linkow w: {nowa_nazwa}\n"
+                          f"        {type(exc).__name__}: {exc}", indent="    ")
 
     nazwy = [nazwa for (_, nazwa, _, _) in kopie]
     return nazwy, dane_kalibracji, dane_zakladek_per_kopia, klasa_wilg_per_kopia, zakresy_per_kopia
@@ -2777,7 +3015,7 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
 # GŁÓWNY PUNKT WEJŚCIA
 # =============================================================================
 
-def main():
+def _main_impl():
     protokol = os.path.join(FOLDER, PROTOKOL_PLIK)
     szablon  = os.path.join(FOLDER, SZABLON_PLIK)
 
@@ -2908,6 +3146,135 @@ def main():
         print(SEP)
         print(f"Zakończono Etap 7. Utworzono {len(nazwy_word)} dokumentów Word.")
         print(SEP)
+
+def _excel_options_subkey():
+    """Zwraca podklucz rejestru Excel\\Options dla zainstalowanej wersji Office."""
+    import winreg
+    for wer in ("16.0", "15.0", "14.0"):
+        sub = rf"Software\Microsoft\Office\{wer}\Excel\Options"
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub):
+                return sub
+        except OSError:
+            continue
+    return None
+
+
+def _czytaj_autorecover():
+    """Globalne ustawienie AutoRecover Excela: True/False (None = nie udalo sie odczytac)."""
+    import winreg
+    sub = _excel_options_subkey()
+    if not sub:
+        return None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub) as k:
+            val, _ = winreg.QueryValueEx(k, "AutoRecoverEnabled")
+            return bool(val)
+    except FileNotFoundError:
+        return True   # brak wartosci = Excel domyslnie ma AutoRecover wlaczone
+    except OSError:
+        return None
+
+
+def _ustaw_autorecover(wlaczone):
+    """Ustawia globalne AutoRecover Excela (rejestr). Cicho ignoruje bledy."""
+    import winreg
+    sub = _excel_options_subkey()
+    if not sub:
+        return
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub, 0, winreg.KEY_SET_VALUE) as k:
+            winreg.SetValueEx(k, "AutoRecoverEnabled", 0, winreg.REG_DWORD, 1 if wlaczone else 0)
+    except OSError:
+        pass
+
+
+def _rozmiar_sciezki(p):
+    """Rozmiar pliku lub calego folderu w bajtach (bledy -> 0)."""
+    if os.path.isfile(p):
+        try:
+            return os.path.getsize(p)
+        except OSError:
+            return 0
+    total = 0
+    for root, _dirs, files in os.walk(p):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
+def _wyczysc_autorecover_folder():
+    """
+    Usuwa stare pliki autoodzyskiwania Excela z %AppData%\\Microsoft\\Excel,
+    zostawiajac XLSTART (dodatki) oraz pliki *.xlb (ustawienia paskow narzedzi).
+    Usuwa tylko elementy starsze niz CZYSC_AUTORECOVER_STARSZE_NIZ_DNI
+    (0 = bez ograniczenia wieku). Pliki zablokowane (otwarty Excel) sa pomijane.
+    """
+    folder = os.path.join(os.environ.get("APPDATA", ""), "Microsoft", "Excel")
+    if not os.path.isdir(folder):
+        return
+
+    granica = None
+    if CZYSC_AUTORECOVER_STARSZE_NIZ_DNI and CZYSC_AUTORECOVER_STARSZE_NIZ_DNI > 0:
+        granica = datetime.datetime.now() - datetime.timedelta(days=CZYSC_AUTORECOVER_STARSZE_NIZ_DNI)
+
+    usuniete = 0
+    zwolnione = 0
+    pominiete_swieze = 0
+    for nazwa in os.listdir(folder):
+        if nazwa.upper() == "XLSTART" or nazwa.lower().endswith(".xlb"):
+            continue
+        pelna = os.path.join(folder, nazwa)
+        try:
+            mtime = datetime.datetime.fromtimestamp(os.path.getmtime(pelna))
+        except OSError:
+            continue
+        if granica is not None and mtime >= granica:
+            pominiete_swieze += 1
+            continue  # zbyt swieze — moze byc potrzebne (reczne odzyskiwanie)
+        try:
+            rozmiar = _rozmiar_sciezki(pelna)
+            if os.path.isdir(pelna):
+                shutil.rmtree(pelna, ignore_errors=True)
+            else:
+                os.remove(pelna)
+            usuniete += 1
+            zwolnione += rozmiar
+        except OSError:
+            pass  # plik zablokowany przez otwarty Excel — pomijamy
+
+    if usuniete:
+        print(f"  [AutoRecover] Usunieto {usuniete} starych elementow odzyskiwania "
+              f"({zwolnione // (1024 * 1024)} MB).")
+    if pominiete_swieze:
+        print(f"  [AutoRecover] Zachowano {pominiete_swieze} swiezych elementow "
+              f"(< {CZYSC_AUTORECOVER_STARSZE_NIZ_DNI} dni — mozliwe reczne odzyskiwanie).")
+
+
+def main():
+    # Skrypt wylacza AutoRecover tylko NA CZAS swojej pracy (instancje Excela nie
+    # tworza plikow .xar — nawet przy ewentualnej awarii nie zostaje smieci w
+    # %AppData%\Microsoft\Excel). Preferencje uzytkownika dla RECZNEJ pracy w
+    # Excelu zapamietujemy tutaj i przywracamy w finally.
+    _ar_user = _czytaj_autorecover()
+
+    # Sprzatanie nagromadzonych plikow autoodzyskiwania PRZED uruchomieniem Excela
+    # (inaczej Excel probuje je odzyskac przy starcie i potrafi paść).
+    if CZYSC_AUTORECOVER:
+        try:
+            _wyczysc_autorecover_folder()
+        except Exception as e:
+            print(f"  [AutoRecover] Sprzatanie pominieto: {type(e).__name__}: {e}")
+
+    try:
+        _main_impl()
+    finally:
+        if _ar_user is not None:
+            _ustaw_autorecover(_ar_user)
+
 
 if __name__ == "__main__":
     main()

@@ -26,3 +26,10 @@ start.txt
 script-protokol-arkusz-cc-clean/
 archiwum/
 archiwium/
+
+# Edytor
+.vscode/
+
+# Dane pomiarowe (loggery / protokoly) — nie publikujemy
+excel_do_analizy/
+20??-*.txt
