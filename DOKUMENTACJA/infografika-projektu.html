@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infografika projektu — Generator arkuszy i protokołów wzorcowania</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#111c33; --card:#16233f; --stroke:#243352;
+    --txt:#e6ecf7; --muted:#93a4c3; --accent:#4c86f9; --accent2:#7aa2ff;
+    --in:#3b82f6; --xf:#f59e0b; --out:#22c55e; --cfg:#94a3b8; --pz:#a855f7; --gui:#ec4899;
+    --diagbg:#0a1424;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font-family:'Segoe UI Variable','Segoe UI',system-ui,sans-serif;
+       background:var(--bg);color:var(--txt);line-height:1.5;font-size:15px}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:grid;grid-template-columns:260px 1fr;max-width:1600px;margin:0 auto}
+  /* nav */
+  nav{position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px;
+      background:var(--panel);border-right:1px solid var(--stroke)}
+  nav h1{font-size:15px;margin:0 0 4px;color:#fff}
+  nav .sub{font-size:11px;color:var(--muted);margin-bottom:16px}
+  nav a{display:block;padding:6px 10px;border-radius:8px;color:var(--muted);font-size:13.5px}
+  nav a:hover{background:var(--card);color:var(--txt);text-decoration:none}
+  nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#5f7099;margin:14px 10px 4px}
+  main{padding:28px 40px 80px;min-width:0}
+  header.hero{background:linear-gradient(135deg,#16233f,#0f1b33);border:1px solid var(--stroke);
+       border-radius:16px;padding:28px 30px;margin-bottom:26px}
+  header.hero h1{margin:0 0 6px;font-size:26px;color:#fff}
+  header.hero p{margin:4px 0;color:var(--muted);max-width:900px}
+  section{margin:34px 0;scroll-margin-top:20px}
+  h2{font-size:21px;border-bottom:2px solid var(--accent);padding-bottom:8px;color:#fff;margin-bottom:6px}
+  h3{font-size:16px;color:var(--accent2);margin:22px 0 8px}
+  h4{font-size:14px;color:#cdd8ee;margin:16px 0 6px}
+  .lead{color:var(--muted);margin:6px 0 16px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:14px 0}
+  .card{background:var(--card);border:1px solid var(--stroke);border-radius:12px;padding:16px}
+  .card .n{font-size:26px;font-weight:800;color:#fff}
+  .card .l{font-size:12.5px;color:var(--muted)}
+  .mermaid{background:var(--diagbg);border:1px solid var(--stroke);
+       border-radius:12px;padding:18px;margin:14px 0;overflow-x:auto;text-align:center}
+  table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13.5px;background:var(--card);
+        border:1px solid var(--stroke);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--stroke);vertical-align:top}
+  th{background:#1a2947;color:#cdd8ee;font-weight:700;position:sticky;top:0}
+  tr:last-child td{border-bottom:none}
+  td code,.mono{font-family:'Cascadia Mono','Consolas',monospace;font-size:12.5px;color:#a8e6cf}
+  .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+  .p-in{background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid #3b82f6}
+  .p-xf{background:rgba(245,158,11,.16);color:#fcd34d;border:1px solid #f59e0b}
+  .p-out{background:rgba(34,197,94,.16);color:#86efac;border:1px solid #22c55e}
+  .p-cfg{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid #94a3b8}
+  .p-pz{background:rgba(168,85,247,.16);color:#d8b4fe;border:1px solid #a855f7}
+  .p-gui{background:rgba(236,72,153,.16);color:#f9a8d4;border:1px solid #ec4899}
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 4px}
+  details{background:var(--card);border:1px solid var(--stroke);border-radius:10px;margin:10px 0;padding:4px 14px}
+  details>summary{cursor:pointer;font-weight:700;color:#cdd8ee;padding:8px 0}
+  details[open]>summary{border-bottom:1px solid var(--stroke);margin-bottom:8px}
+  .note{background:rgba(76,134,249,.08);border-left:3px solid var(--accent);border-radius:8px;
+        padding:10px 14px;margin:12px 0;color:#cdd8ee;font-size:13.5px}
+  .warn{background:rgba(245,158,11,.08);border-left:3px solid var(--xf)}
+  .fileref{color:#6f83a8;font-size:11.5px}
+  footer{color:var(--muted);font-size:12.5px;border-top:1px solid var(--stroke);padding-top:16px;margin-top:40px}
+  @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;height:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>🧪 Generator CC</h1>
+  <div class="sub">Wzorcowanie termohigrometrów · Laboratorium PLUM</div>
+  <a href="#przeglad">📊 Przegląd</a>
+  <a href="#jak">📖 Jak czytać</a>
+  <a href="#architektura">🗺️ Architektura</a>
+  <a href="#pipeline">🔄 Pipeline danych</a>
+  <a href="#uruchamianie">▶️ Uruchamianie (exe/GUI)</a>
+  <div class="grp">Moduły</div>
+  <a href="#analizuj">📥 analizuj_excele.py</a>
+  <a href="#pzdane">📄 pz_dane.py</a>
+  <a href="#obserwacje">📈 generuj_obserwacje.py</a>
+  <a href="#arkusze">📑 generuj_arkusze.py</a>
+  <a href="#gui">🖥️ app_gui / app_entry</a>
+  <a href="#packaging">📦 Pakowanie (exe)</a>
+  <div class="grp">Przekrojowo</div>
+  <a href="#ustawienia">⚙️ Wszystkie ustawienia</a>
+  <a href="#env">🔌 Kontrakt env-var</a>
+  <a href="#interakcje">🔗 Interakcje / dane</a>
+</nav>
+<main>
+
+<header class="hero">
+  <h1>Generator arkuszy i protokołów wzorcowania — infografika projektu</h1>
+  <p>Zestaw skryptów Python automatyzujący pełny obieg wzorcowania termohigrometrów w akredytowanym
+  laboratorium: od surowych logów czujników, przez analizę stabilności i protokoły, po arkusze
+  obliczeniowe Excel i świadectwa Word — spięty desktopowym panelem PySide6 i spakowany w jeden <code>.exe</code>.</p>
+  <p class="fileref">Wygenerowano automatycznie na podstawie analizy kodu (3 agenty Explore + agent project-visualizer).
+  Każde twierdzenie o funkcji/ustawieniu jest oparte na realnym <span class="mono">plik:linia</span>.</p>
+</header>
+
+<!-- PRZEGLAD -->
+<section id="przeglad">
+  <h2>📊 Przegląd projektu</h2>
+  <div class="cards">
+    <div class="card"><div class="n">6</div><div class="l">skryptów Python (rdzeń)</div></div>
+    <div class="card"><div class="n">211</div><div class="l">funkcji łącznie (<span class="mono">def</span>)</div></div>
+    <div class="card"><div class="n">~7 400</div><div class="l">linii kodu</div></div>
+    <div class="card"><div class="n">11</div><div class="l">obsługiwanych formatów loggerów</div></div>
+    <div class="card"><div class="n">1</div><div class="l">plik <code>ProtokolCC.exe</code> (75 MB)</div></div>
+    <div class="card"><div class="n">2</div><div class="l">języki PZ (PL / EN)</div></div>
+  </div>
+  <table>
+    <tr><th>Plik</th><th>Linie</th><th>Funkcje</th><th>Rola</th><th>Kluczowe biblioteki</th></tr>
+    <tr><td><code>generuj_arkusze.py</code></td><td>3402</td><td>97</td><td>Kopie arkuszy obliczeniowych Excel + świadectwa Word</td><td class="mono">xlwings, openpyxl, python-docx</td></tr>
+    <tr><td><code>generuj_obserwacje.py</code></td><td>1549</td><td>41</td><td>Arkusz obserwacji + protokół (CC / CC-04) z pliku TXT multimetru</td><td class="mono">openpyxl, xlwings(COM)</td></tr>
+    <tr><td><code>analizuj_excele.py</code></td><td>1093</td><td>28</td><td>Uniwersalny parser loggerów → <code>wyniki/*.xlsx</code></td><td class="mono">pandas, openpyxl, pypdf</td></tr>
+    <tr><td><code>pz_dane.py</code></td><td>346</td><td>16</td><td>Parser PZ (PDF, PL/EN) + Zestawienie rozdzielczości</td><td class="mono">pypdf, openpyxl</td></tr>
+    <tr><td><code>app_gui.py</code></td><td>472</td><td>26</td><td>Panel sterujący PySide6 (Windows 11 Fluent)</td><td class="mono">PySide6</td></tr>
+    <tr><td><code>app_entry.py</code></td><td>83</td><td>3</td><td>Dyspozytor zamrożonego exe (GUI ↔ worker)</td><td class="mono">—</td></tr>
+  </table>
+</section>
+
+<!-- JAK CZYTAC -->
+<section id="jak">
+  <h2>📖 Jak czytać tę infografikę</h2>
+  <p class="lead">Kolory oznaczają rolę elementu w przepływie danych — spójne we wszystkich diagramach i tabelach:</p>
+  <div class="legend">
+    <span class="pill p-in">wejście / dane surowe</span>
+    <span class="pill p-xf">transformacja / analiza</span>
+    <span class="pill p-out">wyjście / artefakt</span>
+    <span class="pill p-cfg">konfiguracja / ustawienie</span>
+    <span class="pill p-pz">PZ / dane przyrządów</span>
+    <span class="pill p-gui">GUI / orkiestracja</span>
+  </div>
+  <div class="note">Duże tabele funkcji są zwinięte w bloki <b>„▸ Pełna lista funkcji…"</b> — kliknij, aby rozwinąć.
+  Diagramy renderuje Mermaid (jeden skrypt z CDN); jeśli nie masz internetu, diagram pokaże się jako tekst źródłowy.</div>
+</section>
+
+<!-- ARCHITEKTURA -->
+<section id="architektura">
+  <h2>🗺️ Architektura — mapa modułów</h2>
+  <p class="lead">Cztery skrypty-workery + wspólny moduł danych + panel GUI. Strzałki = kierunek przepływu danych.</p>
+  <div class="mermaid">
+flowchart LR
+  subgraph IN["📥 Wejścia (dane surowe)"]
+    TXT["Plik TXT multimetru<br/>(2026-.._nr.txt)"]:::in
+    LOG["Logi czujników DUT<br/>excel_do_analizy/*.csv/.xlsx/.txt/.pdf/.log"]:::in
+    PZ["PZ — Potwierdzenie zamówienia<br/>PZ/*.pdf (PL/EN)"]:::in
+    ZEST["Zestawienie<br/>wzorcowanych przyrządów.xlsx"]:::in
+  end
+  ANAL["analizuj_excele.py<br/><small>sniff_format → 11 parserów</small>"]:::xf
+  WYN["wyniki/&lt;serial&gt;_wynik.xlsx<br/><small>Czas | Temp | Wilg</small>"]:::out
+  PZD["pz_dane.py<br/><small>wczytaj_pz · wczytaj_zestawienie</small>"]:::pz
+  OBS["generuj_obserwacje.py<br/><small>analiza stabilności · protokół</small>"]:::xf
+  PROTO["Protokół CC / CC-04<br/><small>Strona 2 (przyrządy) + Strona 3 (pomiary)</small>"]:::out
+  ARK["generuj_arkusze.py<br/><small>kopie arkuszy + świadectwa</small>"]:::xf
+  KOP["Kopie Excel (arkusze obl.)"]:::out
+  DOC["Świadectwa Word (.docx)"]:::out
+
+  LOG --> ANAL --> WYN
+  TXT --> OBS
+  WYN --> OBS
+  PZ --> PZD
+  ZEST --> PZD
+  PZD --> OBS
+  OBS --> PROTO
+  PROTO --> ARK
+  PZD --> ARK
+  ARK --> KOP
+  ARK --> DOC
+
+  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
+  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
+  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  classDef gui fill:#3d1030,stroke:#ec4899,color:#fbcfe8;
+  </div>
+  <div class="note"><b>Kluczowa zależność kolejności:</b> <span class="mono">analizuj_excele</span> musi wygenerować
+  <span class="mono">wyniki/*</span> zanim <span class="mono">generuj_obserwacje</span> dopasuje je czasowo do Strony 3.
+  PZ wczytywany jest na starcie obserwacji, a dopasowanie przyrządu ↔ kolumny pomiarowej idzie po
+  <b>nr fabrycznym lub nr ewidencyjnym</b> = serial z nazwy pliku wyniku.</div>
+</section>
+
+<!-- PIPELINE -->
+<section id="pipeline">
+  <h2>🔄 Pełny pipeline danych (end-to-end)</h2>
+  <div class="mermaid">
+flowchart TD
+  A["Logi DUT + logi środowiskowe"]:::in --> B{{"analizuj_excele<br/>sniff_format()"}}:::xf
+  B -->|"11 formatów"| C["wyniki/&lt;serial&gt;_wynik.xlsx"]:::out
+  D["TXT multimetru (1..N plików)"]:::in --> E["combine_txt()<br/>sklejenie + dedup po czasie"]:::xf
+  E --> F["Arkusz obserwacji<br/>+ analyze_and_highlight()<br/>segmenty · 5-min okno · 5 reprezentantów"]:::xf
+  F --> G["generuj_protokol()"]:::xf
+  C --> H["_wypelnij_wyniki_srodowiskowe()<br/>dopasowanie 5 wierszy po czasie ±tol"]:::xf
+  H --> G
+  PZ["PZ/*.pdf"]:::in --> I["pz_dane.wczytaj_pz()<br/>klucz: nr_fabr + nr_ewid"]:::pz
+  ZEST["Zestawienie.xlsx"]:::in --> J["wczytaj_zestawienie()<br/>rozdzielczość t/RH"]:::pz
+  I --> K["wypelnij_strone2_z_pz()"]:::pz
+  J --> K
+  G --> L["Protokół: Strona 3 (pomiary)"]:::out
+  K --> M["Protokół: Strona 2 (tabela przyrządów)"]:::out
+  L --> N["generuj_arkusze._main_impl()"]:::xf
+  M --> N
+  N --> O["7 etapów: kopie → zakładki → C/D/E/F → nagłówki (K11-K18) → Wyniki → środowisko → Word"]:::xf
+  O --> P["Kopie Excel (arkusze obl.)"]:::out
+  O --> Q["Świadectwa Word (.docx)"]:::out
+  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
+  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
+  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  </div>
+</section>
+
+<!-- URUCHAMIANIE -->
+<section id="uruchamianie">
+  <h2>▶️ Uruchamianie — jeden exe, trzy tryby</h2>
+  <p class="lead">Panel GUI uruchamia skrypty-workery jako podprocesy. W zamrożonym <code>.exe</code> ten sam plik
+  pełni rolę i GUI, i workera — o trybie decyduje zmienna <code class="mono">CC_WORKER</code>.</p>
+  <div class="mermaid">
+sequenceDiagram
+  participant U as Użytkownik
+  participant E as ProtokolCC.exe
+  participant AE as app_entry.main()
+  participant G as app_gui (GUI)
+  participant W as worker (generuj_*)
+  U->>E: dwuklik (brak CC_WORKER)
+  E->>AE: start
+  AE->>G: CC_WORKER puste → uruchom GUI
+  U->>G: klik „Obserwacja/Protokół/Word"
+  G->>G: _run(tryb): zbierz env (GEN_*, OBS_*, CC_*)
+  G->>E: QProcess.start(sys.executable) + CC_WORKER=obserwacje/arkusze
+  E->>AE: start (worker)
+  AE->>W: CC_WORKER ustawione → import generuj_*, main()
+  W-->>G: stdout przez potok QProcess → żywy log
+  W-->>G: kod wyjścia (0 = OK)
+  </div>
+  <div class="note"><b>Dlaczego tak:</b> jeden windowed-exe nie ma stdout przy dwukliku, ale gdy GUI uruchamia go jako
+  worker przez <span class="mono">QProcess</span> z potokiem — worker pisze do logu na żywo. Awarie workera trafiają do
+  <span class="mono">crash.log</span> obok exe (<span class="fileref">app_entry.py:21</span>).</div>
+</section>
+
+<!-- ANALIZUJ -->
+<section id="analizuj">
+  <h2>📥 analizuj_excele.py — uniwersalny parser loggerów</h2>
+  <p class="lead">Wykrywa format z pierwszych 1 KB pliku i kieruje do właściwego parsera. Wynik zawsze znormalizowany:
+  <code>Czas | Temperatura [°C] | Wilgotność [%RH]</code> → <code>wyniki/&lt;nazwa&gt;_wynik.xlsx</code>.</p>
+
+  <h3>Wykrywanie formatu — <code>sniff_format()</code> <span class="fileref">L249–297</span></h3>
+  <table>
+    <tr><th>Format</th><th>Sygnał wykrycia</th><th>Rozszerzenie</th><th>Logger</th></tr>
+    <tr><td><code>pdf_logger</code></td><td><span class="mono">.pdf</span> lub nagłówek <span class="mono">%PDF</span></td><td>.pdf</td><td>tempmate. i pochodne (raport PDF)</td></tr>
+    <tr><td><code>putty</code></td><td><span class="mono">b'PuTTY log'</span> w treści</td><td>.log/.txt</td><td>Vaisala PTU (log terminala, P/T/RH)</td></tr>
+    <tr><td><code>rotronic_hw4</code></td><td><span class="mono">[#I]Device Name</span> / <span class="mono">[#D]Measurements</span></td><td>.xls*</td><td>Rotronic HW4</td></tr>
+    <tr><td><code>almemo</code></td><td><span class="mono">b'ALMEMO'</span></td><td>.xls</td><td>ALMEMO (bloki metadanych)</td></tr>
+    <tr><td><code>comet_txt</code></td><td>.txt + <span class="mono">Numer seryjny</span>/<span class="mono">Nazwa:</span></td><td>.txt</td><td>Comet / TFA (eksport tekstowy)</td></tr>
+    <tr><td><code>xtherm_com</code></td><td>.txt + <span class="mono">czas odbioru</span></td><td>.txt</td><td>xTHERM (log przez COM, 2×temp + wilg)</td></tr>
+    <tr><td><code>hobo</code></td><td>.csv + <span class="mono">LGR S/N</span>/<span class="mono">GMT+</span> + <span class="mono">"Nr"</span></td><td>.csv</td><td>HOBO data logger</td></tr>
+    <tr><td><code>aranet</code></td><td>.csv + <span class="mono">Aranet</span></td><td>.csv</td><td>Aranet (multi-sensor)</td></tr>
+    <tr><td><code>csv_generic</code></td><td>.csv (fallback)</td><td>.csv</td><td>dowolny CSV (detekcja kolumn po słowach)</td></tr>
+    <tr><td><code>excel_inspect</code></td><td>.xls/.xlsx → głęboka detekcja pod-formatu</td><td>.xls/.xlsx</td><td>Excel (auto: ALMEMO/ElogVis/Comet/tabela)</td></tr>
+    <tr><td><code>txt_generic</code></td><td>.txt (fallback)</td><td>.txt</td><td>dowolny TXT (separator)</td></tr>
+  </table>
+
+  <h3>Ustawienia <span class="fileref">L51–100</span></h3>
+  <table>
+    <tr><th>Stała</th><th>Wartość / rola</th></tr>
+    <tr><td><code>SUPPORTED_EXT</code></td><td><span class="mono">{.csv .xls .xlsx .txt .pdf .log}</span> — rozszerzenia brane z folderu</td></tr>
+    <tr><td><code>DEFAULT_INPUT / OUTPUT</code></td><td><span class="mono">excel_do_analizy/</span> → <span class="mono">wyniki/</span></td></tr>
+    <tr><td><code>TEMP_KW / HUM_KW / TIME_KW</code></td><td>wielojęzyczne regexy nagłówków (PL/EN/DE) dla temperatury / wilgotności / czasu</td></tr>
+    <tr><td><code>_MONTHS_EN</code></td><td>mapa skrótów miesięcy EN→numer (parsowanie dat niezależne od locale)</td></tr>
+  </table>
+
+  <details>
+    <summary>▸ Pełna lista funkcji (28) — parsery i narzędzia</summary>
+    <table>
+      <tr><th>Funkcja</th><th>Rola</th><th class="fileref">Linia</th></tr>
+      <tr><td><code>parse_rotronic_hw4</code></td><td>tekst INI udający .xls; [#H] nagłówki + [#D] pomiary; łączy Date/Time</td><td>301</td></tr>
+      <tr><td><code>parse_almemo</code></td><td>Excel z powtarzanymi blokami metadanych; filtr po dacie; dedup ISO</td><td>355</td></tr>
+      <tr><td><code>parse_hobo</code></td><td>CSV: pomija tytuł; wykrywa T/RH; auto day-first (DD.MM vs MM.DD)</td><td>462</td></tr>
+      <tr><td><code>parse_aranet</code></td><td>CSV multi-sensor; kolumny Temperature(°C)/Humidity(%) z [ID]</td><td>491</td></tr>
+      <tr><td><code>parse_csv_generic</code></td><td>detekcja separatora (;/,/tab/|); fallback pozycyjny</td><td>559</td></tr>
+      <tr><td><code>parse_excel_inspect</code></td><td>pętla po arkuszach; próbuje ALMEMO→ElogVis→Comet→tabela</td><td>599</td></tr>
+      <tr><td><code>parse_comet_txt</code></td><td>Comet/TFA: NNNN DATE TIME T RH (tab lub spacje)</td><td>711</td></tr>
+      <tr><td><code>parse_xtherm_com</code></td><td>xTHERM: temp wewn/zewn + wilgotność; wyjście dwu-temp</td><td>882</td></tr>
+      <tr><td><code>parse_txt_generic</code></td><td>robust CSV; wybór najlepszej kolumny T/RH po pokryciu danych</td><td>779</td></tr>
+      <tr><td><code>parse_pdf_logger</code></td><td>PDF (tempmate): regex <span class="mono">DD-MMM-YY HH:MM:SS val °C/°F</span>; °F→°C; sort</td><td>913</td></tr>
+      <tr><td><code>parse_putty</code></td><td>PuTTY: linie z <span class="mono">T= RH= P=</span> (dowolna kolejność); pomija echo/rok&lt;2015</td><td>967</td></tr>
+      <tr><td><code>save_result</code></td><td>standaryzacja wyjścia; usuwa NaN/duplikaty; zapis <span class="mono">_wynik.xlsx</span></td><td>218</td></tr>
+      <tr><td><code>_save_xtherm</code></td><td>wyjście dwu-temp (Temp wewn./zewn. + opc. wilgotność)</td><td>844</td></tr>
+      <tr><td><code>clean_num / parse_dt</code></td><td>float (przecinek→kropka, sentinel „--"); elastyczny parser dat</td><td>104 / 118</td></tr>
+      <tr><td><code>find_cols / _find_col</code></td><td>dopasowanie kolumn po regexie / nazwie (exact→contains)</td><td>149 / 828</td></tr>
+      <tr><td><code>col_has_time_component</code></td><td>czy kolumna ma pełny datetime (nie tylko datę)</td><td>153</td></tr>
+      <tr><td><code>detect_dayfirst</code></td><td>DD.MM vs MM.DD po wartościach &gt;12; domyślnie europejskie</td><td>162</td></tr>
+      <tr><td><code>build_times</code></td><td>scala kolumny data+czas tylko gdy pierwsza to sama data</td><td>188</td></tr>
+      <tr><td><code>read_csv_robust</code></td><td>4 kodowania × 4 separatory → najlepszy DataFrame</td><td>203</td></tr>
+      <tr><td><code>_best_numeric_col</code></td><td>kolumna z największą liczbą wartości liczbowych</td><td>762</td></tr>
+      <tr><td><code>process_file / main</code></td><td>sniff → parser → obsługa błędów; tryb pliku lub folderu (batch)</td><td>1028 / 1047</td></tr>
+    </table>
+  </details>
+</section>
+
+<!-- PZ_DANE -->
+<section id="pzdane">
+  <h2>📄 pz_dane.py — dane przyrządów z PZ (PL/EN)</h2>
+  <p class="lead">Wspólny, czysty moduł (bez efektów ubocznych) używany przez obserwację i arkusze.
+  Parsuje PDF „Potwierdzenie zamówienia" (dwujęzycznie) oraz Zestawienie rozdzielczości.</p>
+
+  <div class="mermaid">
+flowchart LR
+  P["PZ/*.pdf"]:::in --> A["parsuj_pdf()"]:::pz
+  A --> B["_numer_zlecenia_th()<br/>nr zlecenia (LA/TH)"]:::pz
+  A --> C["sekcja Obiekty/Calibration objects<br/>→ podział 1) 2) 3)"]:::pz
+  C --> D["_parsuj_wpis()<br/>obiekt + czujnik, rozwinięcie 'N szt.'"]:::pz
+  A --> E["_parsuj_uzytkownik()<br/>blok UŻYTKOWNIK/USER"]:::pz
+  D --> F["PZPrzyrzad<br/>wytwórca·typ·nr_fabr·nr_ewid·czujnik·użytkownik"]:::out
+  F --> G["mapa: klucz = nr_fabr I nr_ewid<br/>(znormalizowane)"]:::pz
+  Z["Zestawienie.xlsx"]:::in --> H["wczytaj_zestawienie()<br/>rozmyte (producent,typ) → t/RH res"]:::pz
+  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
+  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  </div>
+
+  <div class="note"><b>Sedno dopasowania:</b> plik loggera nazywa się <span class="mono">&lt;serial&gt;_wynik.xlsx</span>.
+  U Vaisali serial pliku = <b>nr ewidencyjny</b> (EV363499), a nr fabryczny to co innego (D4940027) — dlatego mapa
+  jest kluczowana <b>po obu numerach</b> (<span class="fileref">pz_dane.py wczytaj_pz</span>).</div>
+
+  <h3>Model danych — <code>PZPrzyrzad</code> <span class="fileref">L42–62</span></h3>
+  <table>
+    <tr><th>Pole</th><th>Znaczenie</th><th>Strona 2 kol.</th></tr>
+    <tr><td><code>nr_zlecenia</code></td><td>numer zlecenia (np. „119")</td><td>O</td></tr>
+    <tr><td><code>wytworca</code> / <code>typ</code></td><td>producent / typ obiektu</td><td>B / D</td></tr>
+    <tr><td><code>nr_fabr</code> / <code>nr_ewid</code></td><td>nr fabryczny (klucz) / nr ewidencyjny (klucz alt.)</td><td>E / F</td></tr>
+    <tr><td><code>czuj_wytworca/typ/nr_fabr</code></td><td>czujnik pomiarowy (osobny)</td><td>C / H / I</td></tr>
+    <tr><td><code>uzytkownik</code></td><td>blok adresowy z „UŻYTKOWNIK/USER" (może być pusty)</td><td>→ Word <code>[użytkownik]</code></td></tr>
+  </table>
+
+  <h3>Etykiety dwujęzyczne (regexy)</h3>
+  <table>
+    <tr><th>Pole</th><th>Polski</th><th>Angielski</th></tr>
+    <tr><td>Nr zlecenia</td><td><span class="mono">Numer zlecenia laboratorium:</span></td><td><span class="mono">Order numbers:</span></td></tr>
+    <tr><td>Sekcja przyrządów</td><td><span class="mono">Obiekty wzorcowania:</span></td><td><span class="mono">Calibration objects:</span></td></tr>
+    <tr><td>Typ</td><td><span class="mono">typ: / nr kat.:</span></td><td><span class="mono">type:</span></td></tr>
+    <tr><td>Serial</td><td><span class="mono">nr fabr.: / nr:</span></td><td><span class="mono">serial number(s):</span></td></tr>
+    <tr><td>Nr ewid.</td><td><span class="mono">nr wewn.:</span></td><td><span class="mono">identification number:</span></td></tr>
+    <tr><td>Producent</td><td><span class="mono">wytwórca:</span></td><td><span class="mono">manufacturer:</span></td></tr>
+    <tr><td>Czujnik</td><td><span class="mono">z czujnikiem / oraz czujnika</span></td><td><span class="mono">with N … sensors</span></td></tr>
+    <tr><td>Użytkownik</td><td><span class="mono">UŻYTKOWNIK:</span></td><td><span class="mono">USER:</span></td></tr>
+  </table>
+
+  <details>
+    <summary>▸ Pełna lista funkcji (16)</summary>
+    <table>
+      <tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>wczytaj_pz(folder)</code></td><td>parsuje wszystkie PDF → <span class="mono">dict[serial → PZPrzyrzad]</span> (klucz: nr_fabr + nr_ewid) + lista</td></tr>
+      <tr><td><code>parsuj_pdf(path)</code></td><td>jeden PDF → lista PZPrzyrzad (nr zlecenia, sekcja, podział 1)2)3), użytkownik)</td></tr>
+      <tr><td><code>_parsuj_wpis(wpis, nr)</code></td><td>jeden wpis: obiekt+czujnik; rozwinięcie „N szt." → 1 rekord na serial; dziedziczenie wytwórcy</td></tr>
+      <tr><td><code>_parsuj_pole / _wytnij_serial_liste</code></td><td>(typ,wytwórca) z fragmentu; lista seriali (przecinki)</td></tr>
+      <tr><td><code>_parsuj_uzytkownik(text)</code></td><td>blok adresowy UŻYTKOWNIK/USER (bez pustych linii i „Uwaga")</td></tr>
+      <tr><td><code>_numer_zlecenia_th(text)</code></td><td>nr zlecenia; preferuje wpis <span class="mono">/LA/TH/</span></td></tr>
+      <tr><td><code>wczytaj_zestawienie(path)</code></td><td>arkusz Termohigrometry: B=producent, D=typ, J=rozdzielczość → lista</td></tr>
+      <tr><td><code>rozdzielczosc_zestawienie(zest,prod,typ)</code></td><td>rozmyte dopasowanie (podciąg) → (t_res, rh_res)</td></tr>
+      <tr><td><code>rozdzielczosc_z_kolumny(values)</code></td><td>fallback: najmniejsze zmieniające się miejsce dziesiętne (40.0→1, 40.1→0.1, 40.04→0.01)</td></tr>
+      <tr><td><code>normalizuj_serial / _norm_txt / _oczysc</code></td><td>klucze i porządkowanie (spacje, wielkość liter, interpunkcja)</td></tr>
+    </table>
+  </details>
+</section>
+
+<!-- OBSERWACJE -->
+<section id="obserwacje">
+  <h2>📈 generuj_obserwacje.py — obserwacja + protokół</h2>
+  <p class="lead">Z pliku(ów) TXT multimetru buduje arkusz obserwacji, analizuje stabilność, wybiera 5 reprezentantów
+  na punkt, a następnie tworzy protokół: Strona 3 (dane pomiarowe + środowiskowe) i Strona 2 (tabela przyrządów z PZ).</p>
+
+  <div class="mermaid">
+flowchart TD
+  A["resolve_txt_files()<br/>OBS_TXT_FILES › TXT_FILENAMES › TXT_FILENAME<br/>(tolerancyjnie: dodaje .txt, fuzzy)"]:::xf --> B["combine_txt()<br/>skleja N plików, dedup po czasie (kol. A)"]:::xf
+  B --> C{"detect_file_type<br/>CC / CC-04"}:::xf
+  C --> D["Arkusz obserwacji (A2:U/L)"]:::out
+  D --> E["analyze_and_highlight()<br/>segmenty stabilne (B+C ≥ 1h45m)<br/>filtr suszenia/histerezy<br/>okno 5-min · 5 reprezentantów"]:::xf
+  E --> F["generuj_protokol()"]:::xf
+  F --> G["_wypelnij_wyniki_srodowiskowe()<br/>wyniki/*.xlsx → Strona 3 (Q/R lub S/T)<br/>zwraca (serial, temps, rhs) per przyrząd"]:::xf
+  G --> H["wypelnij_strone2_z_pz()<br/>match serial → PZ · rozdzielczość K/L"]:::pz
+  F --> I["Protokół — Strona 3"]:::out
+  H --> J["Protokół — Strona 2"]:::out
+  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
+  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  </div>
+
+  <h3>Ustawienia <span class="fileref">L40–94</span></h3>
+  <table>
+    <tr><th>Stała</th><th>Domyślnie</th><th>Rola / override env</th></tr>
+    <tr><td><code>FOLDER</code></td><td>ścieżka projektu</td><td>folder roboczy — override <span class="mono">CC_FOLDER</span></td></tr>
+    <tr><td><code>TXT_FILENAME / TXT_FILENAMES</code></td><td>—</td><td>plik(i) TXT; lista = przerwany pomiar (skleja) — override <span class="mono">OBS_TXT_FILES</span></td></tr>
+    <tr><td><code>TEMPLATE / CC04_TEMPLATE</code></td><td>szablony obserwacji</td><td>arkusz obserwacji CC / CC-04</td></tr>
+    <tr><td><code>PROTOKOL_CC_TEMPLATE / _CC04_</code></td><td>szablony protokołu</td><td>protokół CC / CC-04</td></tr>
+    <tr><td><code>PZ_FOLDER / ZESTAWIENIE_PLIK</code></td><td><span class="mono">PZ/</span> · Zestawienie.xlsx</td><td>źródła danych przyrządów — override <span class="mono">CC_PZ_FOLDER</span></td></tr>
+    <tr><td><code>WYNIKI_FOLDER</code></td><td><span class="mono">wyniki/</span></td><td>zunifikowane pliki z analizuj_excele</td></tr>
+    <tr><td><code>STABILIZACJA_MIN</code></td><td>1h 45m</td><td>czas rozgrzewki przed oknem analizy</td></tr>
+    <tr><td><code>FILTR_NASTAWA_ODCZYT</code></td><td>True</td><td>filtr zgodności nastawy z odczytem komory — override <span class="mono">OBS_FILTR</span></td></tr>
+    <tr><td><code>MAX_ROZNICA_PROCENT</code></td><td>10.0 %</td><td>maks. |nastawa−odczyt|/nastawa — override <span class="mono">OBS_PROG</span></td></tr>
+    <tr><td><code>WYNIKI_TOLERANCJA_MIN</code></td><td>30 min</td><td>tolerancja dopasowania czasu wyników — override <span class="mono">OBS_TOL</span></td></tr>
+  </table>
+
+  <details>
+    <summary>▸ Pełna lista funkcji (41) — wg etapów</summary>
+    <h4>Wejście / TXT (multi-plik)</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>resolve_txt_files</code></td><td>ustala listę TXT (env › lista › pojedynczy), sort chronologiczny, tolerancyjnie</td></tr>
+      <tr><td><code>_znajdz_txt / _dostepne_txt</code></td><td>szuka pliku (dokładnie/+.txt/prefix); lista .txt w folderze</td></tr>
+      <tr><td><code>combine_txt</code></td><td>parsuje wiele TXT, skleja wiersze, dedup po czasie (kol. A)</td></tr>
+      <tr><td><code>parse_txt / parse_txt_cc04</code></td><td>CC: czujnik + A:L; CC-04: 4 czujniki, nagłówek dynamiczny → 21 kolumn kanon.</td></tr>
+      <tr><td><code>open_txt / detect_file_type</code></td><td>otwarcie z fallbackiem kodowań; CC vs CC-04 (linia 5)</td></tr>
+    </table>
+    <h4>Analiza stabilności</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>analyze_and_highlight</code></td><td>okna stabilne, filtr suszenia/histerezy, kolorowanie, 5 reprezentantów</td></tr>
+      <tr><td><code>_find_all_analysis_windows</code></td><td>segmenty stałego (B,C) ≥ STABILIZACJA_MIN → (start,end)</td></tr>
+      <tr><td><code>_process_segment</code></td><td>filtr nastawa/odczyt, kryteria K/L, okno 5-min, kolor + bold 5 reprez.</td></tr>
+      <tr><td><code>get_k_threshold</code></td><td>maks. K (punkt rosy) zależnie od T/RH (0.2 / 0.45)</td></tr>
+      <tr><td><code>_find_best_minute_reps</code></td><td>5 kolejnych minut z min. średnią score (K lub max 4×L)</td></tr>
+      <tr><td><code>_prepare_data / _prepare_data_cc04</code></td><td>wiersze str → krotki (dt, nastawy, odczyty, K, L…)</td></tr>
+    </table>
+    <h4>Dane środowiskowe z wyników → Strona 3</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>_wypelnij_wyniki_srodowiskowe</code></td><td>wyniki/*.xlsx → pary kolumn Q/R (CC) lub S/T (CC-04); xTHERM = 2 przyrządy; zwraca użyte (serial,temps,rhs)</td></tr>
+      <tr><td><code>_zaladuj_wyniki_xlsx</code></td><td>ładuje wynik; auto-detekcja kolumn po nagłówku</td></tr>
+      <tr><td><code>_znajdz_5_wierszy / _oznacz_wyniki_xlsx</code></td><td>5 najbliższych czasowo; koloruje wybrane wiersze w pliku wyniku</td></tr>
+      <tr><td><code>_serial_z_wyniku</code></td><td><span class="mono">TMM..._wynik.xlsx → TMM...</span> (nr do dopasowania z PZ)</td></tr>
+    </table>
+    <h4>Protokół + Strona 2</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>generuj_protokol</code></td><td>kopia szablonu, dopasowanie liczby bloków (COM), Strona 3, dane środowiskowe, Strona 2 z PZ</td></tr>
+      <tr><td><code>_insert_blocks_via_excel / _delete_rows_via_excel</code></td><td>wstawianie/usuwanie bloków przez Excel COM</td></tr>
+      <tr><td><code>wypelnij_strone2_z_pz</code></td><td>match serial→PZ, wpis B:J + O; rozdzielczość K/L (Zestawienie › dane); temp-only → „-"</td></tr>
+      <tr><td><code>parse_measurement_id / to_value / _s_to_*</code></td><td>nr pomiaru z nazwy; konwersje typów i dat</td></tr>
+    </table>
+  </details>
+</section>
+
+<!-- ARKUSZE -->
+<section id="arkusze">
+  <h2>📑 generuj_arkusze.py — kopie arkuszy + świadectwa</h2>
+  <p class="lead">Największy moduł (3400 linii, 97 funkcji). Z protokołu tworzy kopie arkuszy obliczeniowych Excel
+  (przez xlwings/COM, z zachowaniem formuł i linków) oraz świadectwa Word. Praca w 7 etapach.</p>
+
+  <div class="mermaid">
+flowchart TD
+  M["_main_impl()"]:::xf --> R["wczytaj_wszystko_xlwings()<br/>Strona 2 (lista) + Strona 3 (zakładki, C/D, E/F, F24)"]:::xf
+  R --> E1["Etap 1: kopie szablonu (shutil)"]:::xf
+  E1 --> E2["Etap 2: liczba/nazwy zakładek (przez tymczasowe)"]:::xf
+  E2 --> E34["Etap 3-4: C15:C19 · D15:D19 · E15:E19 · F15:F19<br/>(źródło Q/R lub S/T; CC-04 dynamiczne kolumny)"]:::xf
+  E34 --> E5["Etap 5: nagłówki — E4/G6/K4/E5/E6/H57<br/>K11-K13/K17 (CC-04) · K18 higrometr · podpisy"]:::xf
+  E5 --> E6["Etap 6: Wyniki — F24, podpisy, sort tabel,<br/>_aktualizuj_formule_histerezy (J23)"]:::xf
+  E6 --> E7["Etap 7: warunki środowiskowe<br/>czujnik + Wzory.xls → F/G + zakresy"]:::xf
+  E7 --> KAL["_odczytaj_kalibracje_xlwings()<br/>D239:K239 (RH) / D246:G246 (temp) · klasa wilgotności"]:::xf
+  KAL --> W["utworz_kopie_word()<br/>szablon wg klasy · placeholdery · tabele kalibracji"]:::pz
+  W --> DOC["Świadectwa .docx"]:::out
+  E7 --> KOP["Kopie Excel"]:::out
+  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
+  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  </div>
+
+  <h3>Ustawienia — najważniejsze <span class="fileref">L91–193</span></h3>
+  <table>
+    <tr><th>Stała</th><th>Domyślnie</th><th>Rola</th></tr>
+    <tr><td><code>PROTOKOL_PLIK / SZABLON_PLIK</code></td><td>protokół · szablon RH (CC)</td><td>wejście — override <span class="mono">CC_PROTOKOL / CC_SZABLON</span></td></tr>
+    <tr><td><code>ARKUSZ_CHRONIONY</code></td><td>„Wyniki"</td><td>arkusz nigdy nie usuwany/zmieniany (poza sortowaniem tabel + J23)</td></tr>
+    <tr><td><code>START_ROW_S2 / START_ROW_S3 / BLOK_S3</code></td><td>11 / 20 / 5</td><td>wiersze startowe i rozmiar bloku zakładki</td></tr>
+    <tr><td><code>HIGROMETR_K18</code></td><td>„S8000"</td><td>higrometr punktu rosy → K18 (S8000 / - / S8000-2 / OPTIDEW); <b>temp-only → zawsze „-"</b></td></tr>
+    <tr><td><code>MAPOWANIE_TYPU_CC04</code></td><td>LG/LD/PD/PG</td><td>stałe K11/K12/K13/K17 per typ CC-04 (Pt100, 1586A…)</td></tr>
+    <tr><td><code>SZABLON_WORD_TYLKO_TEMP / _Z_RH / _MIESZANY</code></td><td>3 szablony .docx</td><td>wybór wg klasy wilgotności; warianty <span class="mono">(uzytkownik)</span> gdy PZ ma USER</td></tr>
+    <tr><td><code>NR_SW_POCZATKOWY</code></td><td>993</td><td>numer pierwszego świadectwa (kolejne +1)</td></tr>
+    <tr><td><code>PLIKI_LINKOWANE / LINKI_SERWEROWE</code></td><td>Wzory.xls, Obliczenia…</td><td>pliki linkowane do formuł; ścieżki serwerowe UNC przywracane po zapisie</td></tr>
+    <tr><td><code>GENERUJ_EXCEL / GENERUJ_WORD</code></td><td>True / True</td><td>etapy — override <span class="mono">GEN_EXCEL / GEN_WORD</span></td></tr>
+    <tr><td><code>USUWAJ_PUSTE_BLOKI_KOPII_S3</code></td><td>True</td><td>kopia dostaje tylko aktywne bloki — override <span class="mono">GEN_PUSTE</span></td></tr>
+    <tr><td><code>CZYSC_AUTORECOVER</code></td><td>True</td><td>czyszczenie AutoRecover Excela — override <span class="mono">GEN_AUTOREC</span></td></tr>
+    <tr><td><code>FILTRUJ_KOLOR_S3 / KOLOR_*_S3</code></td><td>zielony=bierz, szary=pomiń</td><td>filtr komórek Strona 3 po kolorze</td></tr>
+  </table>
+
+  <div class="note warn"><b>Ostatnie zmiany (ta sesja):</b> <span class="mono">HIGROMETR_K18</span> (K18 z konfiguracji, temp-only→„-"),
+  <span class="mono">_aktualizuj_formule_histerezy</span> (Wyniki!J23 podmienia parę punktów histerezy na realne zakładki),
+  <span class="mono">_pz_mapa_arkusze</span> + warianty szablonów Word z <span class="mono">[użytkownik]</span>,
+  poprawka daty wzorcowania (parsowanie dat-stringów).</div>
+
+  <details>
+    <summary>▸ Pełna lista funkcji (97) — wg kategorii</summary>
+    <h4>Odczyt protokołu</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>wczytaj_wszystko_xlwings</code></td><td>jeden przebieg COM: Strona 2 (lista), Strona 3 (zakładki+C/D+E/F+F24), detekcja CC-04</td></tr>
+      <tr><td><code>wczytaj_dane_z_protokolu_s2 / _s3 / _ef</code></td><td>openpyxl: lista kopii; definicje zakładek; dane E/F per kopia</td></tr>
+    </table>
+    <h4>Wypełnianie kopii (xlwings, 7 etapów)</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>_main_impl / main</code></td><td>orkiestracja; AutoRecover save/restore; walidacja wejść</td></tr>
+      <tr><td><code>utworz_kopie</code></td><td>Krok 1-2: kopiuje szablony + jedna sesja COM na wszystkie kopie</td></tr>
+      <tr><td><code>_dostosuj_xlwings</code></td><td>Etapy 2-7 na jednej kopii: zakładki, C/D/E/F, nagłówki, Wyniki, środowisko</td></tr>
+      <tr><td><code>dostosuj_zakladki_i_wypelnij</code></td><td>wariant openpyxl (zachowuje formuły, bez COM)</td></tr>
+      <tr><td><code>_dopasuj_liczbe_zakładek / _unikalne_nazwy_zakladek</code></td><td>liczba zakładek; unikalne nazwy ≤31 zn.</td></tr>
+    </table>
+    <h4>Tabela Wyniki + histereza</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>_uporzadkuj_tabele_wyniki</code></td><td>sortuje B1:I9 i O1:R9, usuwa #REF!, dokłada wiersze &gt;6 (klonuje formuły)</td></tr>
+      <tr><td><code>_aktualizuj_formule_histerezy</code></td><td>J23: podmienia parę „punkt / punkt (2)" na realne zakładki histerezy</td></tr>
+      <tr><td><code>_podmien_arkusz_w_formule / _arkusz_z_formuly</code></td><td>podmiana/odczyt nazwy arkusza w formule</td></tr>
+      <tr><td><code>_to_jest_powtorka_kolizji / _rh_z_nazwy_zakladki</code></td><td>sufiks „ (N)" = histereza; nominalna RH z nazwy („5, -"→None)</td></tr>
+    </table>
+    <h4>Warunki środowiskowe</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>_oblicz_warunki_srodowiskowe</code></td><td>czujnik (data/czas) → T/H → F/G Strona 3; Wzory.xls → min/max</td></tr>
+      <tr><td><code>_wczytaj_dane_czujnika_miesiac / _szukaj_th_w_danych_czujnika</code></td><td>dane czujnika per miesiąc; najbliższe T/H</td></tr>
+      <tr><td><code>_przywroc_linki_w_xml</code></td><td>przepisuje ścieżki linków w XML (lokalne przed otwarciem, serwerowe po zapisie)</td></tr>
+    </table>
+    <h4>Świadectwa Word</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>utworz_kopie_word</code></td><td>szablon wg klasy wilgotności; wariant (uzytkownik); placeholdery; tabele kalibracji</td></tr>
+      <tr><td><code>_zastap_tekst_w_dok / _w_tabeli</code></td><td>podmiana <span class="mono">[...]</span> w akapitach/tabelach (obsługa run-split)</td></tr>
+      <tr><td><code>_uzupelnij_tabele_kalibracji / _wypelnij_jedna_tabele_kalibracji</code></td><td>tabela D239:K239 (RH) i/lub D246:G246 (temp)</td></tr>
+      <tr><td><code>_zastap_histereza_w_dok</code></td><td>przypis „1)" o powtórzonym punkcie histerezy</td></tr>
+      <tr><td><code>_formatuj_daty_wzorcowania / _parsuj_date_dowolna</code></td><td>daty K4 → polski format; parsuje też daty-stringi</td></tr>
+      <tr><td><code>_pz_mapa_arkusze / _wariant_uzytkownik</code></td><td>fallback danych przyrządu z PZ; nazwa wariantu „(uzytkownik)"</td></tr>
+    </table>
+    <h4>Odczyt kalibracji · CC-04 · AutoRecover · narzędzia</h4>
+    <table><tr><th>Funkcja</th><th>Rola</th></tr>
+      <tr><td><code>_odczytaj_kalibracje_xlwings</code></td><td>D239:K239 / D246:G246 per zakładka; klasa „brak/pelna/mieszana"</td></tr>
+      <tr><td><code>_czy_protokol_cc04 / _wykryj_tag_cc04 / _parametry_typu_cc04</code></td><td>detekcja CC-04; tag LG/LD/PD/PG; parametry K11-K17</td></tr>
+      <tr><td><code>_czytaj_autorecover / _ustaw_autorecover / _wyczysc_autorecover_folder</code></td><td>higiena AutoRecover Excela (rejestr + %AppData%)</td></tr>
+      <tr><td><code>_kolor_komorki_hex_xlwings / _czy_bierz_dane_po_kolorze</code></td><td>kolor komórki → filtr (zielony/szary)</td></tr>
+      <tr><td colspan="2"><i>+ ~40 pomniejszych helperów (formatowanie, nazwy plików, scalone komórki, logi _ok/_warn/_err).</i></td></tr>
+    </table>
+  </details>
+</section>
+
+<!-- GUI -->
+<section id="gui">
+  <h2>🖥️ app_gui.py / app_entry.py — panel i dyspozytor</h2>
+  <p class="lead">Panel PySide6 (Windows 11 Fluent): lewy sidebar (wybór plików + przełączniki + parametry),
+  środek (podgląd „przed/po" — makiety), dół (3 przyciski akcji + żywy log). Uruchamia workery przez QProcess.</p>
+
+  <div class="cards">
+    <div class="card"><div class="l">Sidebar</div><div class="n" style="font-size:15px">Pliki · Funkcje · Parametry</div>
+      <div class="l">folder + combo protokół/szablon; 5 przełączników; próg %/tolerancja min</div></div>
+    <div class="card"><div class="l">Środek</div><div class="n" style="font-size:15px">Podgląd przed/po</div>
+      <div class="l">segmenty Protokół/Wyniki/Word; przełącznik stanu; makiety z <code>assets/*.png</code></div></div>
+    <div class="card"><div class="l">Dół</div><div class="n" style="font-size:15px">Obserwacja · Protokół · Word</div>
+      <div class="l">3 przyciski → <code>_run(tryb)</code>; żywy log ze stdout workera</div></div>
+  </div>
+
+  <h3>Przełączniki i kontrakt (FUNKCJE) <span class="fileref">app_gui.py L52–65</span></h3>
+  <table>
+    <tr><th>Przełącznik</th><th>env</th><th>Domyślnie</th><th>Efekt</th></tr>
+    <tr><td>Generuj arkusze Excel</td><td><code>GEN_EXCEL</code></td><td>✓</td><td>kopie arkuszy obliczeniowych</td></tr>
+    <tr><td>Generuj świadectwa Word</td><td><code>GEN_WORD</code></td><td>✓</td><td>dokumenty Word</td></tr>
+    <tr><td>Usuwaj puste bloki Strona 3</td><td><code>GEN_PUSTE</code></td><td>✓</td><td>kopia dostaje tylko aktywne bloki</td></tr>
+    <tr><td>Sprzątaj AutoRecover</td><td><code>GEN_AUTOREC</code></td><td>✓</td><td>czyści pliki autoodzyskiwania Excela</td></tr>
+    <tr><td>Filtr nastawa/odczyt &gt;próg</td><td><code>OBS_FILTR</code></td><td>✓</td><td>odrzuca punkt poza nastawą</td></tr>
+  </table>
+
+  <h3>app_entry.py — dyspozytor <span class="fileref">L32–79</span></h3>
+  <table>
+    <tr><th>CC_WORKER</th><th>Akcja</th></tr>
+    <tr><td><span class="mono">arkusze</span></td><td>import <code>generuj_arkusze</code> → <code>main()</code></td></tr>
+    <tr><td><span class="mono">obserwacje</span></td><td>import <code>generuj_obserwacje</code> → <code>main()</code></td></tr>
+    <tr><td><i>(puste)</i></td><td>uruchom GUI: <code>app_gui.main()</code></td></tr>
+  </table>
+</section>
+
+<!-- PACKAGING -->
+<section id="packaging">
+  <h2>📦 Pakowanie — jeden <code>ProtokolCC.exe</code></h2>
+  <table>
+    <tr><th>Plik</th><th>Rola</th></tr>
+    <tr><td><code>ProtokolCC.spec</code></td><td>PyInstaller: jeden windowed-exe; <span class="mono">collect_all</span> dla xlwings+docx; hidden imports (win32com, app_gui, generuj_*); bundle <span class="mono">assets/</span>; UPX off</td></tr>
+    <tr><td><code>build.ps1</code></td><td>jednokomendowa budowa + weryfikacja rozmiaru <span class="mono">dist/ProtokolCC.exe</span></td></tr>
+    <tr><td><code>make_mockups.py</code></td><td>renderuje makiety podglądu (2×, HiDPI) → <span class="mono">assets/&lt;doc&gt;_pusto/pelny.png</span></td></tr>
+    <tr><td><code>requirements.txt</code></td><td>openpyxl · xlwings · python-docx · PySide6≥6.6 · pandas · pypdf</td></tr>
+  </table>
+  <div class="note">Zamrożony exe wymaga zainstalowanego <b>Excela</b> (xlwings/COM) i dostępu do sieciowego
+  <span class="mono">\\plum4\LabPomiarowe\Wzory.xls</span>. Ścieżka <span class="mono">FOLDER</span> w skryptach jest
+  konfigurowalna z GUI (env <span class="mono">CC_FOLDER</span>).</div>
+</section>
+
+<!-- USTAWIENIA -->
+<section id="ustawienia">
+  <h2>⚙️ Wszystkie ustawienia — skrót</h2>
+  <p class="lead">Najważniejsze stałe konfiguracyjne per moduł (pełne opisy w sekcjach modułów wyżej).</p>
+  <table>
+    <tr><th>Moduł</th><th>Ustawienia (skrót)</th></tr>
+    <tr><td><code>analizuj_excele</code></td><td>SUPPORTED_EXT, DEFAULT_INPUT/OUTPUT, TEMP/HUM/TIME_KW, _MONTHS_EN</td></tr>
+    <tr><td><code>pz_dane</code></td><td>regexy PL/EN (typ, serial, ewid, wytwórca, czujnik, USER), Zestawienie: kol. B/D/J</td></tr>
+    <tr><td><code>generuj_obserwacje</code></td><td>FOLDER, TXT_FILENAME(S), szablony, PZ_FOLDER, ZESTAWIENIE_PLIK, STABILIZACJA_MIN, FILTR/PROG/TOL</td></tr>
+    <tr><td><code>generuj_arkusze</code></td><td>PROTOKOL/SZABLON_PLIK, HIGROMETR_K18, MAPOWANIE_TYPU_CC04, szablony Word, NR_SW_POCZATKOWY, PLIKI_LINKOWANE, GEN_*, filtr koloru</td></tr>
+    <tr><td><code>app_gui</code></td><td>FUNKCJE (5 przełączników), palety Fluent, QSettings, resource_path</td></tr>
+  </table>
+</section>
+
+<!-- ENV -->
+<section id="env">
+  <h2>🔌 Kontrakt env-var (GUI ↔ workery)</h2>
+  <p class="lead">GUI przekazuje ustawienia workerom wyłącznie przez zmienne środowiskowe — to jedyny punkt styku.</p>
+  <table>
+    <tr><th>Zmienna</th><th>Ustawia</th><th>Czyta</th><th>Znaczenie</th></tr>
+    <tr><td><code>CC_WORKER</code></td><td>GUI</td><td>app_entry</td><td>tryb: arkusze / obserwacje / (GUI)</td></tr>
+    <tr><td><code>CC_FOLDER</code></td><td>GUI</td><td>oba workery</td><td>folder roboczy</td></tr>
+    <tr><td><code>CC_PROTOKOL / CC_SZABLON</code></td><td>GUI</td><td>generuj_arkusze</td><td>wybrany protokół / szablon</td></tr>
+    <tr><td><code>CC_PZ_FOLDER</code></td><td>(env)</td><td>oba</td><td>folder PZ</td></tr>
+    <tr><td><code>OBS_TXT_FILES</code></td><td>GUI</td><td>generuj_obserwacje</td><td>lista TXT (średnik) — przerwany pomiar</td></tr>
+    <tr><td><code>OBS_FILTR / OBS_PROG / OBS_TOL</code></td><td>GUI</td><td>generuj_obserwacje</td><td>filtr / próg % / tolerancja min</td></tr>
+    <tr><td><code>GEN_EXCEL / GEN_WORD / GEN_PUSTE / GEN_AUTOREC</code></td><td>GUI</td><td>generuj_arkusze</td><td>etapy i zachowania</td></tr>
+  </table>
+</section>
+
+<!-- INTERAKCJE -->
+<section id="interakcje">
+  <h2>🔗 Interakcje między plikami danych</h2>
+  <div class="mermaid">
+flowchart LR
+  subgraph P["Protokół (jeden plik xlsx)"]
+    S2["Strona 2<br/>tabela przyrządów (B:J, K/L, O)"]:::out
+    S3["Strona 3<br/>pomiary + środowisko (Q/R lub S/T)"]:::out
+  end
+  WYN["wyniki/&lt;serial&gt;_wynik.xlsx"]:::in
+  PZ["PZ + Zestawienie"]:::in
+  TXT["TXT multimetru"]:::in
+  TXT --> S3
+  WYN -->|"dopasowanie po czasie ±tol"| S3
+  PZ -->|"match serial = nazwa pliku wyniku"| S2
+  S3 -->|"serial ↔ kolumna (kolejność)"| S2
+  S2 --> KOP["kopie: E5=wytwórca, E6=typ, G6=serial, K18=higrometr"]:::xf
+  S3 --> KOP
+  S2 --> DOC["Word: [wytworca][typ][nr_fabr][nr_ewid][użytkownik]"]:::xf
+  S3 --> DOC
+  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
+  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
+  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  </div>
+  <div class="note"><b>Reguła sprzężenia Strona 2 ↔ Strona 3:</b> i-ty przyrząd na Stronie 2 (wiersz 11+i) odpowiada
+  i-tej parze kolumn pomiarowych na Stronie 3 (S:T, U:V… dla CC-04). Liczba przyrządów = liczbie kolumn pomiarowych.
+  Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyfr po przecinku w danych pomiarowych.</div>
+</section>
+
+<footer>
+  <p>Infografika wygenerowana automatycznie z analizy kodu · agenty: <b>project-visualizer</b> + 3× Explore.
+  Wszystkie odwołania <span class="mono">plik:linia</span> pochodzą z realnego kodu w chwili generowania.</p>
+  <p>Otwórz ten plik w przeglądarce. Diagramy renderuje Mermaid (CDN). Do druku: Ctrl+P.</p>
+</footer>
+
+</main>
+</div>
+<script>
+  mermaid.initialize({startOnLoad:true, theme:'dark',
+    themeVariables:{fontFamily:'Segoe UI, sans-serif', fontSize:'14px'}});
+  // graceful fallback: if mermaid fails to load, show source
+  window.addEventListener('load',function(){
+    if(typeof mermaid==='undefined'){
+      document.querySelectorAll('.mermaid').forEach(function(el){
+        var pre=document.createElement('pre'); pre.textContent=el.textContent;
+        pre.style.cssText='white-space:pre-wrap;color:#93a4c3;font-size:12px';
+        el.replaceWith(pre);
+      });
+    }
+  });
+</script>
+</body>
+</html>
