@@ -7,10 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   :root{
-    --bg:#0f172a; --panel:#111c33; --card:#16233f; --stroke:#243352;
-    --txt:#e6ecf7; --muted:#93a4c3; --accent:#4c86f9; --accent2:#7aa2ff;
-    --in:#3b82f6; --xf:#f59e0b; --out:#22c55e; --cfg:#94a3b8; --pz:#a855f7; --gui:#ec4899;
-    --diagbg:#0a1424;
+    --bg:#ffffff; --panel:#f6f8fc; --card:#fbfcff; --stroke:#e2e8f0;
+    --txt:#1e293b; --muted:#5b6b85; --accent:#2563eb; --accent2:#1d4ed8;
+    --in:#2563eb; --xf:#d97706; --out:#16a34a; --cfg:#64748b; --pz:#9333ea; --gui:#db2777;
+    --diagbg:#ffffff;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
@@ -21,48 +21,55 @@
   /* nav */
   nav{position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px;
       background:var(--panel);border-right:1px solid var(--stroke)}
-  nav h1{font-size:15px;margin:0 0 4px;color:#fff}
+  nav h1{font-size:15px;margin:0 0 4px;color:#0f172a}
   nav .sub{font-size:11px;color:var(--muted);margin-bottom:16px}
-  nav a{display:block;padding:6px 10px;border-radius:8px;color:var(--muted);font-size:13.5px}
-  nav a:hover{background:var(--card);color:var(--txt);text-decoration:none}
-  nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#5f7099;margin:14px 10px 4px}
+  nav a{display:block;padding:6px 10px;border-radius:8px;color:#475569;font-size:13.5px}
+  nav a:hover{background:#eef2fb;color:var(--accent2);text-decoration:none}
+  nav .grp{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#94a3b8;margin:14px 10px 4px}
   main{padding:28px 40px 80px;min-width:0}
-  header.hero{background:linear-gradient(135deg,#16233f,#0f1b33);border:1px solid var(--stroke);
+  header.hero{background:linear-gradient(135deg,#eff4ff,#f8faff);border:1px solid var(--stroke);
        border-radius:16px;padding:28px 30px;margin-bottom:26px}
-  header.hero h1{margin:0 0 6px;font-size:26px;color:#fff}
-  header.hero p{margin:4px 0;color:var(--muted);max-width:900px}
+  header.hero h1{margin:0 0 6px;font-size:26px;color:#0f172a}
+  header.hero p{margin:4px 0;color:#475569;max-width:900px}
   section{margin:34px 0;scroll-margin-top:20px}
-  h2{font-size:21px;border-bottom:2px solid var(--accent);padding-bottom:8px;color:#fff;margin-bottom:6px}
+  h2{font-size:21px;border-bottom:2px solid var(--accent);padding-bottom:8px;color:#0f172a;margin-bottom:6px}
   h3{font-size:16px;color:var(--accent2);margin:22px 0 8px}
-  h4{font-size:14px;color:#cdd8ee;margin:16px 0 6px}
+  h4{font-size:14px;color:#334155;margin:16px 0 6px}
   .lead{color:var(--muted);margin:6px 0 16px}
   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:14px 0}
   .card{background:var(--card);border:1px solid var(--stroke);border-radius:12px;padding:16px}
-  .card .n{font-size:26px;font-weight:800;color:#fff}
+  .card .n{font-size:26px;font-weight:800;color:#0f172a}
   .card .l{font-size:12.5px;color:var(--muted)}
-  .mermaid{background:var(--diagbg);border:1px solid var(--stroke);
-       border-radius:12px;padding:18px;margin:14px 0;overflow-x:auto;text-align:center}
-  table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13.5px;background:var(--card);
+  .mermaid{position:relative;background:var(--diagbg);border:1px solid var(--stroke);
+       border-radius:12px;padding:14px 18px 18px;margin:14px 0;overflow-x:auto;text-align:center;
+       box-shadow:0 1px 3px rgba(15,23,42,.05)}
+  .dlbar{display:flex;justify-content:flex-end;gap:8px;margin-bottom:8px}
+  .dlbtn{cursor:pointer;font:600 11.5px/1 'Segoe UI',sans-serif;color:var(--accent2);
+       background:#eef4ff;border:1px solid #c7dbff;border-radius:7px;padding:6px 11px}
+  .dlbtn:hover{background:#dbe8ff}
+  table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:13.5px;background:#fff;
         border:1px solid var(--stroke);border-radius:10px;overflow:hidden}
   th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--stroke);vertical-align:top}
-  th{background:#1a2947;color:#cdd8ee;font-weight:700;position:sticky;top:0}
+  th{background:#f1f5fb;color:#334155;font-weight:700}
   tr:last-child td{border-bottom:none}
-  td code,.mono{font-family:'Cascadia Mono','Consolas',monospace;font-size:12.5px;color:#a8e6cf}
+  tr:nth-child(even) td{background:#fafcff}
+  td code,.mono{font-family:'Cascadia Mono','Consolas',monospace;font-size:12.5px;color:#0b7a5b}
+  code{background:#f1f5f9;padding:1px 5px;border-radius:5px}
   .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
-  .p-in{background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid #3b82f6}
-  .p-xf{background:rgba(245,158,11,.16);color:#fcd34d;border:1px solid #f59e0b}
-  .p-out{background:rgba(34,197,94,.16);color:#86efac;border:1px solid #22c55e}
-  .p-cfg{background:rgba(148,163,184,.16);color:#cbd5e1;border:1px solid #94a3b8}
-  .p-pz{background:rgba(168,85,247,.16);color:#d8b4fe;border:1px solid #a855f7}
-  .p-gui{background:rgba(236,72,153,.16);color:#f9a8d4;border:1px solid #ec4899}
+  .p-in{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
+  .p-xf{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+  .p-out{background:#dcfce7;color:#166534;border:1px solid #86efac}
+  .p-cfg{background:#e2e8f0;color:#334155;border:1px solid #cbd5e1}
+  .p-pz{background:#f3e8ff;color:#6b21a8;border:1px solid #d8b4fe}
+  .p-gui{background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4}
   .legend{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 4px}
   details{background:var(--card);border:1px solid var(--stroke);border-radius:10px;margin:10px 0;padding:4px 14px}
-  details>summary{cursor:pointer;font-weight:700;color:#cdd8ee;padding:8px 0}
+  details>summary{cursor:pointer;font-weight:700;color:#334155;padding:8px 0}
   details[open]>summary{border-bottom:1px solid var(--stroke);margin-bottom:8px}
-  .note{background:rgba(76,134,249,.08);border-left:3px solid var(--accent);border-radius:8px;
-        padding:10px 14px;margin:12px 0;color:#cdd8ee;font-size:13.5px}
-  .warn{background:rgba(245,158,11,.08);border-left:3px solid var(--xf)}
-  .fileref{color:#6f83a8;font-size:11.5px}
+  .note{background:#eff6ff;border-left:3px solid var(--accent);border-radius:8px;
+        padding:10px 14px;margin:12px 0;color:#334155;font-size:13.5px}
+  .warn{background:#fffbeb;border-left:3px solid var(--xf)}
+  .fileref{color:#94a3b8;font-size:11.5px}
   footer{color:var(--muted);font-size:12.5px;border-top:1px solid var(--stroke);padding-top:16px;margin-top:40px}
   @media(max-width:900px){.wrap{grid-template-columns:1fr}nav{position:static;height:auto}}
 </style>
@@ -171,11 +178,11 @@ flowchart LR
   ARK --> KOP
   ARK --> DOC
 
-  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
-  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
-  classDef gui fill:#3d1030,stroke:#ec4899,color:#fbcfe8;
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
+  classDef gui fill:#fce7f3,stroke:#db2777,color:#831843;
   </div>
   <div class="note"><b>Kluczowa zależność kolejności:</b> <span class="mono">analizuj_excele</span> musi wygenerować
   <span class="mono">wyniki/*</span> zanim <span class="mono">generuj_obserwacje</span> dopasuje je czasowo do Strony 3.
@@ -206,10 +213,10 @@ flowchart TD
   N --> O["7 etapów: kopie → zakładki → C/D/E/F → nagłówki (K11-K18) → Wyniki → środowisko → Word"]:::xf
   O --> P["Kopie Excel (arkusze obl.)"]:::out
   O --> Q["Świadectwa Word (.docx)"]:::out
-  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
-  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
   </div>
 </section>
 
@@ -317,9 +324,9 @@ flowchart LR
   D --> F["PZPrzyrzad<br/>wytwórca·typ·nr_fabr·nr_ewid·czujnik·użytkownik"]:::out
   F --> G["mapa: klucz = nr_fabr I nr_ewid<br/>(znormalizowane)"]:::pz
   Z["Zestawienie.xlsx"]:::in --> H["wczytaj_zestawienie()<br/>rozmyte (producent,typ) → t/RH res"]:::pz
-  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
-  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   </div>
 
   <div class="note"><b>Sedno dopasowania:</b> plik loggera nazywa się <span class="mono">&lt;serial&gt;_wynik.xlsx</span>.
@@ -384,9 +391,9 @@ flowchart TD
   G --> H["wypelnij_strone2_z_pz()<br/>match serial → PZ · rozdzielczość K/L"]:::pz
   F --> I["Protokół — Strona 3"]:::out
   H --> J["Protokół — Strona 2"]:::out
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
-  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
   </div>
 
   <h3>Ustawienia <span class="fileref">L40–94</span></h3>
@@ -459,9 +466,9 @@ flowchart TD
   KAL --> W["utworz_kopie_word()<br/>szablon wg klasy · placeholdery · tabele kalibracji"]:::pz
   W --> DOC["Świadectwa .docx"]:::out
   E7 --> KOP["Kopie Excel"]:::out
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
-  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
   </div>
 
   <h3>Ustawienia — najważniejsze <span class="fileref">L91–193</span></h3>
@@ -633,9 +640,9 @@ flowchart LR
   S3 --> KOP
   S2 --> DOC["Word: [wytworca][typ][nr_fabr][nr_ewid][użytkownik]"]:::xf
   S3 --> DOC
-  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   </div>
   <div class="note"><b>Reguła sprzężenia Strona 2 ↔ Strona 3:</b> i-ty przyrząd na Stronie 2 (wiersz 11+i) odpowiada
   i-tej parze kolumn pomiarowych na Stronie 3 (S:T, U:V… dla CC-04). Liczba przyrządów = liczbie kolumn pomiarowych.
@@ -651,17 +658,70 @@ flowchart LR
 </main>
 </div>
 <script>
-  mermaid.initialize({startOnLoad:true, theme:'dark',
-    themeVariables:{fontFamily:'Segoe UI, sans-serif', fontSize:'14px'}});
-  // graceful fallback: if mermaid fails to load, show source
+  // Motyw jasny; htmlLabels:false → etykiety jako tekst SVG (poprawny eksport do PNG).
+  mermaid.initialize({startOnLoad:false, theme:'default',
+    flowchart:{htmlLabels:false, useMaxWidth:true},
+    themeVariables:{fontFamily:'Segoe UI, sans-serif', fontSize:'14px',
+      background:'#ffffff', lineColor:'#64748b', textColor:'#1e293b'}});
+
+  function _dl(href,name){var a=document.createElement('a');a.href=href;a.download=name;
+    document.body.appendChild(a);a.click();a.remove();}
+  function _svgStr(svg){
+    var c=svg.cloneNode(true);
+    c.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    // biale tlo (dla przezroczystego SVG)
+    var vb=svg.viewBox&&svg.viewBox.baseVal, w=(vb&&vb.width)||svg.getBoundingClientRect().width,
+        h=(vb&&vb.height)||svg.getBoundingClientRect().height;
+    var r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    r.setAttribute('x',(vb&&vb.x)||0);r.setAttribute('y',(vb&&vb.y)||0);
+    r.setAttribute('width',w);r.setAttribute('height',h);r.setAttribute('fill','#ffffff');
+    c.insertBefore(r,c.firstChild);
+    return {xml:new XMLSerializer().serializeToString(c),w:w,h:h};
+  }
+  function dlSVG(svg,name){
+    var s=_svgStr(svg);
+    var url=URL.createObjectURL(new Blob(['<?xml version="1.0" encoding="UTF-8"?>\n'+s.xml],
+      {type:'image/svg+xml'}));
+    _dl(url,name+'.svg');setTimeout(function(){URL.revokeObjectURL(url);},5000);
+  }
+  function dlPNG(svg,name){
+    var s=_svgStr(svg), scale=2, img=new Image();
+    img.onload=function(){
+      var cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.ceil(s.w*scale));cv.height=Math.max(1,Math.ceil(s.h*scale));
+      var cx=cv.getContext('2d');cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);
+      cx.drawImage(img,0,0,cv.width,cv.height);
+      try{cv.toBlob(function(b){
+        if(!b){alert('Nie udalo sie wygenerowac PNG — pobierz SVG.');return;}
+        var url=URL.createObjectURL(b);_dl(url,name+'.png');
+        setTimeout(function(){URL.revokeObjectURL(url);},5000);
+      });}catch(e){alert('PNG zablokowany przez przegladarke — uzyj SVG.');}
+    };
+    img.onerror=function(){alert('Nie udalo sie wygenerowac PNG — uzyj SVG.');};
+    img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(s.xml)));
+  }
+  function addBars(){
+    document.querySelectorAll('.mermaid').forEach(function(m,i){
+      var svg=m.querySelector('svg'); if(!svg||m.querySelector('.dlbar'))return;
+      var sec=m.closest('section');
+      var name=sec&&sec.id?('diagram-'+sec.id):('diagram-'+(i+1));
+      var bar=document.createElement('div');bar.className='dlbar';
+      var bp=document.createElement('button');bp.className='dlbtn';bp.textContent='⬇ PNG';
+      bp.onclick=function(){dlPNG(svg,name);};
+      var bs=document.createElement('button');bs.className='dlbtn';bs.textContent='⬇ SVG';
+      bs.onclick=function(){dlSVG(svg,name);};
+      bar.appendChild(bp);bar.appendChild(bs);m.insertBefore(bar,m.firstChild);
+    });
+  }
   window.addEventListener('load',function(){
     if(typeof mermaid==='undefined'){
       document.querySelectorAll('.mermaid').forEach(function(el){
-        var pre=document.createElement('pre'); pre.textContent=el.textContent;
-        pre.style.cssText='white-space:pre-wrap;color:#93a4c3;font-size:12px';
-        el.replaceWith(pre);
+        var pre=document.createElement('pre');pre.textContent=el.textContent;
+        pre.style.cssText='white-space:pre-wrap;color:#64748b;font-size:12px';el.replaceWith(pre);
       });
+      return;
     }
+    mermaid.run({querySelector:'.mermaid'}).then(addBars).catch(function(e){console.error(e);addBars();});
   });
 </script>
 </body>
