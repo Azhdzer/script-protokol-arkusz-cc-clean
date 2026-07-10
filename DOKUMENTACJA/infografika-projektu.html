@@ -83,6 +83,7 @@
   <a href="#jak">📖 Jak czytać</a>
   <a href="#architektura">🗺️ Architektura</a>
   <a href="#pipeline">🔄 Pipeline danych</a>
+  <a href="#obieg">🌳 PEŁNY OBIEG (mega)</a>
   <a href="#uruchamianie">▶️ Uruchamianie (exe/GUI)</a>
   <div class="grp">Moduły</div>
   <a href="#analizuj">📥 analizuj_excele.py</a>
@@ -218,6 +219,96 @@ flowchart TD
   classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
   </div>
+</section>
+
+<!-- MEGA OBIEG -->
+<section id="obieg">
+  <h2>🌳 PEŁNY OBIEG PRACY — od plików do świadectw (mega‑schemat)</h2>
+  <p class="lead">Jedno drzewo spinające cały proces: co i gdzie wgrać ręcznie, które pliki wzorcowe zaktualizować,
+  a potem kolejno: <b>analiza → obserwacja/protokół → arkusze/świadectwa</b> z wszystkimi etapami.
+  Możesz pobrać ten schemat przyciskiem <b>⬇ PNG / ⬇ SVG</b>.</p>
+  <div class="mermaid">
+flowchart TD
+  subgraph F0["🗂️ FAZA 0 — Przygotowanie ręczne (zanim uruchomisz cokolwiek)"]
+    direction TB
+    P1["Wgraj pliki z przyrządów (loggery DUT)<br/>→ folder excel_do_analizy/"]:::in
+    P2["Wgraj PZ — Potwierdzenie zamówienia (PDF)<br/>→ folder PZ/"]:::in
+    P6["Umieść plik(i) TXT multimetru<br/>w folderze roboczym"]:::in
+    P3["Zaktualizuj czujnik środowiskowy<br/>Pom. nr 9 (MX1101-02) - 2026.xlsx"]:::in
+    P4["Zaktualizuj pliki wzorcowe / linkowane<br/>Wzory.xls + Obliczenia tdp, RH, C.xls"]:::in
+    P5["Zaktualizuj rozdzielczości<br/>Zestawienie wzorcowanych przyrządów.xlsx"]:::in
+  end
+
+  subgraph F1["1️⃣ analizuj_excele.py — normalizacja logów"]
+    direction TB
+    A1{{"sniff_format() — wykrycie formatu z 1 KB"}}:::xf
+    A2["11 parserów: tempmate/PDF · PuTTY/.log · Rotronic ·<br/>ALMEMO · Comet/TFA · xTHERM · HOBO · Aranet · CSV/TXT/Excel"]:::xf
+    A3["save_result() — Czas | Temperatura | Wilgotność"]:::xf
+    A4[("wyniki/&lt;serial&gt;_wynik.xlsx")]:::out
+    A1 --> A2 --> A3 --> A4
+  end
+
+  subgraph F2["2️⃣ generuj_obserwacje.py — obserwacja + protokół"]
+    direction TB
+    B1["resolve_txt_files() — tolerancyjny wybór TXT"]:::xf
+    B2["combine_txt() — sklejenie N plików + dedup po czasie"]:::xf
+    B3["Arkusz obserwacji (A2:U / A2:L)"]:::out
+    B4["analyze_and_highlight()<br/>• segmenty stabilne (B,C ≥ 1h45m)<br/>• filtr suszenia / histerezy<br/>• okno 5-min (min K/L)<br/>• 5 reprezentantów (kolor + pogrubienie)"]:::xf
+    B5["wczytaj_pz() + wczytaj_zestawienie()"]:::pz
+    B6["generuj_protokol()"]:::xf
+    B8["_wypelnij_wyniki_srodowiskowe()<br/>dopasowanie 5 wierszy po czasie ±tol<br/>→ Q/R (CC) lub S/T (CC-04)"]:::xf
+    B7["PROTOKÓŁ — Strona 3 (pomiary + środowisko)"]:::out
+    B9["wypelnij_strone2_z_pz()<br/>match serial → PZ · rozdzielczość K/L<br/>temp-only → '-'"]:::pz
+    B10["PROTOKÓŁ — Strona 2 (tabela przyrządów B:J, K/L, O)"]:::out
+    B1 --> B2 --> B3 --> B4 --> B6
+    B5 --> B6
+    B6 --> B8 --> B7
+    B6 --> B7
+    B5 --> B9 --> B10
+  end
+
+  subgraph F3["3️⃣ generuj_arkusze.py — kopie arkuszy + świadectwa (7 etapów)"]
+    direction TB
+    C0["_main_impl() → wczytaj_wszystko_xlwings()<br/>Strona 2 (lista) + Strona 3 (zakładki, C/D, E/F, F24)"]:::xf
+    C1["Etap 1 — kopie szablonu (per przyrząd)"]:::xf
+    C2["Etap 2 — liczba i nazwy zakładek (przez tymczasowe)"]:::xf
+    C34["Etap 3-4 — C15:C19 · D15:D19 · E15:E19 · F15:F19<br/>(CC-04: kolumny dynamiczne wg typu)"]:::xf
+    C5["Etap 5 — nagłówki: E4/G6/K4/E5/E6/H57 ·<br/>K11-K13/K17 (CC-04) · K18 higrometr · podpisy"]:::xf
+    C6["Etap 6 — Wyniki: F24 · sort tabel ·<br/>_aktualizuj_formule_histerezy (J23)"]:::xf
+    C7["Etap 7 — warunki środowiskowe<br/>czujnik + Wzory.xls → F/G + min/max"]:::xf
+    C8["_odczytaj_kalibracje_xlwings()<br/>D239:K239 (RH) / D246:G246 (temp) · klasa wilgotności"]:::xf
+    C9["utworz_kopie_word()<br/>szablon wg klasy · placeholdery ·<br/>[użytkownik] · tabele kalibracji · histereza"]:::pz
+    C10[("Kopie Excel — arkusze obliczeniowe")]:::out
+    C11[("Świadectwa Word — .docx")]:::out
+    C0 --> C1 --> C2 --> C34 --> C5 --> C6 --> C7 --> C8 --> C9
+    C7 --> C10
+    C9 --> C11
+  end
+
+  %% połączenia między fazami
+  P1 --> A1
+  P6 --> B1
+  A4 --> B8
+  P2 --> B5
+  P5 --> B5
+  B7 --> C0
+  B10 --> C0
+  P3 --> C7
+  P4 --> C7
+  P4 --> C0
+  P5 -.fallback.-> C9
+
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
+  </div>
+  <div class="note"><b>Legenda kolejności:</b> <span class="pill p-in">FAZA 0</span> ręcznie przygotuj dane i pliki wzorcowe →
+  <span class="pill p-xf">1</span> <code>analizuj_excele</code> tworzy <code>wyniki/*</code> →
+  <span class="pill p-xf">2</span> <code>generuj_obserwacje</code> buduje protokół (Strona 2 z PZ + Strona 3 z pomiarów) →
+  <span class="pill p-xf">3</span> <code>generuj_arkusze</code> robi kopie Excel i świadectwa Word.
+  Pliki wzorcowe <code>Wzory.xls</code> / <code>Pom. nr 9</code> wchodzą dopiero w <b>Etap 7</b> arkuszy (warunki środowiskowe),
+  a <code>Zestawienie</code> i <code>PZ</code> — przy budowie Strony 2.</div>
 </section>
 
 <!-- URUCHAMIANIE -->

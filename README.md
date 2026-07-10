@@ -44,11 +44,11 @@ flowchart LR
   GUI -.uruchamia.-> OBS
   GUI -.uruchamia.-> ARK
 
-  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
-  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
-  classDef gui fill:#3d1030,stroke:#ec4899,color:#fbcfe8;
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
+  classDef gui fill:#fce7f3,stroke:#db2777,color:#831843;
   class TXT,LOG,PZ,ZEST in
   class ANAL,OBS,ARK xf
   class WYN,PROTO,KOP,DOC out
@@ -86,15 +86,102 @@ flowchart TD
   O --> P["Kopie Excel"]
   O --> Q["Swiadectwa Word .docx"]
 
-  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
-  classDef pz fill:#2e1245,stroke:#a855f7,color:#e9d5ff;
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
   class A,D,PZ,ZEST in
   class B,E,F,G,H,N,O xf
   class C,L,P,Q out
   class I,J,K,M pz
 ```
+
+---
+
+## 🌳 Pełny obieg pracy — od plików do świadectw (mega‑schemat)
+
+Jedno drzewo spinające cały proces: co i gdzie wgrać ręcznie, które pliki wzorcowe zaktualizować,
+a potem kolejno **analiza → obserwacja/protokół → arkusze/świadectwa** ze wszystkimi etapami.
+
+```mermaid
+flowchart TD
+  subgraph F0["FAZA 0 - Przygotowanie reczne (zanim uruchomisz cokolwiek)"]
+    direction TB
+    P1["Wgraj pliki z przyrzadow (loggery DUT)<br/>-> folder excel_do_analizy/"]:::in
+    P2["Wgraj PZ - Potwierdzenie zamowienia (PDF)<br/>-> folder PZ/"]:::in
+    P6["Umiesc plik(i) TXT multimetru<br/>w folderze roboczym"]:::in
+    P3["Zaktualizuj czujnik srodowiskowy<br/>Pom. nr 9 (MX1101-02) - 2026.xlsx"]:::in
+    P4["Zaktualizuj pliki wzorcowe / linkowane<br/>Wzory.xls + Obliczenia tdp, RH, C.xls"]:::in
+    P5["Zaktualizuj rozdzielczosci<br/>Zestawienie wzorcowanych przyrzadow.xlsx"]:::in
+  end
+
+  subgraph F1["1 - analizuj_excele.py - normalizacja logow"]
+    direction TB
+    A1{{"sniff_format() - wykrycie formatu z 1 KB"}}:::xf
+    A2["11 parserow: tempmate/PDF, PuTTY/.log, Rotronic,<br/>ALMEMO, Comet/TFA, xTHERM, HOBO, Aranet, CSV/TXT/Excel"]:::xf
+    A3["save_result() - Czas | Temperatura | Wilgotnosc"]:::xf
+    A4[("wyniki/&lt;serial&gt;_wynik.xlsx")]:::out
+    A1 --> A2 --> A3 --> A4
+  end
+
+  subgraph F2["2 - generuj_obserwacje.py - obserwacja + protokol"]
+    direction TB
+    B1["resolve_txt_files() - tolerancyjny wybor TXT"]:::xf
+    B2["combine_txt() - sklejenie N plikow + dedup po czasie"]:::xf
+    B3["Arkusz obserwacji (A2:U / A2:L)"]:::out
+    B4["analyze_and_highlight()<br/>segmenty stabilne (B,C >= 1h45m)<br/>filtr suszenia / histerezy<br/>okno 5-min (min K/L) + 5 reprezentantow"]:::xf
+    B5["wczytaj_pz() + wczytaj_zestawienie()"]:::pz
+    B6["generuj_protokol()"]:::xf
+    B8["_wypelnij_wyniki_srodowiskowe()<br/>dopasowanie 5 wierszy po czasie<br/>-> Q/R (CC) lub S/T (CC-04)"]:::xf
+    B7["PROTOKOL - Strona 3 (pomiary + srodowisko)"]:::out
+    B9["wypelnij_strone2_z_pz()<br/>match serial -> PZ, rozdzielczosc K/L"]:::pz
+    B10["PROTOKOL - Strona 2 (tabela przyrzadow)"]:::out
+    B1 --> B2 --> B3 --> B4 --> B6
+    B5 --> B6
+    B6 --> B8 --> B7
+    B6 --> B7
+    B5 --> B9 --> B10
+  end
+
+  subgraph F3["3 - generuj_arkusze.py - kopie arkuszy + swiadectwa (7 etapow)"]
+    direction TB
+    C0["_main_impl() -> wczytaj_wszystko_xlwings()<br/>Strona 2 (lista) + Strona 3 (zakladki, C/D, E/F, F24)"]:::xf
+    C1["Etap 1 - kopie szablonu (per przyrzad)"]:::xf
+    C2["Etap 2 - liczba i nazwy zakladek"]:::xf
+    C34["Etap 3-4 - C15:C19, D15:D19, E15:E19, F15:F19"]:::xf
+    C5["Etap 5 - naglowki: E4/G6/K4/E5/E6/H57,<br/>K11-K13/K17 (CC-04), K18 higrometr, podpisy"]:::xf
+    C6["Etap 6 - Wyniki: F24, sort tabel,<br/>_aktualizuj_formule_histerezy (J23)"]:::xf
+    C7["Etap 7 - warunki srodowiskowe<br/>czujnik + Wzory.xls -> F/G + min/max"]:::xf
+    C8["_odczytaj_kalibracje_xlwings()<br/>D239:K239 (RH) / D246:G246 (temp)"]:::xf
+    C9["utworz_kopie_word()<br/>szablon wg klasy, placeholdery,<br/>[uzytkownik], tabele kalibracji"]:::pz
+    C10[("Kopie Excel - arkusze obliczeniowe")]:::out
+    C11[("Swiadectwa Word - .docx")]:::out
+    C0 --> C1 --> C2 --> C34 --> C5 --> C6 --> C7 --> C8 --> C9
+    C7 --> C10
+    C9 --> C11
+  end
+
+  P1 --> A1
+  P6 --> B1
+  A4 --> B8
+  P2 --> B5
+  P5 --> B5
+  B7 --> C0
+  B10 --> C0
+  P3 --> C7
+  P4 --> C7
+  P4 --> C0
+  P5 -.fallback.-> C9
+
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
+  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
+```
+
+**Kolejność:** FAZA 0 (ręcznie) → `analizuj_excele` (→ `wyniki/*`) → `generuj_obserwacje`
+(protokół: Strona 2 z PZ + Strona 3 z pomiarów) → `generuj_arkusze` (kopie Excel + świadectwa Word).
+Pliki `Wzory.xls` / `Pom. nr 9` wchodzą dopiero w **Etap 7** arkuszy; `Zestawienie` i `PZ` — przy budowie Strony 2.
 
 ---
 
@@ -144,9 +231,9 @@ flowchart LR
   S2 --> DOC["Word: [wytworca][typ][nr_fabr][nr_ewid][uzytkownik]"]
   S3 --> DOC
 
-  classDef in fill:#12325a,stroke:#3b82f6,color:#dbeafe;
-  classDef xf fill:#3a2c0c,stroke:#f59e0b,color:#fde68a;
-  classDef out fill:#0f3d24,stroke:#22c55e,color:#bbf7d0;
+  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
+  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   class WYN,PZ,TXT in
   class KOP,DOC xf
   class S2,S3 out
