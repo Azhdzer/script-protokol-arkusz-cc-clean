@@ -27,6 +27,17 @@ from pathlib import Path
 import pandas as pd
 from datetime import datetime
 
+# PDF (raporty tempmate. i podobne loggery) — opcjonalna zaleznosc.
+try:
+    import logging
+    from pypdf import PdfReader
+    # Wyciszenie halasliwych ostrzezen pypdf (np. 'incorrect startxref pointer')
+    # dla lekko niepoprawnych, ale czytelnych plikow — pypdf i tak je naprawia.
+    logging.getLogger('pypdf').setLevel(logging.ERROR)
+    _PDF_OK = True
+except ImportError:
+    _PDF_OK = False
+
 # Force UTF-8 output so special characters print correctly on Windows
 if hasattr(sys.stdout, 'buffer'):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
@@ -41,8 +52,18 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 DEFAULT_INPUT  = Path("excel_do_analizy")
 DEFAULT_OUTPUT = Path("wyniki")
-SUPPORTED_EXT  = {'.csv', '.xls', '.xlsx', '.txt'}
+SUPPORTED_EXT  = {'.csv', '.xls', '.xlsx', '.txt', '.pdf', '.log'}
+
+# Angielskie skroty miesiecy → numer. Uzywane do parsowania dat 'DD-MMM-YY'
+# niezaleznie od locale systemu (tempmate zawsze zapisuje miesiac po angielsku,
+# a strptime('%b') zawiodloby na np. polskiej lokalizacji).
+_MONTHS_EN = {m: i for i, m in enumerate(
+    ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
+     'jul', 'aug', 'sep', 'oct', 'nov', 'dec'], start=1)}
 DEBUG = '--debug' in sys.argv
+
+# Zebrane wyniki biezacego przebiegu (label, DataFrame) — do zestawienia zbiorczego.
+_ZEBRANE = []
 
 # Multi-language keyword patterns for column detection
 TEMP_KW = re.compile(
@@ -221,6 +242,7 @@ def save_result(times, temps, hums, source_name, output_dir, suffix=''):
     out_path = Path(output_dir) / f"{stem}{suffix}_wynik.xlsx"
     with pd.ExcelWriter(out_path, engine='openpyxl') as w:
         df.to_excel(w, index=False)
+    _ZEBRANE.append((f"{stem}{suffix}", df))
 
     cols_desc = 'Czas + Temp' + (' + Wilg' if has_hum else ' (brak wilgotności)')
     print(f"    ✓  {len(df)} pomiarów  [{cols_desc}]  →  {out_path.name}")
@@ -240,6 +262,13 @@ def sniff_format(filepath):
         raw = b''
 
     text = raw.decode('latin-1', errors='replace')
+
+    if ext == '.pdf' or raw[:4] == b'%PDF':
+        return 'pdf_logger'
+
+    # Log z terminala (PuTTY) — czujniki Vaisala/PTU: linie 'data time ... T= .. RH= ..'
+    if b'PuTTY log' in raw:
+        return 'putty'
 
     if b'[#I]Device Name' in raw or b'[#D]Measurements' in raw:
         return 'rotronic_hw4'
@@ -848,6 +877,7 @@ def _save_xtherm(times, t_wewn, t_zewn, hums, source_name, output_dir, suffix=''
     out_path = Path(output_dir) / f"{stem}{suffix}_wynik.xlsx"
     with pd.ExcelWriter(out_path, engine='openpyxl') as w:
         df.to_excel(w, index=False)
+    _ZEBRANE.append((f"{stem}{suffix}", df))
 
     cols_desc = ' + '.join(c for c in df.columns if c != 'Czas')
     print(f"    ✓  {len(df)} pomiarów  [Czas + {cols_desc}]  →  {out_path.name}")
@@ -885,6 +915,105 @@ def parse_xtherm_com(filepath, output_dir):
 
 # ─── DISPATCH TABLE ───────────────────────────────────────────────────────────
 
+def parse_pdf_logger(filepath, output_dir):
+    """
+    Raporty PDF loggerow temperatury/wilgotnosci (np. tempmate. Data Report).
+
+    Odporny na uklad kolumn: kazdy pomiar to samodzielna trojka
+    'DD-MMM-YY HH:MM:SS wartosc °C', wiec zbieramy wszystkie dopasowania regexem
+    z calego tekstu i sortujemy po czasie w save_result (kolejnosc czytania
+    kolumn nie ma znaczenia). Obsluguje °C i °F oraz opcjonalna kolumne
+    wilgotnosci (%). Wiersze podsumowania (bez daty+godziny) sa ignorowane.
+    """
+    if not _PDF_OK:
+        print("    ✗ Brak biblioteki 'pypdf' — zainstaluj: pip install pypdf")
+        return
+
+    reader = PdfReader(str(filepath))
+    text = "\n".join((page.extract_text() or "") for page in reader.pages)
+
+    row_re = re.compile(
+        r'(\d{1,2})-([A-Za-z]{3})-(\d{2,4})\s+'      # data: DD-MMM-YY(YY)
+        r'(\d{1,2}:\d{2}:\d{2})\s+'                   # czas: HH:MM:SS
+        r'(-?\d+(?:[.,]\d+)?)\s*°?\s*([CF])'          # temperatura + jednostka
+        r'(?:\s+(-?\d+(?:[.,]\d+)?)\s*%)?',           # opcjonalna wilgotnosc
+        re.I,
+    )
+
+    times, temps, hums = [], [], []
+    for m in row_re.finditer(text):
+        day, mon, year, hms, val, unit, hum = m.groups()
+        mon_num = _MONTHS_EN.get(mon.lower())
+        if mon_num is None:
+            continue                       # nie miesiac (np. przypadkowy tekst)
+        yr = int(year) + 2000 if len(year) == 2 else int(year)
+        try:
+            ts = pd.Timestamp(datetime.strptime(
+                f"{yr:04d}-{mon_num:02d}-{int(day):02d} {hms}", '%Y-%m-%d %H:%M:%S'))
+        except ValueError:
+            continue
+        t = clean_num(val)
+        if t is None:
+            continue
+        if unit.upper() == 'F':            # °F → °C
+            t = (t - 32.0) * 5.0 / 9.0
+        times.append(ts)
+        temps.append(round(t, 2))
+        hums.append(clean_num(hum))
+
+    if not times:
+        print("    ⚠  Nie znaleziono wierszy pomiarowych w PDF "
+              "(moze skan bez warstwy tekstowej?)")
+        return
+
+    save_result(times, temps, hums, filepath.name, output_dir)
+
+
+def parse_putty(filepath, output_dir):
+    """
+    Log z terminala PuTTY z czujnika P/T/RH (Vaisala i pokrewne). Linie danych maja
+    znacznik czasu na poczatku oraz pola T= i RH= w DOWOLNEJ kolejnosci (P= ignorujemy):
+        2026-07-02 12:10:13 P=  998.2 hPa T= 24.0 'C RH= 55.5 %RH
+        2026-07-02 11:20:26 T=   23.4 RH=    60.3 P=  998.1
+    Linie-echa polecen, znaki kontrolne oraz wpisy z domyslna data przyrzadu
+    (rok < 2015, np. 2000-01-01) sa pomijane.
+    """
+    dt_re = re.compile(r'(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})')
+    t_re  = re.compile(r'\bT\s*=\s*(-?\d+(?:[.,]\d+)?)', re.I)
+    rh_re = re.compile(r'\bRH\s*=\s*(-?\d+(?:[.,]\d+)?)', re.I)
+
+    try:
+        with open(filepath, encoding='utf-8', errors='replace') as f:
+            lines = f.readlines()
+    except Exception:
+        with open(filepath, encoding='latin-1', errors='replace') as f:
+            lines = f.readlines()
+
+    times, temps, hums = [], [], []
+    for line in lines:
+        mdt = dt_re.search(line)
+        mt  = t_re.search(line)
+        mrh = rh_re.search(line)
+        if not (mdt and mt and mrh):
+            continue
+        ts = parse_dt(f"{mdt.group(1)} {mdt.group(2)}")
+        if ts is None or ts.year < 2015:   # pomijamy domyslna date przyrzadu (2000-01-01)
+            continue
+        t = clean_num(mt.group(1))
+        rh = clean_num(mrh.group(1))
+        if t is None:
+            continue
+        times.append(ts)
+        temps.append(t)
+        hums.append(rh)
+
+    if not times:
+        print("    ⚠  Nie znaleziono linii pomiarowych (T=/RH=) w logu PuTTY")
+        return
+
+    save_result(times, temps, hums, filepath.name, output_dir)
+
+
 PARSERS = {
     'rotronic_hw4':  parse_rotronic_hw4,
     'almemo':        parse_almemo,
@@ -895,6 +1024,8 @@ PARSERS = {
     'comet_txt':     parse_comet_txt,
     'xtherm_com':    parse_xtherm_com,
     'txt_generic':   parse_txt_generic,
+    'pdf_logger':    parse_pdf_logger,
+    'putty':         parse_putty,
 }
 
 # ─── ENTRY POINT ─────────────────────────────────────────────────────────────
@@ -918,7 +1049,71 @@ def process_file(filepath, output_dir):
             traceback.print_exc()
 
 
+def zbuduj_zestawienie(zebrane, output_dir):
+    """
+    Laczy pomiary WSZYSTKICH przetworzonych przyrzadow w jeden plik, wyrownane po czasie:
+        Czas | Temp <p1> | Wilg <p1> | Temp <p2> | Wilg <p2> | ...
+    Wartosci dopasowywane sa do wspolnej siatki czasu metoda 'najblizszy w czasie'
+    (tolerancja = krok siatki). Krok siatki = mediana odstepu najliczniejszego przyrzadu.
+    Zapisuje: wyniki/zestawienie_pomiarow.xlsx.
+    """
+    wpisy = [(lab, df) for (lab, df) in zebrane if df is not None and not df.empty]
+    if not wpisy:
+        return
+
+    przygotowane = []
+    tmin = tmax = None
+    krok_ref_s = None
+    max_len = -1
+    for lab, df in wpisy:
+        d = df.copy()
+        d['Czas'] = pd.to_datetime(d['Czas'], errors='coerce')
+        d = d.dropna(subset=['Czas']).drop_duplicates(subset=['Czas']).sort_values('Czas')
+        if d.empty:
+            continue
+        # Nazwy kolumn wartosci z etykieta przyrzadu (unikalne miedzy przyrzadami).
+        ren = {}
+        for c in d.columns:
+            if c == 'Czas':
+                continue
+            baza = c.split('[')[0].strip().replace('Temperatura', 'Temp').replace('Wilgotność', 'Wilg')
+            ren[c] = f"{baza} {lab}".strip()
+        przygotowane.append(d.rename(columns=ren))
+        tmin = d['Czas'].min() if tmin is None else min(tmin, d['Czas'].min())
+        tmax = d['Czas'].max() if tmax is None else max(tmax, d['Czas'].max())
+        if len(d) > max_len and len(d) > 1:
+            diffs = d['Czas'].diff().dropna().dt.total_seconds()
+            med = diffs[diffs > 0].median()
+            if med and med > 0:
+                krok_ref_s = med
+            max_len = len(d)
+
+    if not przygotowane or tmin is None or tmax is None:
+        return
+
+    krok_s = int(round(krok_ref_s or 60)) or 60
+    while (tmax - tmin).total_seconds() / krok_s > 300000:   # ochrona przed ogromna siatka
+        krok_s *= 2
+    krok = pd.Timedelta(seconds=krok_s)
+
+    wynik = pd.DataFrame({'Czas': pd.date_range(tmin, tmax, freq=krok)})
+    for d in przygotowane:
+        wynik = pd.merge_asof(wynik, d, on='Czas', direction='nearest', tolerance=krok)
+
+    kol_wart = [c for c in wynik.columns if c != 'Czas']
+    wynik = wynik.dropna(how='all', subset=kol_wart).reset_index(drop=True)
+    if wynik.empty:
+        return
+
+    out_path = Path(output_dir) / 'zestawienie_pomiarow.xlsx'
+    with pd.ExcelWriter(out_path, engine='openpyxl') as w:
+        wynik.to_excel(w, index=False)
+    print(f"\n    ✓  Zestawienie zbiorcze: {len(wynik)} wierszy × {len(przygotowane)} przyrzadow "
+          f"(krok {krok_s}s)  →  {out_path.name}")
+
+
 def main():
+    _ZEBRANE.clear()
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
 
     if args:
@@ -929,6 +1124,7 @@ def main():
             print(f"Przetwarzam pojedynczy plik: {target}")
             print(f"Wyniki → '{output_dir}/'")
             process_file(target, output_dir)
+            zbuduj_zestawienie(_ZEBRANE, output_dir)
             return
         if target.is_dir():
             input_dir = target
@@ -954,6 +1150,8 @@ def main():
 
     for f in files:
         process_file(f, output_dir)
+
+    zbuduj_zestawienie(_ZEBRANE, output_dir)
 
     # Summary
     out_files = list(output_dir.glob('*_wynik.xlsx'))

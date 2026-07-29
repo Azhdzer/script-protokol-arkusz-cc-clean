@@ -33,6 +33,8 @@ from itertools import groupby
 import openpyxl
 import xlwings as xw
 
+import pz_dane   # wspolny modul: dane przyrzadow z PZ (fallback, gdy Strona 2 pusta)
+
 # ---------------------------------------------------------------------------
 # Wizualne helpers logowania
 # ---------------------------------------------------------------------------
@@ -83,11 +85,15 @@ except ImportError:
 # KONFIGURACJA  ← edytuj tutaj przed uruchomieniem
 # =============================================================================
 
-FOLDER           = r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"   # folder z plikami xlsx; "." = ten sam co skrypt  r"." 
+# Wartosci ponizej to DOMYSLNE. Panel GUI (app_gui.py) moze je nadpisac przez
+# zmienne srodowiskowe CC_FOLDER / CC_PROTOKOL / CC_SZABLON — dzieki temu uzytkownik
+# wybiera folder i pliki wejsciowe bez edycji skryptu.
+FOLDER           = os.environ.get("CC_FOLDER") or \
+                   r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"   # folder z plikami xlsx; "." = ten sam co skrypt  r"."
                            # możesz podać pełną ścieżkę, np. r"C:\Moje\Pliki"
 
-PROTOKOL_PLIK    = "11_LA_TH_2026 - protokół CC-04.xlsx"
-SZABLON_PLIK     = "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx"
+PROTOKOL_PLIK    = os.environ.get("CC_PROTOKOL") or "001_LA_TH_2026 - protokół CC-04.xlsx"
+SZABLON_PLIK     = os.environ.get("CC_SZABLON") or "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx"
 
 ARKUSZ_STRONA2   = "Strona 2"   # arkusz z listą kopii do wygenerowania
 ARKUSZ_STRONA3   = "Strona 3"   # arkusz z definicją zakładek
@@ -106,10 +112,17 @@ ARKUSZ_WNIOSKI   = "Wyniki"          # ostatni arkusz — nie jest modyfikowany
 PODPISUJACY_1    = "Artsiom Azhdzer"  # B230:C230 (scalona) — podpisujacy z lewej
 PODPISUJACY_2    = "Marek Szpakowski" # H230:I230 (scalona) — podpisujacy z prawej
 
+# Higrometr punktu rosy wpisywany do komorki K18 KAZDEJ kopii-zakladki.
+# Dozwolone wartosci: "S8000", "-", "S8000-2", "OPTIDEW".
+# UWAGA: dla punktow TYLKO-TEMPERATURA (zakladka bez RH, np. nazwa '5, -') w K18
+# ZAWSZE wpisywane jest "-", niezaleznie od tego ustawienia.
+# Arkusza "Wyniki" to nie dotyczy (nie jest modyfikowany).
+HIGROMETR_K18    = "S8000"
+
 SZABLON_WORD_TYLKO_TEMP = "xxx_yyy_LA_TH_2026 - tylko temp.docx"      # szablon Word, gdy brak aktywnej wilgotnosci
 SZABLON_WORD_Z_RH       = "xxx_yyy_LA_TH_2026 - zakres.docx"          # szablon Word, gdy WSZYSTKIE zakladki maja aktywna wilgotnosc
 SZABLON_WORD_MIESZANY   = "xxx_yyy_LA_TH_2026 - zakres + temp.docx"   # szablon Word, gdy CZESC zakladek ma wilgotnosc, a czesc nie (dwie tabele)
-NR_SW_POCZATKOWY    = 957   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
+NR_SW_POCZATKOWY    = 993   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
 
 NR_POMIESZCZENIA = 9          # numer pomieszczenia środowiskowego
 MODEL_CZUJNIKA   = "MX1101-02"  # model czujnika środowiskowego
@@ -119,7 +132,7 @@ MODEL_CZUJNIKA   = "MX1101-02"  # model czujnika środowiskowego
 #                       korzysta z juz istniejacych kopii (gdy GENERUJ_WORD=True).
 # - GENERUJ_WORD=False : pomija Etap 7 (Word).
 GENERUJ_EXCEL = True
-GENERUJ_WORD  = True
+GENERUJ_WORD  = False
 
 # Pliki linkowane wymagane do przeliczenia formul kalibracyjnych (D246/F246/G246).
 # Muszą być otwarte w tej samej sesji Excel — podaj dokładne nazwy z rozszerzeniem.
@@ -178,6 +191,18 @@ BIERZ_INNE_KOLORY_S3  = False
 # Jesli True, kopia dostaje tylko te zakladki, ktore maja dane E/F
 # (po filtracji kolorow) dla konkretnej kopii.
 USUWAJ_PUSTE_BLOKI_KOPII_S3 = True
+
+
+# --- Nadpisania z panelu GUI (app_gui.py) przez zmienne srodowiskowe ---
+def _env_flag(_nazwa, _biezaca):
+    """Zwraca True/False z env (1/true/tak/on), albo _biezaca gdy brak zmiennej."""
+    _v = os.environ.get(_nazwa)
+    return _biezaca if _v is None else _v.strip().lower() in ("1", "true", "tak", "yes", "on")
+
+GENERUJ_EXCEL = _env_flag("GEN_EXCEL", GENERUJ_EXCEL)
+GENERUJ_WORD  = _env_flag("GEN_WORD", GENERUJ_WORD)
+USUWAJ_PUSTE_BLOKI_KOPII_S3 = _env_flag("GEN_PUSTE", USUWAJ_PUSTE_BLOKI_KOPII_S3)
+CZYSC_AUTORECOVER = _env_flag("GEN_AUTOREC", CZYSC_AUTORECOVER)
 
 # =============================================================================
 # WARUNKI ŚRODOWISKOWE — czujnik + Wzory.xls
@@ -492,6 +517,12 @@ def _oblicz_zakresy_srodowiskowe_z_istniejacych_kopii(folder, nazwy, dane_zaklad
     app.api.DisplayAlerts = False
     app.api.AskToUpdateLinks = False
     app.api.Visible = False
+    # Blokuj Workbook_Open/Worksheet_Calculate makr JUZ PRZED otwarciem plikow
+    # linkowanych (Wzory.xls / Obliczenia tdp, RH, C.xls) — ich makra siegaja
+    # \\plum4 i moga uruchamiac Worda, co zawiesza skrypt. UDF-y dzialaja i tak
+    # (EnableEvents nie dotyczy funkcji, tylko zdarzen). Poszczegolne operacje
+    # przywracaja EnableEvents wg potrzeby.
+    app.api.EnableEvents = False
     try:
         app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
     except Exception:
@@ -785,6 +816,12 @@ def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, chroniony):
     app.api.DisplayAlerts = False
     app.api.AskToUpdateLinks = False
     app.api.Visible = False
+    # Blokuj Workbook_Open/Worksheet_Calculate makr JUZ PRZED otwarciem plikow
+    # linkowanych (Wzory.xls / Obliczenia tdp, RH, C.xls) — ich makra siegaja
+    # \\plum4 i moga uruchamiac Worda, co zawiesza skrypt. UDF-y dzialaja i tak
+    # (EnableEvents nie dotyczy funkcji, tylko zdarzen). Poszczegolne operacje
+    # przywracaja EnableEvents wg potrzeby.
+    app.api.EnableEvents = False
     try:
         app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
     except Exception:
@@ -1093,6 +1130,12 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
     app.api.DisplayAlerts = False
     app.api.AskToUpdateLinks = False
     app.api.Visible = False
+    # Blokuj Workbook_Open/Worksheet_Calculate makr JUZ PRZED otwarciem plikow
+    # linkowanych (Wzory.xls / Obliczenia tdp, RH, C.xls) — ich makra siegaja
+    # \\plum4 i moga uruchamiac Worda, co zawiesza skrypt. UDF-y dzialaja i tak
+    # (EnableEvents nie dotyczy funkcji, tylko zdarzen). Poszczegolne operacje
+    # przywracaja EnableEvents wg potrzeby.
+    app.api.EnableEvents = False
     try:
         app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
     except Exception:
@@ -1310,6 +1353,28 @@ def _formatuj_date(d):
     return f"{d.day:02d} {MIESIACE_GEN[d.month]} {d.year} r."
 
 
+def _parsuj_date_dowolna(d):
+    """
+    Zwraca datetime.date z datetime/date albo ze STRINGA (np. '02.07.2026').
+    None gdy nie da sie rozpoznac. Arkusze zapisuja date pomiaru w Strona 3 (kol. E)
+    jako TEKST 'DD.MM.YYYY', dlatego musimy obsluzyc rowniez stringi.
+    """
+    if isinstance(d, datetime.datetime):
+        return d.date()
+    if isinstance(d, datetime.date):
+        return d
+    if isinstance(d, str):
+        s = d.strip()
+        if not s:
+            return None
+        for fmt in ('%d.%m.%Y', '%Y-%m-%d', '%d-%m-%Y', '%d.%m.%y', '%d/%m/%Y'):
+            try:
+                return datetime.datetime.strptime(s, fmt).date()
+            except ValueError:
+                continue
+    return None
+
+
 def _formatuj_daty_wzorcowania(daty_raw):
     """
     Formatuje liste dat jako polska date wzorcowania.
@@ -1318,19 +1383,15 @@ def _formatuj_daty_wzorcowania(daty_raw):
 
     Przyklady:
       [19.05, 20.05]         → '19, 20 maja 2026 r.'
-      [10.05, 11.05, 12.05]  → '10 - 12 maja 2026 r.'
+      [10.05, 11.05, 12.05]  → '10 ÷ 12 maja 2026 r.'
       [29.04, 04.05]         → '29 kwietnia, 04 maja 2026 r.'
       [18.05, 19.05, 21.05]  → '18, 19, 21 maja 2026 r.'
     """
     daty = []
     for d in daty_raw:
-        if d is None:
-            continue
-        if isinstance(d, datetime.datetime):
-            d = d.date()
-        elif not isinstance(d, datetime.date):
-            continue
-        daty.append(d)
+        d = _parsuj_date_dowolna(d)
+        if d is not None:
+            daty.append(d)
     daty = sorted(set(daty))
     if not daty:
         return ""
@@ -1358,7 +1419,7 @@ def _formatuj_daty_wzorcowania(daty_raw):
         d0 = daty_seg[0]
         dN = daty_seg[-1]
         if typ_seg == "zakres" and d0.month == dN.month:
-            pary.append((d0.year, d0.month, f"{d0.day:02d} - {dN.day:02d}"))
+            pary.append((d0.year, d0.month, f"{d0.day:02d} ÷ {dN.day:02d}"))
         else:
             for d in daty_seg:
                 pary.append((d.year, d.month, f"{d.day:02d}"))
@@ -1883,6 +1944,24 @@ def generuj_nazwe_word(nr_sw, prefiks, rok):
     return f"{nr_sw}_{prefiks}_LA_TH_{rok}.docx"
 
 
+# PZ jako fallback danych przyrzadu (gdy Strona 2 pusta — np. protokol bez PZ-fill).
+PZ_FOLDER_ARK = os.environ.get("CC_PZ_FOLDER") or os.path.join(FOLDER, "PZ")
+_PZ_CACHE = None
+
+def _pz_mapa_arkusze():
+    """Leniwie wczytuje mape PZ (po nr fabrycznym); cache na czas dzialania."""
+    global _PZ_CACHE
+    if _PZ_CACHE is None:
+        _PZ_CACHE, _ = pz_dane.wczytaj_pz(PZ_FOLDER_ARK)
+    return _PZ_CACHE
+
+
+def _wariant_uzytkownik(nazwa_szablonu):
+    """'... tylko temp.docx' -> '... tylko temp (uzytkownik).docx' (wariant z UZYTKOWNIKIEM)."""
+    baza, ext = os.path.splitext(nazwa_szablonu)
+    return f"{baza} (uzytkownik){ext}"
+
+
 def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablon_word_mieszany, dane_s2, kopie_excel,
                       dane_zakladek, dane_kalibracji, nr_sw_poczatkowy,
                       dane_zakladek_per_kopia=None, klasa_wilg_per_kopia=None,
@@ -1919,6 +1998,16 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
     data_str = _formatuj_date(dzis)
 
     for j, (rekord, nowa_nazwa_xlsx) in enumerate(zip(dane_s2, kopie_excel)):
+        nr_sw = nr_sw_poczatkowy + j
+        prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
+
+        # Dane przyrzadu z PZ (po nr fabrycznym): fallback pol Strony 2 + ew. UZYTKOWNIK.
+        _pzdev = _pz_mapa_arkusze().get(pz_dane.normalizuj_serial(nr_fab))
+        uzytkownik_v = (_pzdev.uzytkownik if _pzdev else "") or ""
+        wytworca_v = str(rekord.get("B") or "") or (_pzdev.wytworca if _pzdev else "")
+        typ_v      = str(rekord.get("D") or "") or (_pzdev.typ if _pzdev else "")
+        nr_ewid_v  = _cell_to_str(rekord.get("F")) or (_pzdev.nr_ewid if _pzdev else "")
+
         klasa = klasa_wilg_per_kopia[j] if klasa_wilg_per_kopia and j < len(klasa_wilg_per_kopia) else "brak"
         if klasa == "mieszana":
             szablon_word = szablon_word_mieszany or szablon_word_z_rh or szablon_word_tylko_temp
@@ -1929,13 +2018,21 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
         if not szablon_word:
             print(f"  [UWAGA] Brak skonfigurowanego szablonu Word dla kopii '{nowa_nazwa_xlsx}' — pomijam.")
             continue
+
+        # Gdy PZ zawiera UZYTKOWNIKA — uzyj wariantu szablonu '(uzytkownik)', jesli istnieje.
+        if uzytkownik_v:
+            wariant = _wariant_uzytkownik(szablon_word)
+            if os.path.exists(os.path.join(folder, wariant)):
+                szablon_word = wariant
+                print(f"  [Word] Kopia '{nowa_nazwa_xlsx}': UZYTKOWNIK obecny -> szablon '{wariant}'.")
+            else:
+                print(f"  [UWAGA] Brak szablonu '{wariant}' — uzywam standardowego (bez uzytkownika).")
+
         szablon_path = os.path.join(folder, szablon_word)
         if not os.path.exists(szablon_path):
             print(f"  [UWAGA] Plik szablonu Word nie istnieje: {szablon_word} — pomijam kopie '{nowa_nazwa_xlsx}'.")
             continue
 
-        nr_sw = nr_sw_poczatkowy + j
-        prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
         nowa_nazwa_docx = generuj_nazwe_word(nr_sw, prefiks, rok)
         sciezka_docx = os.path.join(folder, nowa_nazwa_docx)
 
@@ -1954,10 +2051,11 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             "[nr_sw]":            str(nr_sw),
             "[nr_zl]":            prefiks,          # prefiks z nazwy pliku (przed _LA_TH_)
             "[nr_fabr]":          nr_fab,
-            "[nr_ewid]":          _cell_to_str(rekord.get("F")),  # Strona 2 kol. F
-            "[wytworca]":         str(rekord.get("B") or ""),
-            "[typ]":              str(rekord.get("D") or ""),  # E6 pierwszej zakladki
+            "[nr_ewid]":          nr_ewid_v,        # Strona 2 kol. F (lub PZ)
+            "[wytworca]":         wytworca_v,       # Strona 2 kol. B (lub PZ)
+            "[typ]":              typ_v,            # Strona 2 kol. D (lub PZ)
             "[data_wzorcowania]": data_wzorcowania,
+            "[użytkownik]":       uzytkownik_v,     # blok adresowy z PZ (tylko szablon uzytkownika)
             "[Podpis]":           PODPISUJACY_2,
         }.items():
             _zastap_tekst_w_dok(doc, placeholder, wartosc)
@@ -2197,25 +2295,33 @@ def _rh_z_nazwy_zakladki(nazwa):
 def _wybierz_reprezentantow_temp(wpisy, tol_temp=1.0):
     """
     wpisy: lista (temp_zaokr, rh_lub_None, czy_powtorka, payload).
-    Grupuje wpisy o ZBLIZONEJ temperaturze (roznica <= tol_temp °C — np. 60 i 61
-    to jeden punkt, ktory zakolebal sie na roznej wilgotnosci) i z kazdej grupy
-    wybiera JEDEN reprezentatywny 'payload' — do tabel 'tylko temperatura'
-    (Excel O1:R9, Word — tabela bez kolumn RH). W obrebie grupy preferowane sa
-    zakladki bez sufiksu powtorki histerezy ' (N)', a z nich ta o WILGOTNOSCI
-    NAJBLIZSZEJ 50%.
+
+    Laczymy TYLKO zakladki Z WILGOTNOSCIA (wzorcowanie RH): kilka zakladek o tej samej
+    (zblizonej, <= tol_temp °C) temperaturze, ale roznej wilgotnosci, to jeden punkt
+    temperaturowy → jeden reprezentant (do tabel 'tylko temperatura': Excel O1:R9,
+    Word bez kolumn RH). Z grupy preferowane sa zakladki bez sufiksu powtorki ' (N)',
+    a z nich ta o wilgotnosci NAJBLIZSZEJ 50%.
+
+    Zakladki BEZ wilgotnosci ('-', czyli wzorcowanie samej temperatury) to ODDZIELNE
+    punkty i NIGDY nie sa laczone — kazda dostaje wlasny wiersz. Bez tego sasiednie
+    punkty temp co ~1-2 °C (np. 41,6 i 42,3 -> zaokr. 42 i 42) bledy sie sklejaly i
+    czesc punktow ginela w arkuszu Wyniki.
     Zwraca liste wybranych 'payload' (bez okreslonej kolejnosci).
     """
     # Klastrowanie po temperaturze z tolerancja (kotwica = najnizsza temp w grupie).
+    # Grupa moze "wchlaniac" kolejne wpisy TYLKO gdy i ona, i nowy wpis maja wilgotnosc.
     posortowane = sorted(wpisy, key=lambda x: x[0])
-    grupy = []   # lista [kotwica_temp, [wpisy...]]
+    grupy = []   # lista [kotwica_temp, [wpisy...], czy_grupa_z_wilgotnoscia]
     for wp in posortowane:
-        if grupy and abs(wp[0] - grupy[-1][0]) <= tol_temp:
+        ma_rh = wp[1] is not None
+        if (grupy and ma_rh and grupy[-1][2]
+                and abs(wp[0] - grupy[-1][0]) <= tol_temp):
             grupy[-1][1].append(wp)
         else:
-            grupy.append([wp[0], [wp]])
+            grupy.append([wp[0], [wp], ma_rh])
 
     wynik = []
-    for _kotwica, grupa in grupy:
+    for _kotwica, grupa, _hum in grupy:
         kandydaci = [(rh, powtorka, payload) for (_t, rh, powtorka, payload) in grupa]
         bez_powtorki = [k for k in kandydaci if not k[1]]
         pool = bez_powtorki if bez_powtorki else kandydaci
@@ -2223,6 +2329,67 @@ def _wybierz_reprezentantow_temp(wpisy, tol_temp=1.0):
         wybrany = min(z_rh, key=lambda k: abs(k[0] - 50)) if z_rh else pool[0]
         wynik.append(wybrany[2])
     return wynik
+
+
+def _znajdz_komorke_histerezy(ws_w, extra_rows=0):
+    """
+    Znajduje komorke z formula histerezy w arkuszu Wyniki (kolumna J, jedyna z 'E219').
+    W szablonie jest to J23, ale tabela Wyniki moze dodac wiersze (>6 zakladek), przez
+    co formula zjezdza w dol o `extra_rows` (np. do J26). Najpierw celujemy w
+    J(23+extra_rows), a gdy tam nie ma formuly — skanujemy kolumne J.
+    Zwraca (obiekt_komorki, tekst_formuly) albo (None, None).
+    """
+    r0 = 23 + int(extra_rows or 0)
+    try:
+        f = ws_w.range(f"J{r0}").formula
+        if isinstance(f, str) and "E219" in f:
+            return ws_w.range(f"J{r0}"), f
+    except Exception:
+        pass
+    try:
+        kol = ws_w.range("J1:J80").formula
+    except Exception:
+        return None, None
+    for idx, val in enumerate(kol, start=1):
+        f = val[0] if isinstance(val, (list, tuple)) else val
+        if isinstance(f, str) and f.startswith("=") and "E219" in f:
+            return ws_w.range(f"J{idx}"), f
+    return None, None
+
+
+def _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows=0):
+    """
+    Ustawia komorke histerezy w arkuszu Wyniki (kolumna J; w szablonie J23,
+    po dodaniu wierszy tabeli przesunieta o `extra_rows`).
+
+    Regula:
+      • jest punkt histerezy (arkusz z sufiksem ' (N)', np. '20, 44 (2)') →
+        wpisujemy formule =ABS(VALUE('<baza>'!E219)-VALUE('<baza> (2)'!E219))
+        (baza = nazwa arkusza bez ' (N)', np. '20, 44'); Excel pokaze ja jako
+        MODUŁ.LICZBY(WARTOŚĆ(...)-WARTOŚĆ(...)) w polskim interfejsie;
+      • brak powtorki (2) → w komorce wpisujemy liczbe 1 (zamiast formuly).
+    """
+    cell, _ = _znajdz_komorke_histerezy(ws_w, extra_rows)
+    if cell is None:
+        print("  [Wyniki] Nie znaleziono komorki formuly histerezy (J*, E219) — pomijam.")
+        return
+
+    rep = next((s for s in working_final if _to_jest_powtorka_kolizji(s)), None)
+    if rep is None:
+        try:
+            cell.value = 1
+            print(f"  [Wyniki] Histereza {cell.address}: brak punktu (2) → wpisano 1")
+        except Exception as e:
+            print(f"  [Wyniki] Nie udalo sie wpisac 1 do {cell.address}: {e}")
+        return
+
+    base = _WZORZEC_POWTORKI_NAZWY.sub('', rep).strip()
+    nowa = f"=ABS(VALUE('{base}'!E219)-VALUE('{rep}'!E219))"
+    try:
+        cell.formula = nowa
+        print(f"  [Wyniki] Histereza {cell.address}: '{base}' / '{rep}'")
+    except Exception as e:
+        print(f"  [Wyniki] Nie udalo sie zapisac formuly histerezy: {e}")
 
 
 def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
@@ -2613,6 +2780,11 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws.range("K13").value = parametry_cc04["K13"]
                 ws.range("K17").value = parametry_cc04["K17"]
 
+            # K18 — higrometr punktu rosy: wartosc z konfiguracji (HIGROMETR_K18),
+            # ale dla punktow TYLKO-TEMPERATURA (brak RH w nazwie zakladki) zawsze "-".
+            _rh_nom = _rh_z_nazwy_zakladki(zd.get("nazwa"))
+            ws.range("K18").value = "-" if _rh_nom is None else HIGROMETR_K18
+
             o25 = zd.get("o25_val")
             if o25 is not None:
                 try:
@@ -2637,6 +2809,7 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         if chroniony in {s.name for s in wb.sheets}:
             ws_w = wb.sheets[chroniony]
             extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final)
+            _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows)
             if f24_val is not None:
                 ws_w.range(f"F{24 + extra_rows}").value = f24_val
             ws_w.range(f"C{28 + extra_rows}").value = dzis
@@ -2913,6 +3086,12 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
     app.api.DisplayAlerts = False
     app.api.AskToUpdateLinks = False
     app.api.Visible = False
+    # Blokuj Workbook_Open/Worksheet_Calculate makr JUZ PRZED otwarciem plikow
+    # linkowanych (Wzory.xls / Obliczenia tdp, RH, C.xls) — ich makra siegaja
+    # \\plum4 i moga uruchamiac Worda, co zawiesza skrypt. UDF-y dzialaja i tak
+    # (EnableEvents nie dotyczy funkcji, tylko zdarzen). Poszczegolne operacje
+    # przywracaja EnableEvents wg potrzeby.
+    app.api.EnableEvents = False
     try:
         app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
     except Exception:

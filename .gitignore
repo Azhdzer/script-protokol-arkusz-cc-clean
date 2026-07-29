@@ -30,6 +30,12 @@ archiwium/
 # Edytor
 .vscode/
 
+# PyInstaller — artefakty budowy (nie commitujemy exe/build)
+build/
+dist/
+build_log.txt
+crash.log
+
 # Dane pomiarowe (loggery / protokoly) — nie publikujemy
 excel_do_analizy/
 20??-*.txt

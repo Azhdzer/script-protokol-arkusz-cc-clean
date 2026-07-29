@@ -30,26 +30,49 @@ import datetime
 import statistics
 from copy import copy as _copy_obj
 import openpyxl
-from openpyxl.styles import PatternFill, Font
+from openpyxl.styles import PatternFill, Font, Border
 from openpyxl.utils import get_column_letter
+
+import pz_dane   # wspolny modul: dane przyrzadow z PZ + Zestawienie
 
 # =============================================================================
 # KONFIGURACJA  ← edytuj tutaj przed uruchomieniem
 # =============================================================================
 
-FOLDER           = r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"
-TXT_FILENAME     = "2026-06-29 06.46_00001.txt"
+FOLDER           = os.environ.get("CC_FOLDER") or \
+                   r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"
+TXT_FILENAME     = "2026-07-23 12.23_001"
+# Wiele plikow TXT jednego (przerwanego) pomiaru — zostana rozparsowane i
+# sklejone w jeden ciag. Pusta lista => uzywany jest pojedynczy TXT_FILENAME.
+# Panel GUI moze podac liste przez zmienna OBS_TXT_FILES (rozdzielona ';').
+TXT_FILENAMES    = ["",""]
 TEMPLATE         = "xxx_LA_TH_2026 - obserwacje CC.xlsx"
 CC04_TEMPLATE    = "szablon_LA_TH_2026 - obserwacje.xlsx"
 PROTOKOL_CC_TEMPLATE   = "xxx_LA_TH_2026 - protokół CC.xlsx"
 PROTOKOL_CC04_TEMPLATE = "xxx_LA_TH_2026 - protokół CC-04.xlsx"
 PODPIS           = "Artsiom Azhdzer"
-STABILIZACJA_MIN  = datetime.timedelta(hours=1, minutes=45)   # czas rozgrzewki przed analizą
+STABILIZACJA_MIN  = datetime.timedelta(hours=1, minutes=45)   # rozgrzewka: gdy odczyty nie wejda w widelki, okno od tego czasu od poczatku punktu
+
+# Dobor okna analizy: liczymy od momentu, gdy ODCZYTY komory wejda w widelki wokol nastaw:
+#   • temperatura: |Todczytana - Tzadana| <= PROG_WEJSCIA_TEMP  (°C, bezwzglednie),
+#   • wilgotnosc  : |RHodczytana - RHzadana| w granicach PROG_WEJSCIA_RH_PROC %  (wzglednie),
+# i odliczamy STABILIZACJA_PO_RH (2h). Okno = od tego czasu do konca punktu (tam 5 reprezentantow).
+# WAZNE: gdy punkt trzymany jest ~2h, samo 2h "zjadloby" caly punkt — dlatego start
+# jest cofany tak, by na koncu punktu zostal zawsze ogon pomiarowy MIN_OKNO_ANALIZY.
+# Punkt tylko-temperatura: liczy sie samo wejscie temperatury w widelki.
+STABILIZACJA_PO_RH    = datetime.timedelta(hours=2)
+PROG_WEJSCIA_TEMP     = 0.4    # +-0.4 °C (bezwzglednie) od Tzadana — temperatura nie moze "uciekac"
+PROG_WEJSCIA_RH_PROC  = 3.0    # +-3% (wzglednie, jak MAX_ROZNICA_PROCENT) od RHzadana
+MIN_OKNO_ANALIZY      = datetime.timedelta(minutes=15)   # gwarantowany ogon pomiarowy na koncu punktu (nigdy 0)
 SUSZENIE_T_ZAKRES = (21.0, 27.0)   # zakres T [°C] charakterystyczny dla suszenia
 SUSZENIE_RH_MAX   = 50.0           # max RH [%] — ponizej tej wartosci punkt moze byc suszeniem
 
 # Folder z zunifikowanymi plikami wynikow (z analizuj_excele.py)
 WYNIKI_FOLDER = os.path.join(FOLDER, "wyniki")
+
+# Dane przyrzadow: PDFy "Potwierdzenie zamowienia" (PZ/) + Zestawienie rozdzielczosci.
+PZ_FOLDER        = os.environ.get("CC_PZ_FOLDER") or os.path.join(FOLDER, "PZ")
+ZESTAWIENIE_PLIK = os.path.join(FOLDER, "Zestawienie wzorcowanych przyrządów.xlsx")
 
 # Kolumna startowa dla danych srodowiskowych z wynikow w Strona 3
 #   CC:   Q = 17  (temperatura=Q, wilgotnosc=R)
@@ -68,10 +91,27 @@ WYNIKI_TOLERANCJA_MIN = 30
 FILTR_NASTAWA_ODCZYT = True
 MAX_ROZNICA_PROCENT  = 10.0   # dozwolona wzgledna roznica |nastawa-odczyt|/nastawa * 100
 
+# --- Nadpisania z panelu GUI (app_gui.py) przez zmienne srodowiskowe ---
+if os.environ.get("OBS_FILTR") is not None:
+    FILTR_NASTAWA_ODCZYT = os.environ["OBS_FILTR"].strip().lower() in ("1", "true", "tak", "yes", "on")
+try:
+    if os.environ.get("OBS_PROG"):
+        MAX_ROZNICA_PROCENT = float(os.environ["OBS_PROG"])
+except ValueError:
+    pass
+try:
+    if os.environ.get("OBS_TOL"):
+        WYNIKI_TOLERANCJA_MIN = int(float(os.environ["OBS_TOL"]))
+except ValueError:
+    pass
+
 # =============================================================================
 
 FILL_LIGHT = PatternFill(fill_type='solid', fgColor='E2EFDA')  # jasna zieleń
 FILL_DARK  = PatternFill(fill_type='solid', fgColor='A9D08E')  # ciemna zieleń
+# Punkt, ktory NIE przeszedl kryterium (wybrany awaryjnie „najblizej po czasie"):
+FILL_WARN_LIGHT = PatternFill(fill_type='solid', fgColor='FCE4D6')  # jasny pomaranczowy (blok)
+FILL_WARN_DARK  = PatternFill(fill_type='solid', fgColor='F4B183')  # pomaranczowy (reprezentanci)
 
 
 def parse_measurement_id(filename: str) -> str:
@@ -132,36 +172,238 @@ def detect_file_type(lines) -> str:
     return 'CC'
 
 
+# --- CC-04: kanaly czujnikow wzorcowych ------------------------------------
+# Multimetr rejestruje np. 8 kanalow (Ch101..Ch108). W OBSERWACJI pokazujemy WSZYSTKIE
+# (pelna struktura pliku, kolejnosc jak w pliku), a do ANALIZY i PROTOKOLU bierzemy tylko
+# GLOWNE (typowo „co drugi": 101,103,105,107). Numery Pt100 (09/13/01/18) czytane sa
+# z pliku PO NUMERZE KANALU — nie wpisujemy ich recznie.
+CC04_KANALY_WSZYSTKIE = [101, 102, 103, 104, 105, 106, 107, 108]   # kolejnosc jak w pliku
+CC04_KANALY_GLOWNE    = [101, 103, 105, 107]                       # -> analiza + protokol
+CC04_KANALY_ZAPASOWE  = [c for c in CC04_KANALY_WSZYSTKIE if c not in CC04_KANALY_GLOWNE]
+
+# Pelny uklad kolumn CC-04 — DOKLADNIE jak w pliku multimetru (wszystkie kanaly po kolei:
+# najpierw odczyty ChNNN, potem tempChNNN, na koncu roztempChNNN). Kolumny dobierane
+# PO NAZWIE z naglowka pliku, wiec odporne na dodatkowe/inne kanaly.
+CC04_KOLUMNY = (
+    ['Data Czas', 'Tzadana', 'RHzadana', 'Todczytana', 'RHodczytana']
+    + [f'Ch{ch}' for ch in CC04_KANALY_WSZYSTKIE]
+    + ['tdp', 'thigro', '%rh']
+    + [f'tempCh{ch}' for ch in CC04_KANALY_WSZYSTKIE]
+    + ['roztdp(15min)']
+    + [f'roztempCh{ch}' for ch in CC04_KANALY_WSZYSTKIE]
+)
+
+
+def _znajdz_naglowek(lines):
+    """
+    Znajduje wiersz naglowka kolumn (zaczyna sie od 'Data Czas') niezaleznie od
+    dlugosci bloku metadanych. Zwraca (index_naglowka, mapa nazwa->pozycja) albo
+    (None, None) gdy nie znaleziono.
+    """
+    for idx, line in enumerate(lines):
+        if line.strip().lower().startswith('data czas'):
+            names = [c.strip() for c in re.split(r'[;\t,]', line.strip())]
+            return idx, {n: i for i, n in enumerate(names) if n}
+    return None, None
+
+
+def _mapa_kanal_pt(lines):
+    """
+    Mapa numer_kanalu -> 'Pt100-XX' z linii naglowka pliku CC-04, np.:
+      "Czujnik wzorcowy: Pt100-09; Wejscie pomiarowe Ch: 101"  ->  {101: 'Pt100-09'}
+    Uzywana do przypisania POPRAWNYCH numerow czujnikow do kanalow (glownych i zapasowych).
+    """
+    mapa = {}
+    for line in lines:
+        m = re.search(r'(Pt100-\d+).*?Ch:\s*0*(\d+)', line)
+        if m:
+            mapa[int(m.group(2))] = m.group(1)
+    return mapa
+
+
+def _naglowki_cc04(kanal_pt):
+    """
+    Naglowki (rzad 1) obserwacji CC-04 dla PELNEGO ukladu CC04_KOLUMNY — z nazwami
+    czujnikow (Pt100-XX) zamiast surowych 'ChNNN'. Kolejnosc dokladnie jak CC04_KOLUMNY.
+    """
+    def et(ch):
+        return kanal_pt.get(ch) or f'Ch{ch}'
+    return (
+        ['Data Czas', 'Tzadana', 'RHzadana', 'Todczytana', 'RHodczytana']
+        + [f'Wskazania multimetru {et(ch)}' for ch in CC04_KANALY_WSZYSTKIE]
+        + ['TPunktuRosy', 'Temperatura', '%RH']
+        + [f'Temperatura {et(ch)}' for ch in CC04_KANALY_WSZYSTKIE]
+        + ['RozrzutTPunktuRosy(15min)']
+        + [f'RozrzutTemperatura_{et(ch)}(15min)' for ch in CC04_KANALY_WSZYSTKIE]
+    )
+
+
 def parse_txt_cc04(path: str):
     """
     Format CC-04:
       Linie 8-11 (ind. 7-10) : 4 czujniki, np. 'Czujnik wzorcowy: Pt100-09; Wejscie...'
-      Linia 17   (ind. 16)   : naglowek kolumn
-      Linia 18+  (ind. 17+)  : dane pomiarowe, kolumny A:U (21 kol.)
+      Naglowek kolumn        : wiersz zaczynajacy sie od 'Data Czas' (pozycja zmienna!)
+      Dane pomiarowe         : wiersze ponizej naglowka
+
+    Kolumny dobierane sa PO NAZWIE do ukladu kanonicznego CC04_KOLUMNY (21 kol.),
+    co czyni parser odpornym na pliki z dodatkowymi kanalami (np. Przetwornik U) —
+    kluczowe przy sklejaniu wielu plikow o roznej liczbie kolumn.
     Zwraca (sensor_names: list[str], rows: list[list[str]]).
     """
     lines = open_txt(path)
 
-    sensor_names = []
-    for line_idx in range(7, 11):
-        if len(lines) > line_idx:
-            m = re.search(r':\s*(Pt100-\d+)', lines[line_idx])
-            sensor_names.append(m.group(1) if m else '')
-    while len(sensor_names) < 4:
+    # Numer Pt100 kazdego czujnika bierzemy PO NUMERZE KANALU (nie po kolejnosci linii,
+    # bo dane sa z „co drugiego" kanalu). Nazwy do protokolu/obserwacji = kanaly GLOWNE
+    # (101,103,105,107 -> Pt100-09,-13,-01,-18).
+    kanal_do_pt = _mapa_kanal_pt(lines)
+    sensor_names = [kanal_do_pt.get(ch, '') for ch in CC04_KANALY_GLOWNE]
+    while len(sensor_names) < len(CC04_KANALY_GLOWNE):
         sensor_names.append('')
 
+    n_kol = len(CC04_KOLUMNY)
+    hdr_idx, colmap = _znajdz_naglowek(lines)
     rows = []
-    for line in lines[17:]:
-        line = line.strip()
-        if not line:
-            continue
-        parts = re.split(r'[;\t,]', line)
-        row = parts[:21]
-        while len(row) < 21:
-            row.append('')
-        rows.append(row)
+
+    if colmap is not None:
+        # Mapowanie po nazwach kolumn — pelny uklad pliku (wszystkie kanaly po kolei).
+        for line in lines[hdr_idx + 1:]:
+            line = line.strip()
+            if not line:
+                continue
+            parts = re.split(r'[;\t,]', line)
+            row = []
+            for name in CC04_KOLUMNY:
+                ci = colmap.get(name)
+                row.append(parts[ci] if (ci is not None and ci < len(parts)) else '')
+            rows.append(row)
+    else:
+        # Fallback (stary tryb staloindeksowy) — gdy nie rozpoznano naglowka.
+        for line in lines[17:]:
+            line = line.strip()
+            if not line:
+                continue
+            parts = re.split(r'[;\t,]', line)
+            row = parts[:n_kol]
+            while len(row) < n_kol:
+                row.append('')
+            rows.append(row)
 
     return sensor_names, rows
+
+
+def _dostepne_txt():
+    """Lista plikow .txt w FOLDER (bez plikow tymczasowych)."""
+    try:
+        return sorted(f for f in os.listdir(FOLDER)
+                      if f.lower().endswith('.txt') and not f.startswith('~$'))
+    except OSError:
+        return []
+
+
+def _znajdz_txt(nazwa):
+    """
+    Znajduje plik TXT tolerancyjnie (typowe pomylki w konfiguracji):
+      - dokladna nazwa, z dodanym '.txt', ze spacja przed '.txt',
+      - dopasowanie po nazwie bez rozszerzenia i nadmiaru spacji (rowne lub 'zaczyna sie od').
+    Zwraca sciezke albo None.
+    """
+    if os.path.isabs(nazwa):
+        return nazwa if os.path.exists(nazwa) else None
+    baza = nazwa.strip()
+    for k in (baza, baza + '.txt', baza.rstrip() + ' .txt'):
+        p = os.path.join(FOLDER, k)
+        if os.path.exists(p):
+            return p
+
+    def _norm(s):
+        return re.sub(r'\s+', ' ', os.path.splitext(s)[0]).strip().lower()
+
+    cel = _norm(baza)
+    if cel:
+        for f in _dostepne_txt():
+            if _norm(f) == cel or _norm(f).startswith(cel):
+                return os.path.join(FOLDER, f)
+    return None
+
+
+def resolve_txt_files():
+    """
+    Zwraca liste sciezek plikow TXT wejsciowych (posortowana chronologicznie).
+
+    Zrodlo (wg priorytetu):
+      1) zmienna OBS_TXT_FILES  — nazwy rozdzielone ';' (z panelu GUI),
+      2) lista TXT_FILENAMES    — jesli niepusta,
+      3) pojedynczy TXT_FILENAME.
+
+    Nazwy wzgledne sa rozwiazywane wzgledem FOLDER. Sortowanie po nazwie pliku
+    daje kolejnosc chronologiczna (nazwa zaczyna sie od 'YYYY-MM-DD HH.MM').
+    """
+    env = os.environ.get("OBS_TXT_FILES")
+    if env:
+        names = [n.strip() for n in env.split(';') if n.strip()]
+    else:
+        # TXT_FILENAMES (jesli zdefiniowane i niepuste) ma pierwszenstwo, w
+        # przeciwnym razie TXT_FILENAME. globals().get() sprawia, ze zakomentowanie
+        # TXT_FILENAMES nie wywala skryptu. Oba moga byc stringiem (jeden plik)
+        # albo lista (wiele plikow) — normalizujemy do listy.
+        src = globals().get("TXT_FILENAMES") or TXT_FILENAME
+        names = [src] if isinstance(src, str) else list(src)
+    names = [str(n).strip() for n in names if str(n).strip()]
+    # Gdy lista pusta (np. TXT_FILENAMES = ["", ""]) — wroc do pojedynczego TXT_FILENAME.
+    if not names and isinstance(TXT_FILENAME, str) and TXT_FILENAME.strip():
+        names = [TXT_FILENAME.strip()]
+
+    dostepne = _dostepne_txt()
+    lista_txt = "\n".join(f"    • {f}" for f in dostepne) or "    (brak plikow .txt w folderze)"
+
+    if not names:
+        raise FileNotFoundError(
+            "Nie podano pliku TXT — ustaw TXT_FILENAME = \"nazwa.txt\" (albo TXT_FILENAMES / "
+            "OBS_TXT_FILES).\n  Dostepne pliki .txt:\n" + lista_txt)
+
+    paths = []
+    for n in names:
+        p = _znajdz_txt(n)
+        if p is None:
+            raise FileNotFoundError(
+                f"Nie znaleziono pliku TXT: '{n}'.\n  Dostepne pliki .txt:\n" + lista_txt)
+        paths.append(p)
+
+    paths.sort(key=lambda p: os.path.basename(p).lower())
+    return paths
+
+
+def combine_txt(paths, parse_one):
+    """
+    Parsuje wiele plikow TXT (przerwany pomiar) i skleja je w jeden ciag.
+
+    - naglowek (czujnik/czujniki) bierzemy z PIERWSZEGO pliku,
+    - wiersze laczymy w kolejnosci plikow (juz posortowanych chronologicznie),
+    - duplikaty po znaczniku czasu (kolumna A) sa pomijane — usuwa to
+      nakladajace sie probki na styku dwoch plikow.
+
+    parse_one to parse_txt (CC) albo parse_txt_cc04 (CC-04); obie zwracaja
+    (header, rows), wiec ta funkcja dziala dla obu formatow.
+    """
+    header = None
+    combined = []
+    seen_ts = set()
+    for i, p in enumerate(paths):
+        h, rows = parse_one(p)
+        if i == 0:
+            header = h
+        added = 0
+        for row in rows:
+            ts = row[0].strip() if row and row[0] else ''
+            if ts and ts in seen_ts:
+                continue          # duplikat czasu (styk plikow) — pomijamy
+            if ts:
+                seen_ts.add(ts)
+            combined.append(row)
+            added += 1
+        if len(paths) > 1:
+            print(f"  + {os.path.basename(p)}: {len(rows)} wierszy, dodano {added}")
+    return header, combined
 
 
 _ILLEGAL_CHARS_RE = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
@@ -263,64 +505,139 @@ def _prepare_data(rows):
 
 def _prepare_data_cc04(rows):
     """
-    CC-04: krotka (dt, temp, rh, k_dew, l1, l2, l3, l4, d, e)
-      A=0  czas,  B=1 Tzadana,  C=2 RHzadana,
-      D=3  Todczytana,  E=4 RHodczytana  (odczyt komory — filtr zgodnosci),
-      Q=16 roztdp (punkt rosy),
-      R=17 roztemp Ch1,  S=18 Ch2,  T=19 Ch3,  U=20 Ch4
+    CC-04: krotka (dt, Tzad, RHzad, roztdp, l1, l2, l3, l4, Todcz, RHodcz)
+    gdzie l1..l4 = rozrzuty 15-min czterech kanalow GLOWNYCH (do kryterium L).
+    Indeksy w `rows` dobierane PO NAZWIE z CC04_KOLUMNY (pelny uklad pliku), by dzialalo
+    niezaleznie od liczby/kolejnosci kanalow (obserwacja pokazuje wszystkie, analiza — glowne).
     """
+    idx = {name: i for i, name in enumerate(CC04_KOLUMNY)}
+    i_dt   = idx['Data Czas']
+    i_tz   = idx['Tzadana']
+    i_rhz  = idx['RHzadana']
+    i_tod  = idx['Todczytana']
+    i_rho  = idx['RHodczytana']
+    i_rtdp = idx['roztdp(15min)']
+    i_rl   = [idx[f'roztempCh{ch}'] for ch in CC04_KANALY_GLOWNE]   # 4 kanaly glowne
+
+    def g(row, i):
+        return row[i] if 0 <= i < len(row) else None
+
     result = []
     for row in rows:
         result.append((
-            _s_to_dt(row[0]),
-            _s_to_float(row[1]),
-            _s_to_float(row[2]),
-            _s_to_float(row[16]),   # Q – roztdp
-            _s_to_float(row[17]),   # R – roztemp Ch1
-            _s_to_float(row[18]),   # S – roztemp Ch2
-            _s_to_float(row[19]),   # T – roztemp Ch3
-            _s_to_float(row[20]),   # U – roztemp Ch4
-            _s_to_float(row[3]),    # D – Todczytana (odczyt komory)
-            _s_to_float(row[4]),    # E – RHodczytana (odczyt komory)
+            _s_to_dt(g(row, i_dt)),
+            _s_to_float(g(row, i_tz)),
+            _s_to_float(g(row, i_rhz)),
+            _s_to_float(g(row, i_rtdp)),
+            _s_to_float(g(row, i_rl[0])),
+            _s_to_float(g(row, i_rl[1])),
+            _s_to_float(g(row, i_rl[2])),
+            _s_to_float(g(row, i_rl[3])),
+            _s_to_float(g(row, i_tod)),   # Todczytana (odczyt komory)
+            _s_to_float(g(row, i_rho)),   # RHodczytana (odczyt komory)
         ))
     return result
 
 
-def _find_all_analysis_windows(data, min_stable):
+def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
+                       prog_temp, prog_rh):
     """
-    Dla każdego segmentu stabilnego B+C trwającego >= min_stable szuka okna analizy:
-      - start: pierwszy wiersz po upływie min_stable od początku segmentu
-      - end  : pierwszy wiersz gdzie B lub C zmienia wartość (wyłącznie)
+    Zwraca start_idx okna analizy w segmencie stabilnym data[i:j] albo None.
 
-    Zwraca listę krotek (start_idx, end_idx).
+    Zasada:
+      1. Szukamy chwili wejscia ODCZYTOW komory w widelki wokol nastaw:
+           • temperatura: |Todczytana - Tzadana| <= prog_temp (°C, bezwzglednie),
+           • wilgotnosc (punkt z RH): |RHodczytana - RHzadana| w granicach prog_rh %.
+         Punkt tylko-temperatura: liczy sie samo wejscie temperatury.
+      2. Okno startuje min_po (2h) PO wejsciu. Gdy odczyty nie weszly w widelki —
+         start liczony od min_stable (rozgrzewka) od poczatku punktu.
+      3. Punkt trzymany jest zwykle ~2h, wiec samo "2h po wejsciu" czesto wypadaloby
+         dokladnie na koncu punktu (okno = 0). Dlatego start jest cofany tak, by na
+         koncu punktu zostal ZAWSZE ogon pomiarowy MIN_OKNO_ANALIZY (min. 5 minut do
+         wyboru reprezentantow). To odtwarza dawne zachowanie (pomiar na koncu punktu).
+      4. Punkty krotsze niz min_stable (przejsciowe/przerwane) sa pomijane (None).
     """
+    seg_dt0    = data[i][0]
+    seg_end_dt = data[j - 1][0]
+    seg_t      = data[i][1]                   # Tzadana (nastawa temperatury)
+    seg_c      = data[i][2]                   # RHzadana (nastawa wilgotnosci)
+    if seg_dt0 is None or seg_end_dt is None:
+        return None
+    if seg_end_dt - seg_dt0 < min_stable:
+        return None                           # punkt zbyt krotki — pomijamy
+
+    temp_only = (seg_c is None or seg_c == 0.0)
+
+    entry_dt = None
+    for ki in range(i, j):
+        t_odcz = data[ki][idx_t_odcz]         # Todczytana (odczyt komory)
+        if seg_t is None or t_odcz is None or abs(seg_t - t_odcz) > prog_temp:
+            continue                          # temperatura poza widelkami
+        if temp_only:
+            entry_dt = data[ki][0]            # sama temperatura w widelkach
+            break
+        rh = data[ki][idx_rh_odcz]            # RHodczytana (odczyt komory)
+        if rh is not None and not _rozne_procent(seg_c, rh, prog_rh):
+            entry_dt = data[ki][0]            # OBA (T i RH) w widelkach
+            break
+
+    if entry_dt is not None:
+        start_time = entry_dt + min_po        # 2h po wejsciu w widelki
+    else:
+        start_time = seg_dt0 + min_stable     # brak wejscia — rozgrzewka od poczatku
+
+    # Nie "zjadaj" calego punktu: zostaw ogon pomiarowy na koncu.
+    latest = seg_end_dt - MIN_OKNO_ANALIZY
+    if start_time > latest:
+        start_time = latest
+    if start_time < seg_dt0:
+        start_time = seg_dt0
+
+    for ki in range(i, j):
+        if data[ki][0] and data[ki][0] >= start_time:
+            return ki
+    return None
+
+
+def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
+                               min_po=None, prog_temp=None, prog_rh=None):
+    """
+    Dla każdego segmentu stabilnego B+C wyznacza okno analizy (start_idx, end_idx),
+    gdzie end_idx = pierwszy wiersz ze zmianą B lub C (wyłącznie).
+
+    Start okna liczy _oblicz_start_okna: okno rusza min_po (2h) od wejścia odczytów w
+    widełki (T: |Todczytana-Tzadana| <= prog_temp °C; RH: prog_rh % od RHzadana). Dla
+    tylko-temp liczy się sama temperatura. Fallback: po min_stable od początku.
+    idx_t_odcz / idx_rh_odcz = indeksy Todczytana / RHodczytana w krotce (5/6 dla CC, 8/9 dla CC-04).
+    """
+    if min_po is None:
+        min_po = STABILIZACJA_PO_RH
+    if prog_temp is None:
+        prog_temp = PROG_WEJSCIA_TEMP
+    if prog_rh is None:
+        prog_rh = PROG_WEJSCIA_RH_PROC
+
     windows = []
     n = len(data)
     i = 0
-
     while i < n:
         seg_b, seg_c, seg_dt0 = data[i][1], data[i][2], data[i][0]
-
         if seg_b is None or seg_c is None or seg_dt0 is None:
             i += 1
             continue
 
-        # Koniec bieżącego segmentu stabilnego
+        # Koniec bieżącego segmentu stabilnego (stałe B i C)
         j = i + 1
         while j < n:
             b, c = data[j][1], data[j][2]
             if b != seg_b or c != seg_c:
                 break
             j += 1
-        # Segment stabilny: data[i : j]
 
-        seg_end_dt = data[j - 1][0] or seg_dt0
-        if seg_end_dt - seg_dt0 >= min_stable:
-            # Segment wystarczająco długi — szukamy startu po czasie stabilizacji
-            for ki in range(i, j):
-                if data[ki][0] and data[ki][0] - seg_dt0 >= min_stable:
-                    windows.append((ki, j))
-                    break
+        start_idx = _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz,
+                                       min_stable, min_po, prog_temp, prog_rh)
+        if start_idx is not None:
+            windows.append((start_idx, j))
 
         i = j  # następny segment
 
@@ -426,8 +743,79 @@ def _rozne_procent(nastawa, odczyt, prog_proc):
     return abs(nastawa - odczyt) / baza * 100.0 > prog_proc
 
 
+def _reps_ostatnie_minuty(data, start_idx, end_idx, k=5):
+    """
+    Awaryjny wybor reprezentantow: po jednym wierszu na minute, k OSTATNICH minut
+    okna (najblizej konca punktu). Uzywane gdy nie ma 5 kolejnych minut spelniajacych
+    kryteria — bierzemy po prostu najblizsze po czasie (koniec punktu = najstabilniej).
+    """
+    by_min = {}
+    for i in range(start_idx, end_idx):
+        dt = data[i][0]
+        if dt is None:
+            continue
+        m = dt.replace(second=0, microsecond=0)
+        cur = by_min.get(m)
+        if cur is None or dt.second < data[cur][0].second:
+            by_min[m] = i
+    minuty = sorted(by_min)
+    if not minuty:
+        return None
+    return [by_min[m] for m in minuty[-k:]]
+
+
+def _fallback_reprezentanci(data, start_idx, end_idx, score_fn):
+    """
+    Wybor reprezentantow BEZ twardych kryteriow (K/L, filtr nastawy) — dla punktow,
+    ktore kryterium NIE przeszly, ale i tak chcemy je pokazac/wpisac (na pomaranczowo).
+    Najpierw najlepsze 5 kolejnych minut wg score_fn; gdy sie nie da — 5 ostatnich minut.
+    """
+    valid = [i for i in range(start_idx, end_idx)
+             if data[i][0] is not None and score_fn(i) is not None]
+    reps = _find_best_minute_reps(data, valid, start_idx, end_idx, score_fn)
+    if reps:
+        return reps
+    return _reps_ostatnie_minuty(data, start_idx, end_idx, 5)
+
+
+def _oznacz_blok(ws, data, start_idx, end_idx, rep_indices, n_cols,
+                 fill_light, fill_dark, powod=None):
+    """
+    Koloruje 5-minutowy blok (fill_light) + reprezentantow (fill_dark, pogrubienie).
+    Gdy podano `powod` (punkt nie przeszedl kryterium) — dopisuje komentarz w komorce
+    NA PRAWO od bloku (kolumna n_cols+2, wiersz pierwszego reprezentanta).
+    Zwraca liste wierszy jasnego bloku.
+    """
+    rep_times  = [data[i][0] for i in rep_indices]
+    blok_start = rep_times[0].replace(second=0, microsecond=0)
+    blok_end   = blok_start + datetime.timedelta(minutes=5)
+    blok = [i for i in range(start_idx, end_idx)
+            if data[i][0] is not None and blok_start <= data[i][0] <= blok_end]
+    for i in blok:
+        _apply_fill(ws, 2 + i, fill_light, n_cols)
+    for i in rep_indices:
+        _apply_fill(ws, 2 + i, fill_dark, n_cols)
+        _apply_bold(ws, 2 + i, n_cols)
+    if powod:
+        kom = ws.cell(row=2 + rep_indices[0], column=n_cols + 1)
+        kom.value = f"UWAGA (nie na zielono): {powod}. Wybrano 5 wierszy najblizszych czasowo."
+        kom.fill  = fill_dark
+        fo = kom.font
+        kom.font = Font(name=fo.name, size=fo.size, bold=True, italic=True, color='9C5700')
+    return blok
+
+
 def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC'):
-    """Analizuje jeden segment i koloruje go. Zwraca liste 5 indeksow (0-based) lub None."""
+    """
+    Analizuje jeden segment i koloruje go w arkuszu obserwacji:
+      • kryteria spelnione    -> ZIELONY (jasny blok + ciemni reprezentanci),
+      • kryteria niespelnione -> POMARANCZOWY + komentarz z POWODEM (punktu NIE pomijamy;
+        wybieramy najblizsze po czasie).
+    Zwraca krotke (rep_indices, powod):
+      powod = None  -> punkt zielony (OK),
+      powod = tekst -> punkt pomaranczowy (przyczyna),
+      (None, None)  -> brak jakichkolwiek danych do oznaczenia.
+    """
     t0 = data[start_idx][0]
     t1 = data[end_idx - 1][0]
     b  = data[start_idx][1]
@@ -435,58 +823,18 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC'):
     print(f"  Segment {seg_num}: Excel row {2+start_idx}–{2+end_idx-1}  "
           f"T={b} RH={c}  ({t0} – {t1})")
 
-    is_cc04   = (file_type == 'CC04')
-    temp_only = (c is not None and c == 0.0)
+    is_cc04    = (file_type == 'CC04')
+    temp_only  = (c is not None and c == 0.0)
+    n_cols     = len(CC04_KOLUMNY) if is_cc04 else 12
+    n_l        = '4L' if is_cc04 else 'L'
+    crit_label = n_l if temp_only else f"K+{n_l}"   # skrot techniczny (do konsoli)
+    # Opis warunku stabilnosci po polsku (do komentarza w arkuszu — zrozumialy dla operatora)
+    if temp_only:
+        warunek_txt = "rozrzut temperatury czujnikow w 15 min <= 0,1 st.C"
+    else:
+        warunek_txt = "rozrzut temperatury czujnikow w 15 min <= 0,1 st.C oraz rozrzut punktu rosy w normie"
 
-    # Filtr zgodnosci nastawy z odczytem komory (B/D temp, C/E wilgotnosc).
-    # Bierzemy medianowy odczyt z calego segmentu i porownujemy z nastawa.
-    # Gdy rozbieznosc > MAX_ROZNICA_PROCENT — komora nie osiagnela warunkow, pomijamy.
-    if FILTR_NASTAWA_ODCZYT:
-        d_idx, e_idx = (8, 9) if is_cc04 else (5, 6)
-        d_vals = [data[i][d_idx] for i in range(start_idx, end_idx) if data[i][d_idx] is not None]
-        e_vals = [data[i][e_idx] for i in range(start_idx, end_idx) if data[i][e_idx] is not None]
-        d_med  = statistics.median(d_vals) if d_vals else None
-        e_med  = statistics.median(e_vals) if e_vals else None
-        odrzuc_t  = _rozne_procent(b, d_med, MAX_ROZNICA_PROCENT)
-        odrzuc_rh = (not temp_only) and _rozne_procent(c, e_med, MAX_ROZNICA_PROCENT)
-        if odrzuc_t or odrzuc_rh:
-            rh_txt = f"{c}->{e_med}" if not temp_only else "—"
-            print(f"    [ODRZUCONO >{MAX_ROZNICA_PROCENT:g}%] nastawa vs odczyt komory: "
-                  f"T {b}->{d_med}, RH {rh_txt} — pomijam segment.")
-            return None
-
-    # Wiersze spełniające kryteria
-    valid_indices = []
-    for i in range(start_idx, end_idx):
-        row = data[i]
-        dt, temp, rh, k = row[0], row[1], row[2], row[3]
-        ls = row[4:8] if is_cc04 else (row[4],)   # 4 lub 1 spread temperatury
-
-        if None in (dt, temp, rh):
-            continue
-        if any(l is None for l in ls):
-            continue
-        if any(l > 0.1 for l in ls):
-            continue
-
-        if not temp_only:
-            if k is None:
-                continue
-            threshold = get_k_threshold(temp, rh)
-            if threshold is None or k > threshold:
-                continue
-
-        valid_indices.append(i)
-
-    n_l = '4L' if is_cc04 else 'L'
-    crit_label = n_l if temp_only else f"K+{n_l}"
-    print(f"    Wiersze spelniajace kryteria {crit_label}: {len(valid_indices)}")
-
-    if not valid_indices:
-        print(f"    brak wierszy spelniajacych kryteria {crit_label} — pomijam.")
-        return None
-
-    # Score function dla optymalizacji 5 reprezentantow
+    # Score function (wspolna dla sciezki normalnej i awaryjnej)
     if temp_only:
         if is_cc04:
             def score_fn(i):
@@ -497,47 +845,88 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC'):
     else:
         score_fn = lambda i: data[i][3]   # K (roztdp) dla CC i CC-04
 
-    rep_indices = _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn)
-    if rep_indices is None:
-        print(f"    brak 5 kolejnych minut z waznymi kryteriami — pomijam.")
-        return None
+    powod       = None    # None => zielony (OK); tekst => pomaranczowy (przyczyna)
+    rep_indices = None
 
-    rep_times = [data[i][0] for i in rep_indices]
-    print(f"    Wiersze reprezentacyjne: {[str(t) for t in rep_times]}")
-    if not temp_only:
-        rep_k = [round(data[i][3], 4) for i in rep_indices]
-        print(f"    K (roztdp)  : {rep_k}  srednia={round(sum(rep_k)/5, 4)}")
-    if is_cc04:
-        for off, lbl in enumerate(['R', 'S', 'T', 'U']):
-            vals = [round(data[i][4 + off], 4) for i in rep_indices
-                    if data[i][4 + off] is not None]
-            if vals:
-                print(f"    L{lbl} (roztemp): {vals}  srednia={round(sum(vals)/len(vals),4)}")
-    else:
-        rep_l = [round(data[i][4], 4) for i in rep_indices]
-        print(f"    L (roztemp) : {rep_l}  srednia={round(sum(rep_l)/5, 4)}")
+    # 1) Filtr zgodnosci nastawy z odczytem komory (mediana z okna vs nastawa)
+    if FILTR_NASTAWA_ODCZYT:
+        d_idx, e_idx = (8, 9) if is_cc04 else (5, 6)
+        d_vals = [data[i][d_idx] for i in range(start_idx, end_idx) if data[i][d_idx] is not None]
+        e_vals = [data[i][e_idx] for i in range(start_idx, end_idx) if data[i][e_idx] is not None]
+        d_med  = statistics.median(d_vals) if d_vals else None
+        e_med  = statistics.median(e_vals) if e_vals else None
+        odrzuc_t  = _rozne_procent(b, d_med, MAX_ROZNICA_PROCENT)
+        odrzuc_rh = (not temp_only) and _rozne_procent(c, e_med, MAX_ROZNICA_PROCENT)
+        if odrzuc_t or odrzuc_rh:
+            czesci = []
+            if odrzuc_t:
+                czesci.append(f"temperatura: nastawa {b} st.C, a komora ~{round(d_med, 2) if d_med is not None else '-'} st.C")
+            if odrzuc_rh:
+                czesci.append(f"wilgotnosc: nastawa {c}%, a komora ~{round(e_med, 2) if e_med is not None else '-'}%")
+            powod = ("komora nie osiagnela nastawy — " + "; ".join(czesci)
+                     + f" (roznica > {MAX_ROZNICA_PROCENT:g}%)")
 
-    # Zielony obszar: od pelnej minuty pierwszego rep do +5 minut
-    green_start = rep_times[0].replace(second=0, microsecond=0)
-    green_end   = green_start + datetime.timedelta(minutes=5)
+    # 2) Wiersze spelniajace kryteria K/L (tylko jesli filtr nie odrzucil)
+    if powod is None:
+        valid_indices = []
+        for i in range(start_idx, end_idx):
+            row = data[i]
+            dt, temp, rh, k = row[0], row[1], row[2], row[3]
+            ls = row[4:8] if is_cc04 else (row[4],)   # 4 lub 1 spread temperatury
+            if None in (dt, temp, rh):
+                continue
+            if any(l is None for l in ls):
+                continue
+            if any(l > 0.1 for l in ls):
+                continue
+            if not temp_only:
+                if k is None:
+                    continue
+                threshold = get_k_threshold(temp, rh)
+                if threshold is None or k > threshold:
+                    continue
+            valid_indices.append(i)
 
-    n_cols = 21 if is_cc04 else 12
+        print(f"    Wiersze spelniajace kryteria {crit_label}: {len(valid_indices)}")
+        if not valid_indices:
+            powod = f"punkt niestabilny — w zadnym momencie nie spelniono warunku: {warunek_txt}"
+        else:
+            rep_indices = _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn)
+            if rep_indices is None:
+                powod = f"komora za malo stabilna — brak 5 kolejnych minut, gdzie {warunek_txt}"
 
-    green_indices = [
-        i for i in range(start_idx, end_idx)
-        if data[i][0] is not None and green_start <= data[i][0] <= green_end
-    ]
-    for i in green_indices:
-        _apply_fill(ws, 2 + i, FILL_LIGHT, n_cols)
-    if green_indices:
-        print(f"    Wiersze jasno-zielone: {len(green_indices)} "
-              f"(Excel {2+green_indices[0]}–{2+green_indices[-1]})")
+    # 3a) ZIELONY — kryteria spelnione
+    if powod is None:
+        rep_times = [data[i][0] for i in rep_indices]
+        print(f"    Wiersze reprezentacyjne: {[str(t) for t in rep_times]}")
+        if not temp_only:
+            rep_k = [round(data[i][3], 4) for i in rep_indices]
+            print(f"    K (roztdp)  : {rep_k}  srednia={round(sum(rep_k)/5, 4)}")
+        if is_cc04:
+            for off, lbl in enumerate(['R', 'S', 'T', 'U']):
+                vals = [round(data[i][4 + off], 4) for i in rep_indices
+                        if data[i][4 + off] is not None]
+                if vals:
+                    print(f"    L{lbl} (roztemp): {vals}  srednia={round(sum(vals)/len(vals),4)}")
+        else:
+            rep_l = [round(data[i][4], 4) for i in rep_indices]
+            print(f"    L (roztemp) : {rep_l}  srednia={round(sum(rep_l)/5, 4)}")
 
-    for i in rep_indices:
-        _apply_fill(ws, 2 + i, FILL_DARK, n_cols)
-        _apply_bold(ws, 2 + i, n_cols)
+        blok = _oznacz_blok(ws, data, start_idx, end_idx, rep_indices, n_cols,
+                            FILL_LIGHT, FILL_DARK, powod=None)
+        if blok:
+            print(f"    Wiersze jasno-zielone: {len(blok)} (Excel {2+blok[0]}–{2+blok[-1]})")
+        return rep_indices, None
 
-    return rep_indices
+    # 3b) POMARANCZOWY — kryterium niespelnione: nie pomijamy, wybieramy najblizsze po czasie
+    fb = _fallback_reprezentanci(data, start_idx, end_idx, score_fn)
+    if not fb:
+        print(f"    [POMINIETO] {powod} — brak nawet danych zastepczych.")
+        return None, None
+    _oznacz_blok(ws, data, start_idx, end_idx, fb, n_cols,
+                 FILL_WARN_LIGHT, FILL_WARN_DARK, powod=powod)
+    print(f"    [POMARANCZOWY] {powod} — oznaczono {len(fb)} reprezentantow (komentarz w kol. {n_cols+2}).")
+    return fb, powod
 
 
 def analyze_and_highlight(ws, rows, file_type='CC'):
@@ -548,7 +937,10 @@ def analyze_and_highlight(ws, rows, file_type='CC'):
     """
     data = _prepare_data_cc04(rows) if file_type == 'CC04' else _prepare_data(rows)
 
-    windows = _find_all_analysis_windows(data, STABILIZACJA_MIN)
+    # pozycje odczytow komory w krotce: Todczytana / RHodczytana
+    idx_t_odcz  = 8 if file_type == 'CC04' else 5
+    idx_rh_odcz = 9 if file_type == 'CC04' else 6
+    windows = _find_all_analysis_windows(data, STABILIZACJA_MIN, idx_t_odcz, idx_rh_odcz)
     if not windows:
         print(f"  ANALIZA: brak segmentow stabilnych >= {STABILIZACJA_MIN} — pomijam kolorowanie.")
         return
@@ -631,12 +1023,16 @@ def analyze_and_highlight(ws, rows, file_type='CC'):
 
     segments = []
     found = 0
+    ostrzezenia = 0
     for num, (start_idx, end_idx) in enumerate(filtered, 1):
-        rep_idx = _process_segment(ws, data, start_idx, end_idx, num, file_type)
+        rep_idx, powod = _process_segment(ws, data, start_idx, end_idx, num, file_type)
         if rep_idx is not None:
             found += 1
-            segments.append(rep_idx)
-    print(f"  Pokolorowano segmentow: {found}/{len(filtered)}")
+            if powod:
+                ostrzezenia += 1
+            segments.append((rep_idx, powod))
+    print(f"  Oznaczono segmentow: {found}/{len(filtered)} "
+          f"(zielonych: {found - ostrzezenia}, pomaranczowych: {ostrzezenia})")
     return segments
 
 
@@ -796,12 +1192,13 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
 
     # Docelowe czasy dla kazdego punktu (None gdy brak timestampow)
     punkty = []
-    for rep_indices in rep_groups:
+    for rep_indices, _powod in rep_groups:
         tts = [_s_to_dt(rows_obs[i][0]) for i in rep_indices]
         punkty.append(None if any(t is None for t in tts) else tts)
 
     oznaczenia_per_plik = {}   # fname -> set(row_idx)
     dev = 0                    # numer przyrzadu (0-based) -> para kolumn w prawo
+    uzyte = []                 # per przyrzad (w kolejnosci dev): (serial, temps, rhs)
 
     def _wpisz(col, matched_per_punkt, val_idx, z_wilgotnoscia):
         """Wpisuje jedna kolumne (temp z val_idx) + opc. wilgotnosc do bloków punktow."""
@@ -851,6 +1248,9 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
         print(f"  [WYNIKI] Przyrzad {dev+1} ({get_column_letter(col)}/{get_column_letter(col+1)})"
               f" <- '{fname}'  (punkty: {punkty_txt})")
         _wpisz(col, dopasowania, val_idx=1, z_wilgotnoscia=True)
+        temps = [k[1] for m in dopasowania.values() for k in m if k[1] is not None]
+        rhs   = [k[2] for m in dopasowania.values() for k in m if k[2] is not None]
+        uzyte.append((_serial_z_wyniku(fname), temps, rhs))
         dev += 1
 
         # Przyrzad 2 (tylko xTHERM): temperatura zewnetrzna, BEZ wilgotnosci
@@ -862,6 +1262,8 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
                 print(f"  [WYNIKI] Przyrzad {dev+1} ({get_column_letter(col)}, temp zewn., bez RH)"
                       f" <- '{fname}'")
                 _wpisz(col, dopasowania, val_idx=4, z_wilgotnoscia=False)
+                temps2 = [k[4] for m in dopasowania.values() for k in m if k[4] is not None]
+                uzyte.append((_serial_z_wyniku(fname), temps2, []))
                 dev += 1
 
     if dev == 0:
@@ -870,6 +1272,71 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
     # Oznacz wiersze w plikach wynikow
     for fname, row_set in oznaczenia_per_plik.items():
         _oznacz_wyniki_xlsx(os.path.join(WYNIKI_FOLDER, fname), sorted(row_set))
+
+    return uzyte
+
+
+def _serial_z_wyniku(fname):
+    """'TMM230200349_wynik.xlsx' -> 'TMM230200349' (nr fabryczny do dopasowania z PZ)."""
+    base = os.path.splitext(fname)[0]
+    return re.sub(r'_wynik$', '', base, flags=re.I)
+
+
+# Kolumny Strony 2 (tabela przyrzadow, od wiersza 11):
+#  B=2 wytworca(obiekt) C=3 wytworca(czujnik) D=4 typ E=5 nr fabr F=6 nr ewid
+#  G=7 adres H=8 typ(czujnik) I=9 nr fabr(czujnik) J=10 nr ewid(czujnik)
+#  K=11 rozdz. t  L=12 rozdz. RH  O=15 nr zlecenia
+STRONA2_PIERWSZY_WIERSZ = 11
+
+
+def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest):
+    """
+    Wypelnia tabele przyrzadow na Stronie 2 protokolu na podstawie PZ.
+
+    `uzyte` = lista (serial, temps, rhs) w kolejnosci kolumn pomiarowych Strony 3
+    (i-ty przyrzad -> wiersz 11+i). Dopasowanie przyrzadu z PZ po nr fabrycznym
+    (serial z nazwy pliku wyniku). Rozdzielczosc: z Zestawienia (po producencie+typie),
+    a gdy brak — z wahania cyfr po przecinku w danych pomiarowych.
+    Przyrzady bez dopasowania w PZ (np. mierniki reczne bez pliku logera) zostaja
+    do recznego uzupelnienia (log ostrzegawczy).
+    """
+    if not uzyte:
+        return
+    print("\n  Wypelnianie tabeli przyrzadow (Strona 2) z PZ...")
+    for i, (serial, temps, rhs) in enumerate(uzyte):
+        w = STRONA2_PIERWSZY_WIERSZ + i
+        dev = pz_mapa.get(pz_dane.normalizuj_serial(serial)) if pz_mapa else None
+        if dev is None:
+            print(f"    wiersz {w}: brak dopasowania w PZ (serial '{serial}') — uzupelnij recznie.")
+            continue
+
+        # Rozdzielczosc: Zestawienie -> fallback z danych
+        t_res, rh_res = pz_dane.rozdzielczosc_zestawienie(zest, dev.wytworca, dev.typ)
+        zrodlo = "Zestawienie"
+        if t_res is None:
+            t_res = pz_dane.rozdzielczosc_z_kolumny(temps); zrodlo = "dane"
+        if rh_res is None:
+            rh_res = pz_dane.rozdzielczosc_z_kolumny(rhs)
+            if rh_res is None:       # przyrzad tylko-temperatura — brak danych RH
+                rh_res = t_res
+
+        def _set(col, val):
+            ws2.cell(row=w, column=col).value = val if (val not in (None, "")) else "-"
+
+        _set(2, dev.wytworca)            # B
+        _set(3, dev.czuj_wytworca)       # C
+        _set(4, dev.typ)                 # D
+        _set(5, dev.nr_fabr)             # E
+        _set(6, dev.nr_ewid)             # F
+        _set(7, "")                      # G (adres) — brak w PZ
+        _set(8, dev.czuj_typ)            # H
+        _set(9, dev.czuj_nr_fabr)        # I
+        _set(10, "")                     # J (nr ewid czujnika) — brak w PZ
+        ws2.cell(row=w, column=11).value = t_res    # K
+        ws2.cell(row=w, column=12).value = rh_res   # L
+        ws2.cell(row=w, column=15).value = dev.nr_zlecenia   # O
+        print(f"    wiersz {w}: {dev.wytworca} / {dev.typ} / {dev.nr_fabr} "
+              f"(zlec {dev.nr_zlecenia}, K={t_res} L={rh_res} [{zrodlo}])")
 
 
 # =============================================================================
@@ -931,22 +1398,36 @@ def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_ex
     try:
         import win32com.client
     except ImportError:
+        print('  [Excel COM] Brak pywin32 (win32com) — nie moge wstawic blokow.')
         return False
 
     xl = wb = None
     try:
-        xl = win32com.client.Dispatch('Excel.Application')
+        # DEDYKOWANA, nowa instancja Excela (DispatchEx) — NIE doczepiamy sie do
+        # ewentualnego otwartego Excela uzytkownika (zajety/modalny -> wyjatek i tylko
+        # 6 punktow w protokole). Fallback do Dispatch, gdyby DispatchEx zawiodl.
+        try:
+            xl = win32com.client.DispatchEx('Excel.Application')
+        except Exception:
+            xl = win32com.client.Dispatch('Excel.Application')
         xl.Visible         = False
         xl.DisplayAlerts   = False
         xl.ScreenUpdating  = False
+        try:
+            xl.AskToUpdateLinks = False
+            xl.EnableEvents     = False
+        except Exception:
+            pass
 
-        wb  = xl.Workbooks.Open(os.path.abspath(filepath))
+        # UpdateLinks=0: nie aktualizuj linkow zewn. przy otwarciu (unika siegania do sieci).
+        wb  = xl.Workbooks.Open(os.path.abspath(filepath), UpdateLinks=0, ReadOnly=False)
         ws  = None
         for idx in range(1, wb.Sheets.Count + 1):
             if wb.Sheets(idx).Name == sheet_name:
                 ws = wb.Sheets(idx)
                 break
         if ws is None:
+            print(f'  [Excel COM] Brak arkusza "{sheet_name}" — nie wstawiam blokow.')
             return False
 
         addr = f'{block_start}:{block_start + block_size - 1}'
@@ -959,7 +1440,7 @@ def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_ex
         return True
 
     except Exception as exc:
-        print(f'  [Excel COM] Blad wstawiania blokow: {exc}')
+        print(f'  [Excel COM] Blad wstawiania blokow: {type(exc).__name__}: {exc}')
         return False
     finally:
         if wb is not None:
@@ -968,6 +1449,22 @@ def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_ex
         if xl is not None:
             try: xl.Quit()
             except: pass
+
+
+def _zapisz_bezpiecznie(wb, path, opis="plik"):
+    """
+    Zapisuje skoroszyt; gdy plik jest OTWARTY w Excelu (zablokowany) — daje czytelny
+    komunikat zamiast surowego PermissionError. To najczestsza przyczyna „braku danych":
+    plik otwarty w Excelu w trakcie pracy skryptu przerywa zapis.
+    """
+    try:
+        wb.save(path)
+    except PermissionError:
+        raise PermissionError(
+            f"\n  Nie moge zapisac ({opis}):\n    {path}\n"
+            f"  >>> Plik jest OTWARTY w Excelu. ZAMKNIJ go i uruchom skrypt ponownie. <<<\n"
+            f"  (Otwarcie pliku w trakcie pracy skryptu przerywa zapis danych — stad „pusty\" protokol.)"
+        )
 
 
 def _round_hm(dt):
@@ -979,11 +1476,14 @@ def _round_hm(dt):
     return dt.strftime('%H:%M')
 
 
-def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=None):
+def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=None,
+                     pz_mapa=None, zest=None):
     """
     Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.
 
-    rep_groups : lista list[5 int] – indeksy (0-based do `rows`) dla kazdego punktu
+    rep_groups : lista krotek (list[5 int], powod) – indeksy reprezentantow (0-based
+                 do `rows`) dla kazdego punktu; powod=None => zielony (OK),
+                 powod=tekst => pomaranczowy (kryterium niespelnione, wpisany mimo to)
     rows       : surowe wiersze danych z pliku TXT (list of list[str])
     obs_type   : 'CC' lub 'CC04'
     """
@@ -993,7 +1493,10 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
 
     if obs_type == 'CC04':
         tmpl_name   = PROTOKOL_CC04_TEMPLATE
-        src_indices = [5, 6, 7, 8, 9]       # F,G,H,I,J (0-based w rows[])
+        # Do protokolu ida TYLKO kanaly GLOWNE — indeksy odczytow ChNNN + tdp w rows[]
+        # (dobierane po nazwie z pelnego ukladu CC04_KOLUMNY). K,L,M,N,O = 4 kanaly + tdp.
+        _idx        = {name: i for i, name in enumerate(CC04_KOLUMNY)}
+        src_indices = [_idx[f'Ch{ch}'] for ch in CC04_KANALY_GLOWNE] + [_idx['tdp']]
         dst_cols    = [11, 12, 13, 14, 15]  # K,L,M,N,O (1-based w Excel)
     else:
         tmpl_name   = PROTOKOL_CC_TEMPLATE
@@ -1052,8 +1555,12 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     # ── Zapis danych dla każdego punktu ───────────────────────────────────────
     FILL_GREY = PatternFill(fill_type='solid', fgColor='BFBFBF')
 
-    for punkt_idx, rep_indices in enumerate(rep_groups):
+    for punkt_idx, (rep_indices, powod) in enumerate(rep_groups):
         r0 = BLOCK_START_ROW + punkt_idx * BLOCK_SIZE
+
+        # Numer punktu w kolumnie A (A20=1, A25=2, ...). Wstawianie blokow kopiuje
+        # szablonowy „1" do kazdego bloku — nadpisujemy poprawnym numerem kolejnym.
+        ws3.cell(row=r0, column=1).value = punkt_idx + 1
 
         first_i   = rep_indices[0]
         last_i    = rep_indices[-1]
@@ -1112,6 +1619,18 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         if end_dt:
             ws3.cell(row=r0 + 3, column=5).value = _round_hm(end_dt)
 
+        # Punkt NIE przeszedl kryterium (w obserwacji pomaranczowy) — oznacz TAK SAMO
+        # w protokole: kolumna B (nastawa T) calego bloku na pomaranczowo + nota z powodem
+        # w kolumnie poza obszarem druku (widoczna operatorowi w Excelu).
+        if powod:
+            for row_off in range(BLOCK_SIZE):
+                ws3.cell(row=r0 + row_off, column=2).fill = FILL_WARN_DARK
+            nota = ws3.cell(row=r0, column=20)
+            nota.value = f"UWAGA (nie na zielono): {powod}"
+            fo = nota.font
+            nota.font = Font(name=fo.name, size=fo.size, bold=True, italic=True, color='9C5700')
+            print(f"    [PROTOKOL] Punkt {punkt_idx+1} oznaczony na pomaranczowo: {powod}")
+
     # ── Podmiana Pt100-XX w naglowkach na Stronie 3 ──────────────────────────
     def _subst(cell, sname):
         """Podmienia Pt100-XX w wartosci komorki lub wpisuje nazwe jesli brak wzorca."""
@@ -1147,9 +1666,15 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
 
     # ── Dane srodowiskowe z wynikow (wyniki/*.xlsx → Q/S kolumny Strona 3) ──────
     print("\n  Szukam danych srodowiskowych w wynikach...")
-    _wypelnij_wyniki_srodowiskowe(ws3, rep_groups, rows, obs_type)
+    uzyte = _wypelnij_wyniki_srodowiskowe(ws3, rep_groups, rows, obs_type)
 
-    proto_wb.save(out_path)
+    # Tabela przyrzadow (Strona 2) z PZ — dopasowanie po nr fabrycznym do kolumn Strony 3.
+    if 'Strona 2' in proto_wb.sheetnames:
+        wypelnij_strone2_z_pz(proto_wb['Strona 2'], uzyte, pz_mapa, zest)
+    else:
+        print("  [PZ] Brak arkusza 'Strona 2' — pomijam tabele przyrzadow.")
+
+    _zapisz_bezpiecznie(proto_wb, out_path, "protokol")
     print(f"Zapisano protokol: {out_name}")
 
 
@@ -1158,17 +1683,28 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
 # =============================================================================
 
 def main():
-    measurement_id = parse_measurement_id(TXT_FILENAME)
-    txt_path = os.path.join(FOLDER, TXT_FILENAME)
+    txt_files = resolve_txt_files()
+    first_name = os.path.basename(txt_files[0])
+    measurement_id = parse_measurement_id(first_name)
 
-    if not os.path.exists(txt_path):
-        raise FileNotFoundError(f"Nie znaleziono pliku TXT: {txt_path}")
-
-    raw_lines = open_txt(txt_path)
+    # Typ pliku i naglowek wyznaczamy z pierwszego pliku (przerwany pomiar to
+    # ten sam typ i ten sam czujnik we wszystkich czesciach).
+    raw_lines = open_txt(txt_files[0])
     file_type = detect_file_type(raw_lines)
 
+    # Dane przyrzadow z PZ wczytujemy NA STARCIE (przed analiza), zeby byly gotowe
+    # do wypelnienia Strony 2 przy budowie protokolu.
+    print("Wczytywanie danych przyrzadow (PZ + Zestawienie)...")
+    pz_mapa, _pz_lista = pz_dane.wczytaj_pz(PZ_FOLDER)
+    zest = pz_dane.wczytaj_zestawienie(ZESTAWIENIE_PLIK)
+
     print(f"Numer pomiaru : {measurement_id}")
-    print(f"Plik wejsciowy: {TXT_FILENAME}")
+    if len(txt_files) == 1:
+        print(f"Plik wejsciowy: {first_name}")
+    else:
+        print(f"Pliki wejsciowe ({len(txt_files)}):")
+        for p in txt_files:
+            print(f"    • {os.path.basename(p)}")
     print(f"Typ pliku     : {file_type}")
 
     today        = datetime.date.today()
@@ -1188,30 +1724,57 @@ def main():
         shutil.copy2(template_path, output_path)
         print("Skopiowano szablon.")
 
-        sensor_names, rows = parse_txt_cc04(txt_path)
+        sensor_names, rows = combine_txt(txt_files, parse_txt_cc04)
         print(f"Czujniki wzorcowe: {sensor_names}")
         print(f"Wierszy danych   : {len(rows)}")
 
         wb = openpyxl.load_workbook(output_path)
         ws = wb.active
 
-        # A2:U(ostatni) – dane pomiarowe (21 kolumn)
+        # PELNY uklad jak w pliku multimetru: WSZYSTKIE kanaly po kolei (A..AG = 33 kol).
+        # Analiza i protokol biora tylko kanaly GLOWNE (po nazwie); reszta jest do wgladu.
+        N_KOL = len(CC04_KOLUMNY)
+        kanal_pt = _mapa_kanal_pt(raw_lines)
+
+        # Podpisy z szablonu (X92/X93) + ich STYL (ramka, format daty) czytamy PRZED
+        # nadpisaniem danymi. W pelnym ukladzie kol. 24-25 to juz dane, wiec podpisy,
+        # ramke i date przenosimy na PRAWO od danych, a stare komorki czyscimy (inaczej
+        # zostaje pusta ramka i data pokazuje np. „19.02.1900" na miejscu danych).
+        sig1 = ws.cell(row=92, column=24).value
+        sig2 = ws.cell(row=93, column=24).value
+        sig_border = _copy_obj(ws.cell(row=92, column=24).border)
+        date_nf    = ws.cell(row=92, column=25).number_format or 'yyyy-mm-dd'
+
+        # Dane pomiarowe A2:AG(ostatni) — wszystkie kolumny pliku
         for r_i, row in enumerate(rows):
-            for c_i, val in enumerate(row):
-                ws.cell(row=2 + r_i, column=1 + c_i).value = to_value(val)
+            for c_i in range(min(len(row), N_KOL)):
+                ws.cell(row=2 + r_i, column=1 + c_i).value = to_value(row[c_i])
 
-        # M1, N1, O1, P1 (kol. 13-16) – 4 czujniki wzorcowe
-        for col, sname in zip(range(13, 17), sensor_names):
-            cell = ws.cell(row=1, column=col)
-            if cell.value and isinstance(cell.value, str):
-                cell.value = re.sub(r'Pt100-\d+', sname, cell.value)
-            elif sname:
-                cell.value = 'Temperatura ' + sname
-            print(f"  kol {col} (rząd 1) -> {cell.value!r}")
+        # Naglowki (rzad 1) — z nazwami czujnikow (Pt100-XX) zamiast surowych 'ChNNN'
+        for c_i, lbl in enumerate(_naglowki_cc04(kanal_pt)):
+            ws.cell(row=1, column=1 + c_i).value = lbl
+        print(f"  Czujniki glowne : {sensor_names}")
+        print(f"  Czujniki zapasowe: {[kanal_pt.get(c) or c for c in CC04_KANALY_ZAPASOWE]}")
 
-        # Y92, Y93 (kol. 25) – aktualna data
-        ws.cell(row=92, column=25).value = today
-        ws.cell(row=93, column=25).value = today
+        # Podpisy + data PRZENIESIONE na prawo od danych (z ramka jak w oryginale)
+        SIG_COL = N_KOL + 3
+        for i, nazwisko in enumerate((sig1, sig2)):
+            cn = ws.cell(row=92 + i, column=SIG_COL)
+            cn.value  = nazwisko
+            cn.border = _copy_obj(sig_border)
+            cd = ws.cell(row=92 + i, column=SIG_COL + 1)
+            cd.value  = today
+            cd.border = _copy_obj(sig_border)
+            cd.number_format = date_nf
+
+        # Wyczysc STARE komorki podpisow (kol 24-25, w. 92-93) — teraz to zwykle dane:
+        # bez ramki i bez formatu daty.
+        _pusta_ramka = Border()
+        for _r in (92, 93):
+            for _col in (24, 25):
+                _oc = ws.cell(row=_r, column=_col)
+                _oc.border = _pusta_ramka
+                _oc.number_format = 'General'
 
         print("\nAnaliza stabilnosci...")
         rep_groups = analyze_and_highlight(ws, rows, file_type='CC04')
@@ -1230,7 +1793,7 @@ def main():
         shutil.copy2(template_path, output_path)
         print("Skopiowano szablon.")
 
-        sensor_name, rows = parse_txt(txt_path)
+        sensor_name, rows = combine_txt(txt_files, parse_txt)
         sensor_names = [sensor_name]   # ujednolicamy z formatem CC04
         print(f"Czujnik wzorcowy: {sensor_name}")
         print(f"Wierszy danych  : {len(rows)}")
@@ -1261,12 +1824,12 @@ def main():
         print("\nAnaliza stabilnosci...")
         rep_groups = analyze_and_highlight(ws, rows, file_type='CC')
 
-    wb.save(output_path)
+    _zapisz_bezpiecznie(wb, output_path, "obserwacje")
     print(f"\nZapisano: {output_name}")
 
     if rep_groups:
         generuj_protokol(rep_groups, rows, measurement_id, file_type,
-                         sensor_names=sensor_names)
+                         sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest)
 
     print("Gotowe!")
 
