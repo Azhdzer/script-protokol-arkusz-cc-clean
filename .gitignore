@@ -39,3 +39,10 @@ crash.log
 # Dane pomiarowe (loggery / protokoly) — nie publikujemy
 excel_do_analizy/
 20??-*.txt
+
+# Zdjecia punktow kopiowane przez skrypt (setki MB) — tylko lokalnie
+foto/
+
+# Potwierdzenia zamowienia (PDF) — zawieraja dane zleceniodawcy: nazwa firmy, adres,
+# osoba kontaktowa, telefon, e-mail, NIP. NIE publikujemy.
+PZ/

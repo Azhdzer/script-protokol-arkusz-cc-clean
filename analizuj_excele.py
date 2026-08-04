@@ -1030,11 +1030,19 @@ PARSERS = {
 
 # ─── ENTRY POINT ─────────────────────────────────────────────────────────────
 
+# Czytelne nazwy formatow do logu (klucze techniczne zostaja bez zmian).
+# 'comet_txt' obsluguje ten sam uklad naglowka ('Nazwa:', 'Numer seryjny:', 'Start:')
+# uzywany zarowno przez Comet/TFA, jak i przez LogSoft — stad wspolna etykieta.
+OPISY_FORMATOW = {
+    'comet_txt': 'comet/logsoft_txt',
+}
+
+
 def process_file(filepath, output_dir):
     filepath = Path(filepath)
     fmt      = sniff_format(filepath)
     print(f"\n  [{filepath.name}]")
-    print(f"    Format: {fmt}")
+    print(f"    Format: {OPISY_FORMATOW.get(fmt, fmt)}")
 
     parser = PARSERS.get(fmt)
     if parser is None:
@@ -1047,6 +1055,29 @@ def process_file(filepath, output_dir):
         print(f"    ✗ Błąd: {e}")
         if DEBUG:
             traceback.print_exc()
+
+
+def _glowna_sesja(d, min_przerwa_s=3600, mnoznik=20):
+    """
+    Zwraca NAJDLUZSZY ciagly blok pomiarow z ramki `d` (posortowanej po 'Czas').
+
+    Pliki z loggerow potrafia zawierac kilka sesji — np. resztki poprzedniego wdrozenia
+    sprzed roku (wpisy co 24 h) przed wlasciwym pomiarem (co 1 min). Taki „ogon" rozciaga
+    os czasu zestawienia o setki dni i wymusza rzadsza siatke. Blok konczy sie tam, gdzie
+    przerwa przekracza max(mnoznik * mediana_odstepu, min_przerwa_s).
+    """
+    if len(d) < 3:
+        return d
+    odstepy = d['Czas'].diff().dt.total_seconds()
+    med = odstepy[odstepy > 0].median()
+    if not med or med <= 0:
+        return d
+    prog = max(med * mnoznik, min_przerwa_s)
+    grupy = (odstepy > prog).cumsum()
+    if grupy.nunique() <= 1:
+        return d
+    najliczniejsza = grupy.value_counts().idxmax()
+    return d[grupy == najliczniejsza]
 
 
 def zbuduj_zestawienie(zebrane, output_dir):
@@ -1069,6 +1100,18 @@ def zbuduj_zestawienie(zebrane, output_dir):
         d = df.copy()
         d['Czas'] = pd.to_datetime(d['Czas'], errors='coerce')
         d = d.dropna(subset=['Czas']).drop_duplicates(subset=['Czas']).sort_values('Czas')
+        if d.empty:
+            continue
+
+        # Loggery czesto maja w pamieci resztki POPRZEDNIEGO wdrozenia (np. wpisy sprzed
+        # roku, co 24 h). Rozciagaja one os czasu zestawienia o setki dni, przez co
+        # zabezpieczenie przed ogromna siatka rozrzedza krok (60 s -> 120 s) i punkty
+        # przestaja sie pokrywac z minutowymi probkami. Bierzemy najdluzsza ciagla sesje.
+        przed = len(d)
+        d = _glowna_sesja(d)
+        if len(d) < przed:
+            print(f"    [Zestawienie] {lab}: pominieto {przed - len(d)} wierszy spoza glownej "
+                  f"sesji (stare zapisy w pamieci loggera).")
         if d.empty:
             continue
         # Nazwy kolumn wartosci z etykieta przyrzadu (unikalne miedzy przyrzadami).

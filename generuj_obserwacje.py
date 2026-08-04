@@ -24,6 +24,7 @@ Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.
 
 import os
 import re
+import math
 import bisect
 import shutil
 import datetime
@@ -41,7 +42,7 @@ import pz_dane   # wspolny modul: dane przyrzadow z PZ + Zestawienie
 
 FOLDER           = os.environ.get("CC_FOLDER") or \
                    r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"
-TXT_FILENAME     = "2026-07-23 12.23_001"
+TXT_FILENAME     = "2026-07-31 13.37_180"
 # Wiele plikow TXT jednego (przerwanego) pomiaru — zostana rozparsowane i
 # sklejone w jeden ciag. Pusta lista => uzywany jest pojedynczy TXT_FILENAME.
 # Panel GUI moze podac liste przez zmienna OBS_TXT_FILES (rozdzielona ';').
@@ -50,8 +51,9 @@ TEMPLATE         = "xxx_LA_TH_2026 - obserwacje CC.xlsx"
 CC04_TEMPLATE    = "szablon_LA_TH_2026 - obserwacje.xlsx"
 PROTOKOL_CC_TEMPLATE   = "xxx_LA_TH_2026 - protokół CC.xlsx"
 PROTOKOL_CC04_TEMPLATE = "xxx_LA_TH_2026 - protokół CC-04.xlsx"
-PODPIS           = "Artsiom Azhdzer"
-STABILIZACJA_MIN  = datetime.timedelta(hours=1, minutes=45)   # rozgrzewka: gdy odczyty nie wejda w widelki, okno od tego czasu od poczatku punktu
+PODPIS           = "Artsiom Azhdzer"    # 'Pomiary wykonal(a)' — Strona 2 protokolu + obserwacja
+PODPIS_SPRAWDZIL = "Marek Szpakowski"   # 'Protokol sprawdzil(a)' — Strona 2 protokolu
+STABILIZACJA_MIN  = datetime.timedelta(hours=2, minutes=0)   # rozgrzewka: gdy odczyty nie wejda w widelki, okno od tego czasu od poczatku punktu
 
 # Dobor okna analizy: liczymy od momentu, gdy ODCZYTY komory wejda w widelki wokol nastaw:
 #   • temperatura: |Todczytana - Tzadana| <= PROG_WEJSCIA_TEMP  (°C, bezwzglednie),
@@ -67,6 +69,15 @@ MIN_OKNO_ANALIZY      = datetime.timedelta(minutes=15)   # gwarantowany ogon pom
 SUSZENIE_T_ZAKRES = (21.0, 27.0)   # zakres T [°C] charakterystyczny dla suszenia
 SUSZENIE_RH_MAX   = 50.0           # max RH [%] — ponizej tej wartosci punkt moze byc suszeniem
 
+# Wybor punktow wg PZ ('Zakres wzorcowania'). Jeden wsad komory obsluguje czesto KILKA
+# zlecen, wiec w obserwacji sa tez punkty z innych PZ. Gdy znamy liste punktow zamowionych,
+# bierzemy do protokolu WYLACZNIE je (z powtorzeniami — np. drugi punkt 50 % na histereze),
+# a reszte pomijamy. Ponizsze tolerancje dopasowuja nastawy komory do wartosci z PZ
+# (np. PZ '25 C / 30 %' -> nastawa komory 25,0 / 28,0).
+WYBIERAJ_PUNKTY_WG_PZ = True
+TOL_PUNKT_T  = 1.5    # [st.C] dopuszczalna roznica nastawy od punktu z PZ
+TOL_PUNKT_RH = 4.0    # [%RH]  dopuszczalna roznica nastawy od punktu z PZ
+
 # Folder z zunifikowanymi plikami wynikow (z analizuj_excele.py)
 WYNIKI_FOLDER = os.path.join(FOLDER, "wyniki")
 
@@ -74,22 +85,60 @@ WYNIKI_FOLDER = os.path.join(FOLDER, "wyniki")
 PZ_FOLDER        = os.environ.get("CC_PZ_FOLDER") or os.path.join(FOLDER, "PZ")
 ZESTAWIENIE_PLIK = os.path.join(FOLDER, "Zestawienie wzorcowanych przyrządów.xlsx")
 
+# --- ZDJECIA (foto) punktow pomiarowych --------------------------------------
+# KOPIUJ_FOTO=True: dla KAZDEGO wybranego punktu kopiujemy zdjecia odpowiadajace
+# czasom jego 5 wierszy reprezentacyjnych (te podswietlone w obserwacji).
+# Czas zdjecia czytany z NAZWY pliku (np. '2026-07-23_16.12.51.jpg'); gdy nazwa nie
+# zawiera czasu — z daty modyfikacji pliku.
+KOPIUJ_FOTO      = False
+FOTO_ZRODLO      = r"\\83b\Zdjęcia\2026_07-31-wew"        # folder ZRODLOWY ze zdjeciami
+FOTO_FOLDER      = os.path.join(FOLDER, "foto")       # folder DOCELOWY w projekcie
+FOTO_TOLERANCJA  = datetime.timedelta(minutes=1)      # max odchylka czasu zdjecia od wiersza
+FOTO_ROZSZERZENIA = ('.jpg', '.jpeg', '.png', '.bmp')
+
 # Kolumna startowa dla danych srodowiskowych z wynikow w Strona 3
 #   CC:   Q = 17  (temperatura=Q, wilgotnosc=R)
 #   CC04: S = 19  (temperatura=S, wilgotnosc=T)
 WYNIKI_START_COL_CC   = 17   # Q
 WYNIKI_START_COL_CC04 = 19   # S
 
+# Pierwszy wiersz tabeli przyrzadow na Stronie 2 (przyrzad i -> wiersz 11+i).
+# Naglowek pary kolumn w Stronie 3 (wiersz 12) pokazuje nr fabryczny tego przyrzadu:
+#   para 1 -> ='Strona 2'!$E$11,  para 2 -> $E$12, ...
+WIERSZ_1_PRZYRZADU_S2 = 11
+
 # Maksymalna tolerancja przy dopasowaniu timestampow [minuty]
 WYNIKI_TOLERANCJA_MIN = 30
+
+# Maksymalna roznica miedzy odczytem przyrzadu a nastawa komory [st.C].
+# Sam czas NIE wystarcza do przypisania pliku wynikow do pomiaru: w tej samej dobie
+# moze trwac inne wzorcowanie w DRUGIEJ komorze (inne zlecenie). Przyrzad lezacy w
+# NASZEJ komorze musi pokazywac mniej wiecej jej nastawe — pliki, ktore tego nie
+# spelniaja, sa odrzucane (inaczej do protokolu trafiaja obce dane).
+MAX_ROZNICA_PRZYRZAD_C = 5.0
+
+# Korekta ZEGARA loggera. Tanie loggery (np. Tempmate) bywaja rozjechane w czasie o
+# godziny — wtedy dane trafialyby do zlego punktu. Gdy odczyty nie zgadzaja sie z
+# nastawami, skrypt porownuje PROFIL temperatury loggera z profilem komory, wykrywa
+# przesuniecie i koryguje je (glosno raportujac w logu). Wartosci pozostaja oryginalne
+# — korygowany jest wylacznie czas dopasowania.
+KOREKTA_ZEGARA          = True
+KOREKTA_ZEGARA_MAX_MIN  = 360   # maksymalne szukane przesuniecie [min] (+/-)
+KOREKTA_ZEGARA_KROK_MIN = 5     # rozdzielczosc szukania [min]
 
 # Filtr zgodnosci NASTAWY z ODCZYTEM komory:
 #   B = Tzadana  vs  D = Todczytana   (temperatura)
 #   C = RHzadana vs  E = RHodczytana  (wilgotnosc)
-# Jesli odczyt komory rozni sie od nastawy o wiecej niz prog [%], segment (punkt)
-# jest pomijany — komora nie osiagnela zadanych warunkow.
+# Gdy komora NIE osiagnela nastawy, to nie jest punkt pomiarowy tylko przejscie/
+# suszenie (np. 10h schladzania 35->24 st.C przy nastawie 23) — taki segment jest
+# POMIJANY (nie trafia ani do obserwacji jako punkt, ani do protokolu).
+# Uwaga: sam prog wzgledny [%] jest zbyt ostry przy malych nastawach (np. RH 8%:
+# 10% = zaledwie 0,8 %RH), dlatego odczyt uznajemy za zgodny, gdy miesci sie w
+# progu WZGLEDNYM **albo** w tolerancji BEZWZGLEDNEJ ponizej.
 FILTR_NASTAWA_ODCZYT = True
 MAX_ROZNICA_PROCENT  = 10.0   # dozwolona wzgledna roznica |nastawa-odczyt|/nastawa * 100
+TOL_ABS_TEMP = 1.0    # [st.C]  odczyt w tych granicach od nastawy = zgodny
+TOL_ABS_RH   = 2.0    # [%RH]   odczyt w tych granicach od nastawy = zgodny
 
 # --- Nadpisania z panelu GUI (app_gui.py) przez zmienne srodowiskowe ---
 if os.environ.get("OBS_FILTR") is not None:
@@ -104,6 +153,10 @@ try:
         WYNIKI_TOLERANCJA_MIN = int(float(os.environ["OBS_TOL"]))
 except ValueError:
     pass
+if os.environ.get("OBS_FOTO") is not None:
+    KOPIUJ_FOTO = os.environ["OBS_FOTO"].strip().lower() in ("1", "true", "tak", "yes", "on")
+if os.environ.get("OBS_FOTO_ZRODLO"):
+    FOTO_ZRODLO = os.environ["OBS_FOTO_ZRODLO"].strip()
 
 # =============================================================================
 
@@ -743,6 +796,20 @@ def _rozne_procent(nastawa, odczyt, prog_proc):
     return abs(nastawa - odczyt) / baza * 100.0 > prog_proc
 
 
+def _poza_nastawa(nastawa, odczyt, prog_proc, tol_abs):
+    """
+    True, gdy komora NIE osiagnela nastawy: odczyt jest poza progiem WZGLEDNYM
+    (prog_proc [%]) I JEDNOCZESNIE poza tolerancja BEZWZGLEDNA (tol_abs).
+    Podwojny warunek chroni przed falszywym odrzuceniem przy malych nastawach
+    (np. RH 8% vs 7,1% to 11% wzglednie, ale tylko 0,9 %RH — punkt jest poprawny).
+    """
+    if nastawa is None or odczyt is None:
+        return False
+    if abs(nastawa - odczyt) <= tol_abs:
+        return False
+    return _rozne_procent(nastawa, odczyt, prog_proc)
+
+
 def _reps_ostatnie_minuty(data, start_idx, end_idx, k=5):
     """
     Awaryjny wybor reprezentantow: po jednym wierszu na minute, k OSTATNICH minut
@@ -797,7 +864,7 @@ def _oznacz_blok(ws, data, start_idx, end_idx, rep_indices, n_cols,
         _apply_fill(ws, 2 + i, fill_dark, n_cols)
         _apply_bold(ws, 2 + i, n_cols)
     if powod:
-        kom = ws.cell(row=2 + rep_indices[0], column=n_cols + 1)
+        kom = ws.cell(row=2 + rep_indices[0], column=n_cols + 2)   # +1 zajmuje znacznik nr punktu
         kom.value = f"UWAGA (nie na zielono): {powod}. Wybrano 5 wierszy najblizszych czasowo."
         kom.fill  = fill_dark
         fo = kom.font
@@ -805,16 +872,24 @@ def _oznacz_blok(ws, data, start_idx, end_idx, rep_indices, n_cols,
     return blok
 
 
-def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC'):
+def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC',
+                     punkt_z_pz=False):
     """
     Analizuje jeden segment i koloruje go w arkuszu obserwacji:
-      • kryteria spelnione    -> ZIELONY (jasny blok + ciemni reprezentanci),
-      • kryteria niespelnione -> POMARANCZOWY + komentarz z POWODEM (punktu NIE pomijamy;
-        wybieramy najblizsze po czasie).
+      • komora NIE osiagnela nastawy  -> POMIJAMY (to nie punkt, tylko przejscie/suszenie),
+      • kryterium stabilnosci spelnione   -> ZIELONY (jasny blok + ciemni reprezentanci),
+      • kryterium stabilnosci niespelnione -> POMARANCZOWY + komentarz z POWODEM
+        (punkt jest realny, wiec go NIE gubimy — bierzemy najblizsze po czasie).
+
+    `punkt_z_pz=True` — segment zostal DOPASOWANY do punktu zamowionego w PZ. Wtedy nie
+    zgadujemy juz, czy to punkt pomiarowy: PZ o tym przesadza. Rozbieznosc nastawy z
+    odczytem komory (np. nastawa 7,5 %RH, a komora trzyma ~13,7 % — przy tak niskiej
+    wilgotnosci to normalne) daje wtedy POMARANCZOWY z uwaga, a nie pominiecie punktu.
+
     Zwraca krotke (rep_indices, powod):
       powod = None  -> punkt zielony (OK),
       powod = tekst -> punkt pomaranczowy (przyczyna),
-      (None, None)  -> brak jakichkolwiek danych do oznaczenia.
+      (None, None)  -> segment pominiety (nie jest punktem pomiarowym).
     """
     t0 = data[start_idx][0]
     t1 = data[end_idx - 1][0]
@@ -848,23 +923,34 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC'):
     powod       = None    # None => zielony (OK); tekst => pomaranczowy (przyczyna)
     rep_indices = None
 
-    # 1) Filtr zgodnosci nastawy z odczytem komory (mediana z okna vs nastawa)
+    # 1) Czy komora w ogole osiagnela nastawe? Jesli NIE — to nie jest punkt pomiarowy,
+    #    tylko przejscie/suszenie (np. wielogodzinne schladzanie) → POMIJAMY segment.
     if FILTR_NASTAWA_ODCZYT:
         d_idx, e_idx = (8, 9) if is_cc04 else (5, 6)
         d_vals = [data[i][d_idx] for i in range(start_idx, end_idx) if data[i][d_idx] is not None]
         e_vals = [data[i][e_idx] for i in range(start_idx, end_idx) if data[i][e_idx] is not None]
         d_med  = statistics.median(d_vals) if d_vals else None
         e_med  = statistics.median(e_vals) if e_vals else None
-        odrzuc_t  = _rozne_procent(b, d_med, MAX_ROZNICA_PROCENT)
-        odrzuc_rh = (not temp_only) and _rozne_procent(c, e_med, MAX_ROZNICA_PROCENT)
+        odrzuc_t  = _poza_nastawa(b, d_med, MAX_ROZNICA_PROCENT, TOL_ABS_TEMP)
+        odrzuc_rh = (not temp_only) and _poza_nastawa(c, e_med, MAX_ROZNICA_PROCENT, TOL_ABS_RH)
         if odrzuc_t or odrzuc_rh:
             czesci = []
             if odrzuc_t:
-                czesci.append(f"temperatura: nastawa {b} st.C, a komora ~{round(d_med, 2) if d_med is not None else '-'} st.C")
+                czesci.append(f"T: nastawa {b} st.C, komora ~{round(d_med, 2) if d_med is not None else '-'} st.C")
             if odrzuc_rh:
-                czesci.append(f"wilgotnosc: nastawa {c}%, a komora ~{round(e_med, 2) if e_med is not None else '-'}%")
-            powod = ("komora nie osiagnela nastawy — " + "; ".join(czesci)
-                     + f" (roznica > {MAX_ROZNICA_PROCENT:g}%)")
+                czesci.append(f"RH: nastawa {c}%, komora ~{round(e_med, 2) if e_med is not None else '-'}%")
+            opis = "; ".join(czesci)
+
+            if punkt_z_pz:
+                # Punkt zamowiony w PZ — nie pomijamy go. Komora bywa fizycznie
+                # niezdolna utrzymac nastawy (zwlaszcza przy bardzo niskiej wilgotnosci),
+                # co jest informacja do protokolu, a nie powodem do skasowania punktu.
+                powod = f"komora nie utrzymala nastawy — {opis}"
+                print(f"    [UWAGA] {powod} — punkt z PZ, wiec zostaje (pomaranczowy).")
+            else:
+                print(f"    [POMINIETO — nie punkt pomiarowy] komora nie osiagnela nastawy: "
+                      + opis + " (przejscie/suszenie).")
+                return None, None
 
     # 2) Wiersze spelniajace kryteria K/L (tylko jesli filtr nie odrzucil)
     if powod is None:
@@ -929,7 +1015,73 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC'):
     return fb, powod
 
 
-def analyze_and_highlight(ws, rows, file_type='CC'):
+def _oznacz_numery_punktow(ws, segments, file_type):
+    """
+    Znaczniki nawigacyjne: NUMER punktu (1,2,3...) w kolumnie z prawej, przy pierwszym
+    wierszu okna kazdego punktu. Kolumna zawiera liczbe tylko w punktach, wiec w Excelu
+    mozna szybko skakac miedzy nimi (Ctrl+strzalka w dol) albo znalezc po numerze.
+    Numer = pozycja punktu w protokole. Kolor = stan (zielony / pomaranczowy).
+    """
+    n_cols_mark = len(CC04_KOLUMNY) if file_type == 'CC04' else 12
+    marker_col  = n_cols_mark + 1
+    ws.cell(row=1, column=marker_col).value = "Nr"
+    for i, (rep_idx, powod) in enumerate(segments, 1):
+        cell = ws.cell(row=2 + rep_idx[0], column=marker_col)
+        cell.value = i
+        cell.fill  = FILL_WARN_DARK if powod else FILL_DARK
+        fo = cell.font
+        cell.font = Font(name=fo.name, size=fo.size, bold=True)
+
+
+def _wybierz_okna_wg_pz(data, windows, punkty_pz):
+    """
+    Wybiera z wykrytych okien te, ktore odpowiadaja punktom ZAMOWIONYM w PZ.
+
+    Dla kazdego punktu z PZ (po kolei, razem z powtorzeniami) bierzemy NAJWCZESNIEJSZE
+    jeszcze niewykorzystane okno o zgodnych nastawach (tolerancje TOL_PUNKT_T/RH).
+    Dzieki temu:
+      • punkt powtorzony na histereze (np. drugi raz 50 %) NIE jest gubiony — PZ go zamawia,
+        wiec nie stosujemy tu reguly „suszenie/powtorzenie",
+      • okna z INNEGO zlecenia (ten sam wsad komory) nie trafiaja do protokolu.
+    Zwraca liste okien w kolejnosci chronologicznej.
+    """
+    uzyte = set()
+    dopasowane = []
+    for t_exp, rh_exp in punkty_pz:
+        etykieta = (f"{t_exp:g} st.C / {rh_exp:g} %RH" if rh_exp is not None
+                    else f"{t_exp:g} st.C (tylko temperatura)")
+        wybrany = None
+        for idx, (si, _ei) in enumerate(windows):
+            if idx in uzyte:
+                continue
+            b, c = data[si][1], data[si][2]
+            if b is None or abs(b - t_exp) > TOL_PUNKT_T:
+                continue
+            if rh_exp is not None and (c is None or abs(c - rh_exp) > TOL_PUNKT_RH):
+                continue
+            wybrany = idx
+            break                      # najwczesniejsze pasujace okno
+        if wybrany is None:
+            print(f"  [PZ] Punkt {etykieta}: BRAK pasujacego segmentu w obserwacji "
+                  f"(sprawdz nastawy komory albo tolerancje TOL_PUNKT_*).")
+            continue
+        uzyte.add(wybrany)
+        si = windows[wybrany][0]
+        print(f"  [PZ] Punkt {etykieta} -> segment {wybrany + 1} "
+              f"(nastawa {data[si][1]}/{data[si][2]}, start {data[si][0]})")
+        dopasowane.append(wybrany)
+
+    pominiete = [i for i in range(len(windows)) if i not in uzyte]
+    for i in pominiete:
+        si = windows[i][0]
+        print(f"  [PZ] Segment {i + 1} (nastawa {data[si][1]}/{data[si][2]}, "
+              f"start {data[si][0]}) — spoza zamowienia, pomijam.")
+
+    dopasowane.sort()
+    return [windows[i] for i in dopasowane]
+
+
+def analyze_and_highlight(ws, rows, file_type='CC', punkty_pz=None):
     """
     Dla każdego segmentu stabilnego B+C (>= STABILIZACJA_MIN):
       - koloruje najlepsze 5-minutowe okno na #E2EFDA
@@ -944,6 +1096,29 @@ def analyze_and_highlight(ws, rows, file_type='CC'):
     if not windows:
         print(f"  ANALIZA: brak segmentow stabilnych >= {STABILIZACJA_MIN} — pomijam kolorowanie.")
         return
+
+    # Gdy znamy punkty zamowione w PZ — one decyduja, ktore segmenty ida do protokolu.
+    # Regula „suszenie/powtorzenie" jest wtedy zbedna (a wrecz szkodliwa: gubila punkt
+    # powtorzony na histereze, ktory PZ jawnie zamawia).
+    if WYBIERAJ_PUNKTY_WG_PZ and punkty_pz:
+        print(f"\n  Wybor punktow wg PZ ({len(punkty_pz)} zamowionych, "
+              f"{len(windows)} segmentow w obserwacji):")
+        filtered = _wybierz_okna_wg_pz(data, windows, punkty_pz)
+        print(f"  Do protokolu: {len(filtered)} punktow.")
+        segments = []
+        found = ostrzezenia = 0
+        for num, (start_idx, end_idx) in enumerate(filtered, 1):
+            rep_idx, powod = _process_segment(ws, data, start_idx, end_idx, num, file_type,
+                                              punkt_z_pz=True)
+            if rep_idx is not None:
+                found += 1
+                if powod:
+                    ostrzezenia += 1
+                segments.append((rep_idx, powod))
+        print(f"  Oznaczono segmentow: {found}/{len(filtered)} "
+              f"(zielonych: {found - ostrzezenia}, pomaranczowych: {ostrzezenia})")
+        _oznacz_numery_punktow(ws, segments, file_type)
+        return segments
 
     # Wykrywanie gisterezy:
     # Jesli (T, RH) pojawia sie powторnie ORAZ miedzy pierwszym a obecnym wystаpieniem
@@ -1033,6 +1208,8 @@ def analyze_and_highlight(ws, rows, file_type='CC'):
             segments.append((rep_idx, powod))
     print(f"  Oznaczono segmentow: {found}/{len(filtered)} "
           f"(zielonych: {found - ostrzezenia}, pomaranczowych: {ostrzezenia})")
+
+    _oznacz_numery_punktow(ws, segments, file_type)
     return segments
 
 
@@ -1089,6 +1266,221 @@ def _zaladuj_wyniki_xlsx(path):
     except Exception as exc:
         print(f"  [WYNIKI] Blad odczytu '{os.path.basename(path)}': {exc}")
         return []
+
+
+_CACHE_WYNIKI = {}   # (sciezka, mtime) -> dane; pliki wynikow czytamy raz na uruchomienie
+
+# Zbiorcze zestawienie (z analizuj_excele.py) lezy w tym samym folderze co pliki wynikow,
+# ale NIE jest przyrzadem — trzeba je wykluczyc, inaczej zajmuje pare kolumn w protokole.
+ZESTAWIENIE_WYNIKI_NAZWA = "zestawienie_pomiarow.xlsx"
+
+
+def _pliki_wynikow():
+    """
+    Pliki wynikow POJEDYNCZYCH przyrzadow z WYNIKI_FOLDER (posortowane).
+    Pomija zbiorcze 'zestawienie_pomiarow.xlsx' i pliki tymczasowe Excela ('~$').
+    """
+    if not os.path.isdir(WYNIKI_FOLDER):
+        return []
+    return sorted(
+        f for f in os.listdir(WYNIKI_FOLDER)
+        if f.lower().endswith('.xlsx')
+        and not f.startswith('~$')
+        and f.lower() != ZESTAWIENIE_WYNIKI_NAZWA.lower()
+    )
+
+
+def _zaladuj_wyniki_xlsx_cache(path):
+    """_zaladuj_wyniki_xlsx z pamiecia (ten sam plik czytany raz)."""
+    try:
+        klucz = (path, os.path.getmtime(path))
+    except OSError:
+        return _zaladuj_wyniki_xlsx(path)
+    if klucz not in _CACHE_WYNIKI:
+        _CACHE_WYNIKI[klucz] = _zaladuj_wyniki_xlsx(path)
+    return _CACHE_WYNIKI[klucz]
+
+
+def _policz_potrzebne_przyrzady(rep_groups, rows_obs):
+    """
+    Ile PAR kolumn przyrzadow bedzie potrzebnych w Stronie 3 — liczone tak samo jak
+    w _wypelnij_wyniki_srodowiskowe (tylko pliki pasujace czasowo do punktow; plik
+    xTHERM z temperatura zewnetrzna liczy sie jako DWA przyrzady).
+    Wywolywane PRZED otwarciem protokolu, zeby w razie potrzeby dolozyc kolumny.
+    """
+    pliki = _pliki_wynikow()
+    if not pliki:
+        return 0
+
+    punkty = []
+    nastawy = []
+    for rep_indices, _powod in rep_groups:
+        tts = [_s_to_dt(rows_obs[i][0]) for i in rep_indices]
+        punkty.append(None if any(t is None for t in tts) else tts)
+        r0 = rows_obs[rep_indices[0]]
+        nastawy.append(_s_to_float(r0[1]) if len(r0) > 1 else None)
+    tol_s = datetime.timedelta(minutes=WYNIKI_TOLERANCJA_MIN).total_seconds()
+
+    ile = 0
+    for fname in pliki:
+        dane = _zaladuj_wyniki_xlsx_cache(os.path.join(WYNIKI_FOLDER, fname))
+        if not dane:
+            continue
+        # Ta sama logika co przy wypelnianiu (czas + zgodnosc z nastawa + korekta zegara),
+        # tylko po cichu — tu liczymy wylacznie ILE par kolumn bedzie potrzebnych.
+        dop, _shift = _dopasuj_plik_do_punktow(dane, punkty, nastawy, tol_s,
+                                               fname=fname, cicho=True)
+        if not dop:
+            continue
+        ile += 2 if any(row[4] is not None for row in dane) else 1   # xTHERM = 2 przyrzady
+    return ile
+
+
+def _wykryj_przesuniecie_zegara(dane, punkty, nastawy):
+    """
+    Wykrywa przesuniecie ZEGARA loggera wzgledem multimetru, porownujac jego profil
+    temperatury z nastawami komory. Dla kazdego kandydata przesuniecia liczy medianowe
+    |odczyt - nastawa| w srodkach punktow.
+
+    Punkty trwaja godzinami, wiec „dobrych" przesuniec jest zwykle caly przedzial.
+    Wybieramy jego SRODEK (mediane) — dopasowanie trafia wtedy w srodek plateau punktu,
+    a nie na krawedz, gdzie temperatura jeszcze sie zmienia (tam odczyt bywa zanizony).
+    Zwraca (timedelta, odchylka) albo (None, None).
+    """
+    czasy = [d[0] for d in dane]
+    temps = [d[1] for d in dane]
+    if not czasy:
+        return None, None
+    cele = [(tts[len(tts) // 2], nastawy[i])
+            for i, tts in enumerate(punkty)
+            if tts and i < len(nastawy) and nastawy[i] is not None]
+    if not cele:
+        return None, None
+
+    wyniki = []
+    for mins in range(-KOREKTA_ZEGARA_MAX_MIN, KOREKTA_ZEGARA_MAX_MIN + 1,
+                      KOREKTA_ZEGARA_KROK_MIN):
+        sh = datetime.timedelta(minutes=mins)
+        odch = []
+        for t_cel, nast in cele:
+            cel = t_cel + sh
+            poz = bisect.bisect_left(czasy, cel)
+            kand = [i for i in (poz - 1, poz) if 0 <= i < len(czasy)]
+            if not kand:
+                continue
+            i_best = min(kand, key=lambda i: abs((czasy[i] - cel).total_seconds()))
+            if temps[i_best] is not None:
+                odch.append(abs(temps[i_best] - nast))
+        if odch:
+            wyniki.append((statistics.median(odch), abs(mins), mins))
+    if not wyniki:
+        return None, None
+
+    min_odch = min(w[0] for w in wyniki)
+    prog = min_odch + 0.3          # rownie dobre = w granicach 0,3 st.C od najlepszego
+    dobre = sorted(w[2] for w in wyniki if w[0] <= prog)
+    if not dobre:
+        return None, None
+    wybor = int(statistics.median(dobre))
+    # zaokraglij mediane do siatki szukania i odczytaj jej faktyczna odchylke
+    wybor = min(dobre, key=lambda m: abs(m - wybor))
+    odch = next(w[0] for w in wyniki if w[2] == wybor)
+    return datetime.timedelta(minutes=wybor), odch
+
+
+def _dopasuj_plik_do_punktow(dane, punkty, nastawy, tol_s, fname="", cicho=False):
+    """
+    Dopasowuje jeden plik wynikow do punktow pomiarowych.
+
+    Dwa warunki: zgodnosc CZASU (5 najblizszych wierszy w tolerancji) oraz zgodnosc
+    ODCZYTU z nastawa komory (przyrzad lezacy w komorze musi pokazywac to, co komora).
+    Gdy odczyty nie pasuja, a KOREKTA_ZEGARA=True — szuka przesuniecia zegara loggera.
+
+    Zwraca (dopasowania, przesuniecie) albo (None, None) gdy plik jest z innego wzorcowania.
+    """
+    def _dop(shift):
+        dop = {}
+        for idx, tts in enumerate(punkty):
+            if tts is None:
+                continue
+            tt = [t + shift for t in tts] if shift else tts
+            m = _znajdz_5_wierszy(dane, tt)
+            if m is None:
+                continue
+            avg = sum(abs((tt[i] - m[i][0]).total_seconds()) for i in range(5)) / 5
+            if avg <= tol_s:
+                dop[idx] = m
+        return dop
+
+    def _odch(dop):
+        o = []
+        for idx, m in dop.items():
+            nast = nastawy[idx] if idx < len(nastawy) else None
+            vals = [k[1] for k in m if k[1] is not None]
+            if nast is not None and vals:
+                o.append(abs(statistics.median(vals) - nast))
+        return statistics.median(o) if o else None
+
+    zero = datetime.timedelta(0)
+    dop0 = _dop(zero)
+    od0  = _odch(dop0)
+    if dop0 and (od0 is None or od0 <= MAX_ROZNICA_PRZYRZAD_C):
+        return dop0, zero      # wszystko gra bez korekty
+
+    if not KOREKTA_ZEGARA:
+        if not cicho and dop0:
+            print(f"  [WYNIKI] '{fname}' — ODRZUCONY: odczyty odbiegaja od nastaw komory "
+                  f"o ~{od0:.1f} st.C (limit {MAX_ROZNICA_PRZYRZAD_C:g}).")
+        return None, None
+
+    shift, odch_sh = _wykryj_przesuniecie_zegara(dane, punkty, nastawy)
+    if shift is None or odch_sh is None or odch_sh > MAX_ROZNICA_PRZYRZAD_C:
+        if not cicho and dop0:
+            print(f"  [WYNIKI] '{fname}' — ODRZUCONY: odczyty odbiegaja od nastaw komory "
+                  f"o ~{od0:.1f} st.C i nie znaleziono sensownego przesuniecia zegara. "
+                  f"To plik z INNEGO wzorcowania — usun go z folderu 'wyniki'.")
+        return None, None
+
+    dop = _dop(shift)
+    od  = _odch(dop)
+    if not dop or od is None or od > MAX_ROZNICA_PRZYRZAD_C:
+        if not cicho and dop0:
+            print(f"  [WYNIKI] '{fname}' — ODRZUCONY (po probie korekty zegara).")
+        return None, None
+
+    if not cicho:
+        godz = shift.total_seconds() / 3600.0
+        print(f"  [WYNIKI] '{fname}' — WYKRYTO PRZESUNIECIE ZEGARA loggera: "
+              f"{godz:+.2f} h. Skorygowano czasy dopasowania "
+              f"(odchylka {od0:.1f} -> {od:.1f} st.C). Wartosci pomiarowe bez zmian.")
+    return dop, shift
+
+
+def _miejsca_po_przecinku(res):
+    """Ile miejsc po przecinku wynika z rozdzielczosci: 1->0, 0.1->1, 0.01->2, 0.001->3."""
+    if not res or res <= 0:
+        return None
+    for dec, krok in ((0, 1.0), (1, 0.1), (2, 0.01), (3, 0.001)):
+        if abs(res - krok) < 1e-9:
+            return dec
+    return min(4, max(0, int(round(-math.log10(res)))))
+
+
+def _zaokr_do_rozdz(val, res):
+    """
+    Zaokragla wartosc do rozdzielczosci przyrzadu (np. 0.1 -> jedno miejsce po przecinku).
+    Bez rozdzielczosci — awaryjnie 4 miejsca (jak dotad).
+    """
+    dec = _miejsca_po_przecinku(res)
+    return round(val, 4 if dec is None else dec)
+
+
+def _format_rozdz(res):
+    """Format liczbowy Excela wg rozdzielczosci: 0.1 -> '0.0', 0.01 -> '0.00', 1 -> '0'."""
+    dec = _miejsca_po_przecinku(res)
+    if dec is None:
+        return None
+    return '0' if dec == 0 else '0.' + '0' * dec
 
 
 def _znajdz_5_wierszy(wyniki_rows, target_times):
@@ -1150,10 +1542,7 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
         print(f"  [WYNIKI] Brak folderu '{WYNIKI_FOLDER}' — pomijam dane srodowiskowe.")
         return
 
-    pliki = sorted(
-        f for f in os.listdir(WYNIKI_FOLDER)
-        if f.lower().endswith('.xlsx')
-    )
+    pliki = _pliki_wynikow()
     if not pliki:
         print(f"  [WYNIKI] Brak plikow .xlsx w '{WYNIKI_FOLDER}' — pomijam.")
         return
@@ -1161,7 +1550,7 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
     print(f"  [WYNIKI] Wczytuje {len(pliki)} plik(ow) wynikow...")
     baza = {}
     for fname in pliki:
-        dane = _zaladuj_wyniki_xlsx(os.path.join(WYNIKI_FOLDER, fname))
+        dane = _zaladuj_wyniki_xlsx_cache(os.path.join(WYNIKI_FOLDER, fname))
         if dane:
             baza[fname] = dane
     if not baza:
@@ -1190,18 +1579,26 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
     print(f"  [WYNIKI] Szablon ma {MAX_PRZYRZADY} par kolumn przyrzadow (od "
           f"{get_column_letter(start_col)}).")
 
-    # Docelowe czasy dla kazdego punktu (None gdy brak timestampow)
+    # Docelowe czasy dla kazdego punktu (None gdy brak timestampow) + nastawa temperatury
+    # punktu (kolumna B) — sluzy do sprawdzenia, czy plik wynikow pochodzi z NASZEJ komory.
     punkty = []
+    nastawy = []
     for rep_indices, _powod in rep_groups:
         tts = [_s_to_dt(rows_obs[i][0]) for i in rep_indices]
         punkty.append(None if any(t is None for t in tts) else tts)
+        r0 = rows_obs[rep_indices[0]]
+        nastawy.append(_s_to_float(r0[1]) if len(r0) > 1 else None)
 
     oznaczenia_per_plik = {}   # fname -> set(row_idx)
     dev = 0                    # numer przyrzadu (0-based) -> para kolumn w prawo
     uzyte = []                 # per przyrzad (w kolejnosci dev): (serial, temps, rhs)
 
-    def _wpisz(col, matched_per_punkt, val_idx, z_wilgotnoscia):
-        """Wpisuje jedna kolumne (temp z val_idx) + opc. wilgotnosc do bloków punktow."""
+    def _wpisz(col, matched_per_punkt, val_idx, z_wilgotnoscia, res_t=None, res_rh=None):
+        """
+        Wpisuje jedna kolumne (temp z val_idx) + opc. wilgotnosc do blokow punktow.
+        Wartosci sa ZAOKRAGLANE do rozdzielczosci przyrzadu (res_t/res_rh, np. 0.1) i
+        dostaja odpowiedni format liczbowy ('0.0'), zeby nie pokazywac zer na setnych.
+        """
         for punkt_idx, matched in matched_per_punkt.items():
             r0 = BLOCK_START_ROW + punkt_idx * BLOCK_SIZE
             for off, krotka in enumerate(matched):
@@ -1210,9 +1607,17 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
                 rh_v   = krotka[2]
                 row_idx = krotka[3]
                 if temp_v is not None:
-                    proto_ws.cell(row=er, column=col).value = round(temp_v, 4)
+                    c = proto_ws.cell(row=er, column=col)
+                    c.value = _zaokr_do_rozdz(temp_v, res_t)
+                    fmt = _format_rozdz(res_t)
+                    if fmt:
+                        c.number_format = fmt
                 if z_wilgotnoscia and rh_v is not None:
-                    proto_ws.cell(row=er, column=col + 1).value = round(rh_v, 4)
+                    c = proto_ws.cell(row=er, column=col + 1)
+                    c.value = _zaokr_do_rozdz(rh_v, res_rh)
+                    fmt = _format_rozdz(res_rh)
+                    if fmt:
+                        c.number_format = fmt
                 oznaczenia_per_plik.setdefault(fname, set()).add(row_idx)
 
     for fname in pliki:
@@ -1220,20 +1625,13 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
             continue
         dane = baza[fname]
 
-        # Dopasuj plik do punktow: 5 najblizszych wierszy w tolerancji czasowej
-        dopasowania = {}   # punkt_idx -> lista 5 krotek
-        for punkt_idx, tts in enumerate(punkty):
-            if tts is None:
-                continue
-            matched = _znajdz_5_wierszy(dane, tts)
-            if matched is None:
-                continue
-            avg = sum(abs((tts[i] - matched[i][0]).total_seconds()) for i in range(5)) / 5
-            if avg <= tol_s:
-                dopasowania[punkt_idx] = matched
-
+        # Dopasowanie pliku do punktow: zgodnosc CZASU + zgodnosc odczytow z nastawami
+        # komory (chroni przed doklejeniem plikow z innego wzorcowania), a gdy zegar
+        # loggera jest rozjechany — automatyczna korekta przesuniecia.
+        dopasowania, _shift = _dopasuj_plik_do_punktow(dane, punkty, nastawy, tol_s,
+                                                       fname=fname)
         if not dopasowania:
-            continue   # plik nie pasuje czasowo (np. inne/stare pomiary) — pomijamy
+            continue
 
         ma_zewn = any(row[4] is not None for row in dane)   # temp2 -> xTHERM = 2 przyrzady
 
@@ -1242,12 +1640,18 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
                   f"(max {MAX_PRZYRZADY}) — pomijam.")
             continue
 
+        # Rozdzielczosc przyrzadu z JEGO danych (np. 0.1) — do zaokraglenia i formatu
+        # komorek. Liczona z calego pliku, wiec odporna na pojedyncze rowne wartosci.
+        res_t  = pz_dane.rozdzielczosc_z_kolumny([r[1] for r in dane])
+        res_rh = pz_dane.rozdzielczosc_z_kolumny([r[2] for r in dane])
+        res_t2 = pz_dane.rozdzielczosc_z_kolumny([r[4] for r in dane]) if ma_zewn else None
+
         # Przyrzad: temperatura (wewnetrzna) + wilgotnosc
         col = start_col + dev * 2
         punkty_txt = ', '.join(str(p + 1) for p in sorted(dopasowania))
         print(f"  [WYNIKI] Przyrzad {dev+1} ({get_column_letter(col)}/{get_column_letter(col+1)})"
-              f" <- '{fname}'  (punkty: {punkty_txt})")
-        _wpisz(col, dopasowania, val_idx=1, z_wilgotnoscia=True)
+              f" <- '{fname}'  (punkty: {punkty_txt}; rozdz. t={res_t} rh={res_rh})")
+        _wpisz(col, dopasowania, val_idx=1, z_wilgotnoscia=True, res_t=res_t, res_rh=res_rh)
         temps = [k[1] for m in dopasowania.values() for k in m if k[1] is not None]
         rhs   = [k[2] for m in dopasowania.values() for k in m if k[2] is not None]
         uzyte.append((_serial_z_wyniku(fname), temps, rhs))
@@ -1261,7 +1665,7 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
                 col = start_col + dev * 2
                 print(f"  [WYNIKI] Przyrzad {dev+1} ({get_column_letter(col)}, temp zewn., bez RH)"
                       f" <- '{fname}'")
-                _wpisz(col, dopasowania, val_idx=4, z_wilgotnoscia=False)
+                _wpisz(col, dopasowania, val_idx=4, z_wilgotnoscia=False, res_t=res_t2)
                 temps2 = [k[4] for m in dopasowania.values() for k in m if k[4] is not None]
                 uzyte.append((_serial_z_wyniku(fname), temps2, []))
                 dev += 1
@@ -1276,10 +1680,25 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
     return uzyte
 
 
+# Data/godzina doklejona do nazwy pliku przez program logujacy (np. LogSoft):
+#   '1970325 2026-07-31 12.19.00_wynik.xlsx'  ->  serial '1970325'
+_RE_TS_W_NAZWIE = re.compile(
+    r'[\s_-]*\d{4}-\d{2}-\d{2}[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?\s*$')
+
+
 def _serial_z_wyniku(fname):
-    """'TMM230200349_wynik.xlsx' -> 'TMM230200349' (nr fabryczny do dopasowania z PZ)."""
+    """
+    Nr fabryczny przyrzadu z nazwy pliku wynikow (klucz do dopasowania z PZ):
+      'TMM230200349_wynik.xlsx'                 -> 'TMM230200349'
+      '1970325 2026-07-31 12.19.00_wynik.xlsx'  -> '1970325'
+    Odcinamy sufiks '_wynik' oraz date/godzine, ktora niektore programy (LogSoft)
+    dokleja do nazwy pliku — bez tego klucz nie pasowal do PZ i tabela przyrzadow
+    na Stronie 2 zostawala pusta.
+    """
     base = os.path.splitext(fname)[0]
-    return re.sub(r'_wynik$', '', base, flags=re.I)
+    base = re.sub(r'_wynik$', '', base, flags=re.I).strip()
+    base = _RE_TS_W_NAZWIE.sub('', base).strip()
+    return base
 
 
 # Kolumny Strony 2 (tabela przyrzadow, od wiersza 11):
@@ -1287,6 +1706,32 @@ def _serial_z_wyniku(fname):
 #  G=7 adres H=8 typ(czujnik) I=9 nr fabr(czujnik) J=10 nr ewid(czujnik)
 #  K=11 rozdz. t  L=12 rozdz. RH  O=15 nr zlecenia
 STRONA2_PIERWSZY_WIERSZ = 11
+
+# Blok podpisow po PRAWEJ stronie Strony 2 (T = data, V = podpis; komorki scalone):
+#   wiersz 4  — '4. Pomiary wykonal(a)'      (wiersze 5-8 to miejsce na kolejne osoby)
+#   wiersz 10 — '5. Protokol sprawdzil(a)'
+STRONA2_KOL_DATA   = 20   # T
+STRONA2_KOL_PODPIS = 22   # V
+STRONA2_W_WYKONAL  = 4
+STRONA2_W_SPRAWDZIL = 10
+
+
+def wypelnij_podpisy_strona2(ws2, data_pomiaru=None):
+    """
+    Wpisuje date i podpis w bloku po prawej stronie Strony 2:
+      'Pomiary wykonal(a)'    -> data POMIARU (z ostatniego punktu) + PODPIS,
+      'Protokol sprawdzil(a)' -> data dzisiejsza + PODPIS_SPRAWDZIL.
+    Szablon ma tam '-' w komorkach; komorki sa scalone, wiec piszemy przez _ustaw_komorke.
+    """
+    dzis = datetime.date.today().strftime('%d.%m.%Y')
+    data_wyk = data_pomiaru.strftime('%d.%m.%Y') if data_pomiaru else dzis
+
+    _ustaw_komorke(ws2, STRONA2_W_WYKONAL,   STRONA2_KOL_DATA,   data_wyk)
+    _ustaw_komorke(ws2, STRONA2_W_WYKONAL,   STRONA2_KOL_PODPIS, PODPIS)
+    _ustaw_komorke(ws2, STRONA2_W_SPRAWDZIL, STRONA2_KOL_DATA,   dzis)
+    _ustaw_komorke(ws2, STRONA2_W_SPRAWDZIL, STRONA2_KOL_PODPIS, PODPIS_SPRAWDZIL)
+    print(f"    podpisy: wykonal '{PODPIS}' ({data_wyk}), "
+          f"sprawdzil '{PODPIS_SPRAWDZIL}' ({dzis})")
 
 
 def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest):
@@ -1305,7 +1750,16 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest):
     print("\n  Wypelnianie tabeli przyrzadow (Strona 2) z PZ...")
     for i, (serial, temps, rhs) in enumerate(uzyte):
         w = STRONA2_PIERWSZY_WIERSZ + i
-        dev = pz_mapa.get(pz_dane.normalizuj_serial(serial)) if pz_mapa else None
+        dev = None
+        if pz_mapa:
+            # Dopasowanie po pelnym kluczu, a gdy brak — po pierwszym czlonie nazwy
+            # (pliki z niektorych programow maja w nazwie dodatki po nr seryjnym).
+            for kandydat in (serial, serial.split()[0] if serial.split() else ""):
+                if not kandydat:
+                    continue
+                dev = pz_mapa.get(pz_dane.normalizuj_serial(kandydat))
+                if dev is not None:
+                    break
         if dev is None:
             print(f"    wiersz {w}: brak dopasowania w PZ (serial '{serial}') — uzupelnij recznie.")
             continue
@@ -1323,14 +1777,23 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest):
         def _set(col, val):
             ws2.cell(row=w, column=col).value = val if (val not in (None, "")) else "-"
 
+        # Ten protokol dotyczy wzorcowania w KOMORZE KLIMATYCZNEJ — czujnik wewnetrzny
+        # (kanal 1), wiec kolumny 'Czujnik pomiarowy' zostaja puste ('-'). Gdy przyrzad
+        # trafil z pozycji PZ wzorcowanej w termostacie (czujnik zewnetrzny 0572 1001),
+        # tych danych NIE przepisujemy — naleza do innego protokolu.
+        w_komorze = getattr(dev, 'komora', True)
+        czuj_w  = dev.czuj_wytworca if w_komorze else ""
+        czuj_t  = dev.czuj_typ      if w_komorze else ""
+        czuj_nf = dev.czuj_nr_fabr  if w_komorze else ""
+
         _set(2, dev.wytworca)            # B
-        _set(3, dev.czuj_wytworca)       # C
+        _set(3, czuj_w)                  # C
         _set(4, dev.typ)                 # D
         _set(5, dev.nr_fabr)             # E
         _set(6, dev.nr_ewid)             # F
         _set(7, "")                      # G (adres) — brak w PZ
-        _set(8, dev.czuj_typ)            # H
-        _set(9, dev.czuj_nr_fabr)        # I
+        _set(8, czuj_t)                  # H
+        _set(9, czuj_nf)                 # I
         _set(10, "")                     # J (nr ewid czujnika) — brak w PZ
         ws2.cell(row=w, column=11).value = t_res    # K
         ws2.cell(row=w, column=12).value = rh_res   # L
@@ -1451,6 +1914,139 @@ def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_ex
             except: pass
 
 
+def _rozszerz_kolumny_przyrzadow(filepath, sheet_name, start_col, potrzebne):
+    """
+    Dokłada PARY kolumn przyrzadow w Stronie 3, gdy przyrzadow jest wiecej niz w szablonie
+    (szablon CC ma 10 par: Q/R … AI/AJ). Kopiuje OSTATNIA pare (np. AI:AJ) i wstawia ja
+    z przesunieciem w PRAWO — tak jak robi to operator recznie, wiec zachowane sa scalenia,
+    formatowanie, obramowania i naglowek 'Przyrzady wzorcowane' (rozciaga sie automatycznie).
+
+    Po wstawieniu ustawia w kazdej nowej parze:
+      - wiersz 10: numer przyrzadu (11, 12, ...),
+      - wiersz 12: formule ='Strona 2'!$E$<kolejny wiersz przyrzadu> (wzor z ostatniej pary).
+    Formuly w wierszu 18 (=CONCATENATE("t",AI10)) sa relatywne — przeliczaja sie same.
+
+    Zwraca liczbe dodanych par (0 gdy nie bylo potrzeby lub COM niedostepny).
+    """
+    if potrzebne <= 0:
+        return 0
+    try:
+        import win32com.client
+    except ImportError:
+        print('  [Excel COM] Brak pywin32 — nie moge dolozyc kolumn przyrzadow.')
+        return 0
+
+    xl = wb = None
+    try:
+        try:
+            xl = win32com.client.DispatchEx('Excel.Application')
+        except Exception:
+            xl = win32com.client.Dispatch('Excel.Application')
+        xl.Visible = False
+        xl.DisplayAlerts = False
+        xl.ScreenUpdating = False
+        try:
+            xl.AskToUpdateLinks = False
+            xl.EnableEvents = False
+        except Exception:
+            pass
+
+        wb = xl.Workbooks.Open(os.path.abspath(filepath), UpdateLinks=0, ReadOnly=False)
+        ws = None
+        for idx in range(1, wb.Sheets.Count + 1):
+            if wb.Sheets(idx).Name == sheet_name:
+                ws = wb.Sheets(idx)
+                break
+        if ws is None:
+            print(f'  [Excel COM] Brak arkusza "{sheet_name}" — nie dokladam kolumn.')
+            return 0
+
+        # Ile par jest teraz? (wiersz 10: numery 1,2,3... co 2 kolumny od start_col)
+        obecne = 0
+        c = start_col
+        while True:
+            v = ws.Cells(10, c).Value
+            if isinstance(v, (int, float)) and int(v) == obecne + 1:
+                obecne += 1
+                c += 2
+            else:
+                break
+        if obecne == 0:
+            print('  [Excel COM] Nie rozpoznano par kolumn przyrzadow — nie dokladam.')
+            return 0
+
+        # 1) Dokladanie brakujacych par: kopiuj OSTATNIA pare i wstaw w prawo.
+        dodane = 0
+        c_last = start_col + (obecne - 1) * 2
+        for nr in range(obecne + 1, potrzebne + 1):
+            src = f"{get_column_letter(c_last)}:{get_column_letter(c_last + 1)}"
+            dst = f"{get_column_letter(c_last + 2)}:{get_column_letter(c_last + 3)}"
+            ws.Columns(src).Copy()
+            ws.Columns(dst).Insert(Shift=-4161)      # xlShiftToRight
+            xl.CutCopyMode = False
+            c_new = c_last + 2
+            ws.Cells(10, c_new).Value = nr           # numer przyrzadu w naglowku
+            c_last = c_new
+            dodane += 1
+
+        # 2) Naglowek pary (wiersz 12) = nr fabryczny przyrzadu z tabeli na Stronie 2.
+        #    Szablon ma te komorki puste, wiec wpisujemy je dla WSZYSTKICH uzywanych par
+        #    (par nadmiarowych nie ruszamy, zeby nie pokazywac zer przy pustych przyrzadach).
+        for nr in range(1, potrzebne + 1):
+            cc = start_col + (nr - 1) * 2
+            ws.Cells(12, cc).Formula = f"='Strona 2'!$E${WIERSZ_1_PRZYRZADU_S2 + nr - 1}"
+
+        wb.Save()
+        if dodane:
+            print(f"  Dolozono {dodane} par kolumn przyrzadow ({obecne} -> {potrzebne}); "
+                  f"ostatnia para: {get_column_letter(c_last)}/{get_column_letter(c_last + 1)}.")
+        print(f"  Naglowki przyrzadow (wiersz 12) ustawione dla {potrzebne} par "
+              f"(= nr fabryczne ze Strony 2).")
+        return dodane
+
+    except Exception as exc:
+        print(f'  [Excel COM] Blad dokladania kolumn przyrzadow: {type(exc).__name__}: {exc}')
+        return 0
+    finally:
+        if wb is not None:
+            try: wb.Close(False)
+            except: pass
+        if xl is not None:
+            try: xl.Quit()
+            except: pass
+
+
+def _ustaw_komorke(ws, row, col, value):
+    """
+    Wpisuje wartosc, uwzgledniajac SCALENIA: gdy (row,col) lezy w scalonym zakresie,
+    zapis idzie do jego lewego-gornego rogu (openpyxl nie pozwala pisac do MergedCell).
+    """
+    for rng in ws.merged_cells.ranges:
+        if rng.min_row <= row <= rng.max_row and rng.min_col <= col <= rng.max_col:
+            row, col = rng.min_row, rng.min_col
+            break
+    ws.cell(row=row, column=col).value = value
+    return row, col
+
+
+def _kolumna_roku_s3(ws3, wiersz=5):
+    """
+    Kolumna na ROK w naglowku Strony 3 = pierwsza kolumna ZA etykieta '/LA/TH/'.
+    Szablony maja rozny uklad (CC: O5 -> rok w P5; CC-04: Q5 -> rok w R5), wiec
+    szukamy po etykiecie zamiast wpisywac stala kolumne.
+    """
+    for c in range(1, (ws3.max_column or 40) + 1):
+        v = ws3.cell(row=wiersz, column=c).value
+        if isinstance(v, str) and 'LA/TH' in v.replace(' ', '').upper():
+            koniec = c
+            for rng in ws3.merged_cells.ranges:
+                if rng.min_row <= wiersz <= rng.max_row and rng.min_col <= c <= rng.max_col:
+                    koniec = rng.max_col
+                    break
+            return koniec + 1
+    return None
+
+
 def _zapisz_bezpiecznie(wb, path, opis="plik"):
     """
     Zapisuje skoroszyt; gdy plik jest OTWARTY w Excelu (zablokowany) — daje czytelny
@@ -1477,7 +2073,7 @@ def _round_hm(dt):
 
 
 def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=None,
-                     pz_mapa=None, zest=None):
+                     pz_mapa=None, zest=None, pz_lista=None):
     """
     Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.
 
@@ -1543,6 +2139,13 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         else:
             print(f"  UWAGA: Excel COM niedostepny — nadmiarowe bloki pozostana w pliku.")
 
+    # ── Dolozenie PAR KOLUMN przyrzadow, gdy przyrzadow jest wiecej niz w szablonie ──
+    # (szablon ma 10 par Q/R…AI/AJ; przy 12 przyrzadach dokladamy AK/AL i AM/AN)
+    _start_col = WYNIKI_START_COL_CC04 if obs_type == 'CC04' else WYNIKI_START_COL_CC
+    _potrzebne = _policz_potrzebne_przyrzady(rep_groups, rows)
+    if _potrzebne:
+        _rozszerz_kolumny_przyrzadow(out_path, 'Strona 3', _start_col, _potrzebne)
+
     # ── Ładujemy plik (już z prawidłową liczbą bloków) z openpyxl ────────────
     proto_wb = openpyxl.load_workbook(out_path)
 
@@ -1551,6 +2154,22 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         proto_wb.close()
         return
     ws3 = proto_wb['Strona 3']
+
+    # ── Naglowek: P5 = rok wzorcowania, J6 = numer protokolu ─────────────────
+    # Rok bierzemy z daty pomiaru (a nie z zegara systemowego) — protokol dotyczy
+    # konkretnego wzorcowania; gdy brak daty, awaryjnie rok biezacy.
+    _rok = None
+    _dt_pierwszy = _s_to_dt(rows[rep_groups[0][0][0]][0]) if rep_groups else None
+    if _dt_pierwszy is not None:
+        _rok = _dt_pierwszy.year
+    _rok = _rok or datetime.date.today().year
+    _kol_rok = _kolumna_roku_s3(ws3)          # CC -> P5, CC-04 -> R5
+    if _kol_rok:
+        _w, _k = _ustaw_komorke(ws3, 5, _kol_rok, _rok)
+        print(f"  Naglowek: rok = {_rok} ({get_column_letter(_k)}{_w}), nr protokolu = 1 (J6)")
+    else:
+        print(f"  [UWAGA] Nie znalazlem etykiety '/LA/TH/' w wierszu 5 — rok niewpisany.")
+    _ustaw_komorke(ws3, 6, 10, 1)             # J6 (nr protokolu)
 
     # ── Zapis danych dla każdego punktu ───────────────────────────────────────
     FILL_GREY = PatternFill(fill_type='solid', fgColor='BFBFBF')
@@ -1602,6 +2221,15 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         if rh_zero:
             for row_off in range(BLOCK_SIZE):
                 ws3.cell(row=r0 + row_off, column=15).fill = FILL_GREY  # O
+
+            # Kolumny WILGOTNOSCI przyrzadow (druga kolumna kazdej pary: R, T, V, ...) —
+            # w punkcie tylko-temperaturowym nie ma odczytu RH, wiec zaznaczamy je na szaro
+            # (nie zostawiamy pustych bialych komorek).
+            _par = _potrzebne or 0
+            for _k in range(_par):
+                _col_rh = _start_col + _k * 2 + 1
+                for row_off in range(BLOCK_SIZE):
+                    ws3.cell(row=r0 + row_off, column=_col_rh).fill = FILL_GREY
             if obs_type == 'CC04':
                 ws3.cell(row=r0, column=17).value = '-'   # Q
                 ws3.cell(row=r0, column=18).value = '-'   # R
@@ -1668,14 +2296,259 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     print("\n  Szukam danych srodowiskowych w wynikach...")
     uzyte = _wypelnij_wyniki_srodowiskowe(ws3, rep_groups, rows, obs_type)
 
+    # Przyrzady BEZ pliku logera (np. reczny termohigrometr odczytywany multimetrem)
+    # nie maja jak trafic do 'uzyte' — wtedy tabele przyrzadow budujemy WPROST z PZ:
+    # bierzemy pozycje wzorcowane w komorze klimatycznej, w kolejnosci z PZ.
+    if not uzyte and pz_lista:
+        widziane, z_pz = set(), []
+        for p in pz_lista:
+            if not getattr(p, 'komora', False) or not p.nr_fabr:
+                continue
+            klucz = pz_dane.normalizuj_serial(p.nr_fabr)
+            if klucz in widziane:
+                continue          # ten sam przyrzad na kilku pozycjach — raz wystarczy
+            widziane.add(klucz)
+            z_pz.append((p.nr_fabr, [], []))
+        if z_pz:
+            uzyte = z_pz
+            print(f"  [PZ] Brak plikow wynikow — tabele przyrzadow buduje z PZ "
+                  f"({len(uzyte)} przyrzad(ow) z komory klimatycznej).")
+
     # Tabela przyrzadow (Strona 2) z PZ — dopasowanie po nr fabrycznym do kolumn Strony 3.
     if 'Strona 2' in proto_wb.sheetnames:
         wypelnij_strone2_z_pz(proto_wb['Strona 2'], uzyte, pz_mapa, zest)
+        # Data pomiaru = dzien OSTATNIEGO punktu (wtedy pomiary zostaly zakonczone).
+        _dt_ost = _s_to_dt(rows[rep_groups[-1][0][-1]][0]) if rep_groups else None
+        wypelnij_podpisy_strona2(proto_wb['Strona 2'],
+                                 _dt_ost.date() if _dt_ost else None)
     else:
         print("  [PZ] Brak arkusza 'Strona 2' — pomijam tabele przyrzadow.")
 
     _zapisz_bezpiecznie(proto_wb, out_path, "protokol")
     print(f"Zapisano protokol: {out_name}")
+
+
+def oznacz_zestawienie_punkty(rep_groups, rows):
+    """
+    W pliku wyniki/zestawienie_pomiarow.xlsx (wszystkie przyrzady na wspolnej osi czasu)
+    zaznacza okna WYBRANYCH punktow: koloruje wiersze mieszczace sie w oknie punktu i
+    wpisuje NUMER punktu (ten sam co w protokole) w kolumnie z prawej — do szybkiej
+    nawigacji w Excelu (Ctrl+strzalka w dol / wyszukanie numeru).
+    Dopasowanie po kolumnie 'Czas' do okna [pierwszy..ostatni reprezentant] punktu.
+    """
+    zest_path = os.path.join(WYNIKI_FOLDER, "zestawienie_pomiarow.xlsx")
+    if not os.path.exists(zest_path):
+        print(f"  [Zestawienie] Brak {os.path.basename(zest_path)} — pomijam znaczniki punktow.")
+        return
+    try:
+        wb = openpyxl.load_workbook(zest_path)
+    except Exception as e:
+        print(f"  [Zestawienie] Nie moge otworzyc pliku: {type(e).__name__}: {e}")
+        return
+    ws = wb.active
+    n_col = ws.max_column
+
+    # (czas, wiersz) z kolumny 1 ('Czas')
+    czas_rows = []
+    for r in range(2, ws.max_row + 1):
+        v = ws.cell(row=r, column=1).value
+        dt = v if isinstance(v, datetime.datetime) else (_s_to_dt(str(v)) if v else None)
+        if dt is not None:
+            czas_rows.append((dt, r))
+    if not czas_rows:
+        print("  [Zestawienie] Nie znaleziono kolumny czasu — pomijam.")
+        return
+
+    marker_col = n_col + 2            # kolumna na numer punktu (1 kolumna odstepu)
+    ws.cell(row=1, column=marker_col).value = "Nr punktu"
+    czasy_zest = [dt for dt, _ in czas_rows]
+    oznaczone = 0
+    for i, (rep_idx, powod) in enumerate(rep_groups, 1):
+        # Dla KAZDEGO z 5 wierszy punktu bierzemy NAJBLIZSZY czasowo wiersz zestawienia.
+        # (Dopasowanie „po zakresie czasu" dawalo mniej wierszy niz 5, bo siatka czasu
+        # zestawienia jest przesunieta wzgledem probek multimetru.)
+        matched = []
+        for idx_r in rep_idx:
+            cel = _s_to_dt(rows[idx_r][0])
+            if cel is None:
+                continue
+            poz = bisect.bisect_left(czasy_zest, cel)
+            kand = []
+            if poz > 0:
+                kand.append(czas_rows[poz - 1])
+            if poz < len(czas_rows):
+                kand.append(czas_rows[poz])
+            if not kand:
+                continue
+            _dt, r = min(kand, key=lambda x: abs(x[0] - cel))
+            if r not in matched:
+                matched.append(r)
+        if not matched:
+            continue
+        matched.sort()
+        fill_l = FILL_WARN_LIGHT if powod else FILL_LIGHT
+        fill_d = FILL_WARN_DARK  if powod else FILL_DARK
+        for r in matched:
+            for c in range(1, n_col + 1):
+                ws.cell(row=r, column=c).fill = fill_l
+        mcell = ws.cell(row=matched[0], column=marker_col)
+        mcell.value = i
+        mcell.fill  = fill_d
+        fo = mcell.font
+        mcell.font = Font(name=fo.name, size=fo.size, bold=True)
+        oznaczone += 1
+
+    _zapisz_bezpiecznie(wb, zest_path, "zestawienie")
+    print(f"  [Zestawienie] Oznaczono {oznaczone}/{len(rep_groups)} punktow "
+          f"({os.path.basename(zest_path)}).")
+
+
+# =============================================================================
+# ZDJECIA PUNKTOW (foto/)
+# =============================================================================
+
+_FOTO_WZORCE_CZASU = (
+    # 2026-07-23_16.12.51 / 2026-07-23 16.12.51 / 2026-07-23T16:12:51
+    re.compile(r'(\d{4})-(\d{2})-(\d{2})[ _T]+(\d{2})[.:_-](\d{2})[.:_-](\d{2})'),
+    # 20260723_161251
+    re.compile(r'(\d{4})(\d{2})(\d{2})[ _T-]+(\d{2})(\d{2})(\d{2})'),
+)
+
+
+def _czas_z_nazwy_foto(nazwa):
+    """Czas zdjecia z NAZWY pliku (np. '2026-07-23_16.12.51.jpg'). None gdy brak."""
+    for wz in _FOTO_WZORCE_CZASU:
+        m = wz.search(nazwa)
+        if m:
+            try:
+                y, mo, d, h, mi, s = (int(g) for g in m.groups())
+                return datetime.datetime(y, mo, d, h, mi, s)
+            except ValueError:
+                continue
+    return None
+
+
+def _indeks_zdjec(folder):
+    """
+    Indeks zdjec: posortowana lista (czas, sciezka). Czas z nazwy pliku, a gdy nazwa
+    go nie zawiera — z daty modyfikacji pliku (mtime).
+    """
+    idx = []
+    bez_czasu_w_nazwie = 0
+    try:
+        pliki = os.listdir(folder)
+    except OSError as e:
+        print(f"  [FOTO] Nie moge odczytac folderu zrodlowego:\n    {folder}\n    {e}")
+        return []
+    for nazwa in pliki:
+        if not nazwa.lower().endswith(FOTO_ROZSZERZENIA):
+            continue
+        sciezka = os.path.join(folder, nazwa)
+        dt = _czas_z_nazwy_foto(nazwa)
+        if dt is None:
+            try:
+                dt = datetime.datetime.fromtimestamp(os.path.getmtime(sciezka))
+                bez_czasu_w_nazwie += 1
+            except OSError:
+                continue
+        idx.append((dt, sciezka))
+    idx.sort(key=lambda x: x[0])
+    if bez_czasu_w_nazwie:
+        print(f"  [FOTO] {bez_czasu_w_nazwie} plikow bez czasu w nazwie — uzyto daty modyfikacji.")
+    return idx
+
+
+def _najblizsze_zdjecie(idx, czasy, cel):
+    """Zwraca (czas, sciezka, odchylka) zdjecia najblizszego czasowi `cel`."""
+    poz = bisect.bisect_left(czasy, cel)
+    kandydaci = []
+    if poz > 0:
+        kandydaci.append(idx[poz - 1])
+    if poz < len(idx):
+        kandydaci.append(idx[poz])
+    if not kandydaci:
+        return None
+    dt, sciezka = min(kandydaci, key=lambda x: abs(x[0] - cel))
+    return dt, sciezka, abs(dt - cel)
+
+
+def _nazwa_folderu_punktu(nr, row_first):
+    """Nazwa podfolderu punktu, np. 'punkt_01_50,0C' albo 'punkt_07_23,0C_60RH'."""
+    t = _s_to_float(row_first[1]) if len(row_first) > 1 else None
+    rh = _s_to_float(row_first[2]) if len(row_first) > 2 else None
+    czesci = [f"punkt_{nr:02d}"]
+    if t is not None:
+        czesci.append(f"{t:.1f}C".replace('.', ','))
+    if rh is not None and rh > 0:
+        czesci.append(f"{rh:.0f}RH")
+    nazwa = "_".join(czesci)
+    return re.sub(r'[\\/:*?"<>|]', '_', nazwa)
+
+
+def kopiuj_foto_punktow(rep_groups, rows):
+    """
+    Kopiuje zdjecia odpowiadajace WYBRANYM punktom: dla kazdego z 5 wierszy
+    reprezentacyjnych punktu szuka zdjecia najblizszego czasowo i kopiuje je do
+    FOTO_FOLDER/punkt_NN_<nastawa>/ (oryginalne nazwy plikow).
+    Zdjecia dalej niz FOTO_TOLERANCJA od wiersza sa pomijane (z ostrzezeniem).
+    """
+    print(f"\nZdjecia punktow (foto):")
+    print(f"  Zrodlo : {FOTO_ZRODLO}")
+    print(f"  Cel    : {FOTO_FOLDER}")
+    if not os.path.isdir(FOTO_ZRODLO):
+        print(f"  [FOTO] Folder zrodlowy nie istnieje — pomijam kopiowanie.")
+        return
+
+    idx = _indeks_zdjec(FOTO_ZRODLO)
+    if not idx:
+        print("  [FOTO] Brak zdjec w folderze zrodlowym — pomijam.")
+        return
+    czasy = [dt for dt, _ in idx]
+    print(f"  Znaleziono {len(idx)} zdjec ({czasy[0]} … {czasy[-1]}).")
+
+    os.makedirs(FOTO_FOLDER, exist_ok=True)
+    razem = pominiete = 0
+    max_odchylka = datetime.timedelta(0)
+
+    for nr, (rep_idx, _powod) in enumerate(rep_groups, 1):
+        row_first = rows[rep_idx[0]]
+        pod = os.path.join(FOTO_FOLDER, _nazwa_folderu_punktu(nr, row_first))
+        skopiowane = set()
+        braki = 0
+        for i in rep_idx:
+            cel = _s_to_dt(rows[i][0])
+            if cel is None:
+                continue
+            trafienie = _najblizsze_zdjecie(idx, czasy, cel)
+            if trafienie is None:
+                braki += 1
+                continue
+            _dt, sciezka, odchylka = trafienie
+            if odchylka > FOTO_TOLERANCJA:
+                braki += 1
+                continue
+            if sciezka in skopiowane:
+                continue            # dwa wiersze trafily w to samo zdjecie
+            os.makedirs(pod, exist_ok=True)
+            try:
+                shutil.copy2(sciezka, os.path.join(pod, os.path.basename(sciezka)))
+            except OSError as e:
+                print(f"    [FOTO] Nie moge skopiowac {os.path.basename(sciezka)}: {e}")
+                continue
+            skopiowane.add(sciezka)
+            max_odchylka = max(max_odchylka, odchylka)
+        razem += len(skopiowane)
+        pominiete += braki
+        status = f"{len(skopiowane)} zdjec"
+        if braki:
+            status += f"  [UWAGA] {braki} wierszy bez zdjecia w tolerancji {FOTO_TOLERANCJA}"
+        print(f"  punkt {nr:>2}: {status}  -> {os.path.basename(pod)}")
+
+    print(f"  Skopiowano lacznie {razem} zdjec dla {len(rep_groups)} punktow "
+          f"(max odchylka czasu: {max_odchylka}).")
+    if pominiete:
+        print(f"  [FOTO] {pominiete} wierszy bez pasujacego zdjecia — sprawdz zgodnosc "
+              f"zegara aparatu z multimetrem albo zwieksz FOTO_TOLERANCJA.")
 
 
 # =============================================================================
@@ -1696,6 +2569,9 @@ def main():
     # do wypelnienia Strony 2 przy budowie protokolu.
     print("Wczytywanie danych przyrzadow (PZ + Zestawienie)...")
     pz_mapa, _pz_lista = pz_dane.wczytaj_pz(PZ_FOLDER)
+    # Punkty ZAMOWIONE w PZ ('Zakres wzorcowania') — decyduja, ktore segmenty obserwacji
+    # trafia do protokolu (jeden wsad komory obsluguje czesto kilka zlecen).
+    punkty_pz = pz_dane.wczytaj_punkty(PZ_FOLDER) if WYBIERAJ_PUNKTY_WG_PZ else []
     zest = pz_dane.wczytaj_zestawienie(ZESTAWIENIE_PLIK)
 
     print(f"Numer pomiaru : {measurement_id}")
@@ -1777,7 +2653,7 @@ def main():
                 _oc.number_format = 'General'
 
         print("\nAnaliza stabilnosci...")
-        rep_groups = analyze_and_highlight(ws, rows, file_type='CC04')
+        rep_groups = analyze_and_highlight(ws, rows, file_type='CC04', punkty_pz=punkty_pz)
 
     else:
         # ── CC (oryginalny) ────────────────────────────────────────────────────
@@ -1822,14 +2698,20 @@ def main():
         ws.cell(row=92, column=15).value = PODPIS
 
         print("\nAnaliza stabilnosci...")
-        rep_groups = analyze_and_highlight(ws, rows, file_type='CC')
+        rep_groups = analyze_and_highlight(ws, rows, file_type='CC', punkty_pz=punkty_pz)
 
     _zapisz_bezpiecznie(wb, output_path, "obserwacje")
     print(f"\nZapisano: {output_name}")
 
     if rep_groups:
         generuj_protokol(rep_groups, rows, measurement_id, file_type,
-                         sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest)
+                         sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest,
+                         pz_lista=_pz_lista)
+        # Znaczniki punktow w zestawieniu przyrzadow (nawigacja po czasie)
+        oznacz_zestawienie_punkty(rep_groups, rows)
+        # Zdjecia punktow (gdy wlaczone w konfiguracji)
+        if KOPIUJ_FOTO:
+            kopiuj_foto_punktow(rep_groups, rows)
 
     print("Gotowe!")
 

@@ -42,10 +42,12 @@ except ImportError:
 class PZPrzyrzad:
     """Jeden przyrzad z PZ (po rozwinieciu 'N szt.' — dokladnie jeden nr fabryczny)."""
     __slots__ = ("nr_zlecenia", "wytworca", "typ", "nr_fabr", "nr_ewid",
-                 "czuj_wytworca", "czuj_typ", "czuj_nr_fabr", "uzytkownik")
+                 "czuj_wytworca", "czuj_typ", "czuj_nr_fabr", "uzytkownik",
+                 "zleceniodawca", "pozycja", "komora")
 
     def __init__(self, nr_zlecenia="", wytworca="", typ="", nr_fabr="", nr_ewid="",
-                 czuj_wytworca="", czuj_typ="", czuj_nr_fabr="", uzytkownik=""):
+                 czuj_wytworca="", czuj_typ="", czuj_nr_fabr="", uzytkownik="",
+                 zleceniodawca="", pozycja=None, komora=False):
         self.nr_zlecenia = nr_zlecenia
         self.wytworca = wytworca
         self.typ = typ
@@ -55,6 +57,9 @@ class PZPrzyrzad:
         self.czuj_typ = czuj_typ
         self.czuj_nr_fabr = czuj_nr_fabr
         self.uzytkownik = uzytkownik   # blok adresowy z pola 'UZYTKOWNIK:' (moze byc pusty)
+        self.zleceniodawca = zleceniodawca  # blok adresowy z pola 'ZLECENIODAWCA:' 
+        self.pozycja = pozycja         # numer pozycji w 'Obiekty wzorcowania' (1,2,3...)
+        self.komora = komora           # True = wzorcowany w KOMORZE KLIMATYCZNEJ (ILAJ 5.4/11)
 
     def __repr__(self):
         return (f"PZPrzyrzad(zlec={self.nr_zlecenia}, wytw={self.wytworca!r}, "
@@ -93,10 +98,15 @@ def _oczysc(s):
 
 # Etykiety pol wewnatrz opisu przyrzadu — DWUJEZYCZNE (PL / EN; PZ bywa po angielsku).
 # Granica konca wartosci serialu = poczatek nastepnej etykiety.
-_END = (r'wytw[oó]rca|manufacturer|nr\s*wewn|identification|'
-        r'typ\s*:|type\s*:|nr\s*kat|year\s+of\s+production')
+# UWAGA na warianty zapisu numeru ewidencyjnego w PZ: 'nr wew.:', 'nr wewn.:', 'nr ewid.:',
+# 'nr ewid .:'. Musza byc GRANICA konca numeru fabrycznego — inaczej tekst 'nr wew.: CL-1318A'
+# wpada do wartosci 'nr fabr.' i po rozdzieleniu przecinkiem tworzy fikcyjny drugi przyrzad.
+_END = (r'wytw[oó]rca|manufacturer|nr\s*wewn?|nr\s*ewid|identification|'
+        r'typ\s*:|type\s*:|nr\s*kat|year\s+of\s+production|oraz\s+czujnika')
 _RE_TYP    = re.compile(r'(?:typ|type|nr\s*kat\.?)\s*:\s*([^,\n]+)', re.I)
-_RE_WEWN   = re.compile(r'(?:nr\s*wewn\.?|identification\s+number)\s*:\s*([^,\n]+)', re.I)
+# nr ewidencyjny: 'nr wew.:' / 'nr wewn.:' (starsze PZ) albo 'nr ewid.:' / 'nr ewid .:' (nowsze)
+_RE_WEWN   = re.compile(
+    r'(?:nr\s*wewn?\s*\.?|nr\s*ewid\s*\.?|identification\s+number)\s*:\s*([^,\n]+)', re.I)
 _RE_WYTW   = re.compile(r'(?:wytw[oó]rca|manufacturer)\s*:\s*([^,.\n]+)', re.I)
 # serial: "nr fabr.:" / "serial number(s):" albo bare "nr:" (nie "nr kat.", nie "nr wewn.")
 _RE_FABR   = re.compile(
@@ -125,17 +135,70 @@ def _parsuj_pole(part):
             _oczysc(mw.group(1)) if mw else "")
 
 
+# Znaki wypunktowania w PZ (pypdf zwraca rozne warianty, m.in. z fontu Symbol).
+_RE_BULLET = re.compile(r'[•·●▪‣]\s*')
+
+
+def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia):
+    """
+    Jeden wypunktowany podpunkt: '• nr fabr.: 40118669, nr ewid.: Q/LOG/36'
+    (opcjonalnie z dopiskiem 'oraz czujnika temperatury typ: 0572 1001, nr ewid.: 8669').
+    Typ i wytworca dziedziczy z naglowka pozycji. Zwraca liste PZPrzyrzad.
+    """
+    czesci = _RE_CZUJNIK_SPLIT.split(fragment, maxsplit=1)
+    obiekt  = czesci[0]
+    czujnik = czesci[1] if len(czesci) > 1 else ""
+
+    serials = _wytnij_serial_liste(obiekt)
+    mw = _RE_WEWN.search(obiekt)
+    nr_ewid = _oczysc(mw.group(1)) if mw else ""
+
+    czuj_typ, czuj_wytworca = _parsuj_pole(czujnik) if czujnik else ("", "")
+    czuj_serials = _wytnij_serial_liste(czujnik) if czujnik else []
+    czuj_serial = _oczysc(czuj_serials[0]) if czuj_serials else ""
+
+    return [PZPrzyrzad(
+        nr_zlecenia=nr_zlecenia, wytworca=wytworca, typ=typ,
+        nr_fabr=_oczysc(s), nr_ewid=nr_ewid,
+        czuj_wytworca=czuj_wytworca, czuj_typ=czuj_typ, czuj_nr_fabr=czuj_serial,
+    ) for s in (serials or [""])]
+
+
 def _parsuj_wpis(wpis, nr_zlecenia):
     """
     Parsuje jeden wpis 'Obiekty wzorcowania' -> lista PZPrzyrzad.
-    Obsluguje: obiekt + opcjonalny czujnik ('z czujnikiem'/'oraz czujnika'),
-    oraz kilka seriali (np. '2 szt.') -> po jednym rekordzie na serial.
+
+    Dwa uklady w PZ:
+      A) WYPUNKTOWANY (wiele przyrzadow jednego typu):
+           'Termometr ... (rejestrator, 7 szt.) typ: testo 175T2,
+              • nr fabr.: 40118669, nr ewid.: Q/LOG/36,
+              • nr fabr.: 40118614, nr ewid.: Q/LOG/37, ...
+            wytworca: Testo.'
+         -> po jednym rekordzie na wypunktowanie (typ/wytworca z naglowka).
+      B) JEDNOLINIOWY: 'typ: M1, nr fabr.: TMM160500502, nr ewid.: Q/LOG/19, wytworca: Tempmate.'
+         (obsluguje tez kilka seriali po przecinku oraz opcjonalny czujnik pomiarowy).
     """
+    bullety = _RE_BULLET.split(wpis)
+    naglowek = bullety[0]
+    podpunkty = [b for b in bullety[1:] if b.strip()]
+
+    typ, wytworca = _parsuj_pole(naglowek)
+    if not wytworca:
+        # W ukladzie wypunktowanym wytworca stoi PO ostatnim podpunkcie — szukamy w calosci.
+        mw = _RE_WYTW.search(wpis)
+        wytworca = _oczysc(mw.group(1)) if mw else ""
+
+    if podpunkty:
+        out = []
+        for frag in podpunkty:
+            out.extend(_parsuj_bullet(frag, typ, wytworca, nr_zlecenia))
+        return out
+
+    # --- uklad B: jedna linia ---
     czesci = _RE_CZUJNIK_SPLIT.split(wpis, maxsplit=1)
     obiekt = czesci[0]
     czujnik = czesci[1] if len(czesci) > 1 else ""
 
-    typ, wytworca = _parsuj_pole(obiekt)
     mw = _RE_WEWN.search(obiekt)
     nr_ewid = _oczysc(mw.group(1)) if mw else ""
     serials = _wytnij_serial_liste(obiekt)
@@ -149,15 +212,11 @@ def _parsuj_wpis(wpis, nr_zlecenia):
     if not wytworca and czuj_wytworca:
         wytworca = czuj_wytworca
 
-    out = []
-    for s in serials or [""]:
-        out.append(PZPrzyrzad(
-            nr_zlecenia=nr_zlecenia,
-            wytworca=wytworca, typ=typ,
-            nr_fabr=_oczysc(s), nr_ewid=nr_ewid,
-            czuj_wytworca=czuj_wytworca, czuj_typ=czuj_typ, czuj_nr_fabr=czuj_serial,
-        ))
-    return out
+    return [PZPrzyrzad(
+        nr_zlecenia=nr_zlecenia, wytworca=wytworca, typ=typ,
+        nr_fabr=_oczysc(s), nr_ewid=nr_ewid,
+        czuj_wytworca=czuj_wytworca, czuj_typ=czuj_typ, czuj_nr_fabr=czuj_serial,
+    ) for s in (serials or [""])]
 
 
 # Pole UZYTKOWNIK / USER (opcjonalne) — blok adresowy do '[użytkownik]' w Word.
@@ -166,6 +225,28 @@ def _parsuj_wpis(wpis, nr_zlecenia):
 _RE_UZYT = re.compile(
     r'(?:UŻYTKOWNIK|UZYTKOWNIK|USER)\s*:(.*?)'
     r'(?:Uwaga\s*:|Note\s*:|Opis\s+us[łl]ugi|Service\s+description|$)', re.S)
+
+
+# ZLECENIODAWCA / APPLICANT — blok adresowy do '[zleceniodawca]' w Word.
+# Bierzemy tekst miedzy naglowkiem a 'Osoba odpowiedzialna' (dalej ida dane kontaktowe
+# osoby, telefon, e-mail, NIP — te NIE naleza do adresu zleceniodawcy).
+_RE_ZLEC = re.compile(
+    r'(?:ZLECENIODAWCA|APPLICANT|ORDERING\s+PARTY)\s*:(.*?)'
+    r'(?:Osoba\s+odpowiedzialna|Contact\s+person|tel\.?\s*:|e-?mail\s*:|NIP\s*:'
+    r'|U[ŻZ]YTKOWNIK\s*:|USER\s*:|$)', re.S | re.I)
+
+
+def _parsuj_zleceniodawce(text):
+    """
+    Zwraca blok adresowy ZLECENIODAWCY (nazwa + ulica + kod/miasto) jako tekst
+    wieloliniowy, albo ''. Puste linie z PDF sa pomijane, kolejnosc zachowana:
+        'DANLAB Danuta Katryńska\\nul. Handlowa 6D\\n15-399 Białystok'
+    """
+    m = _RE_ZLEC.search(text)
+    if not m:
+        return ""
+    linie = [ln.strip() for ln in m.group(1).splitlines() if ln.strip()]
+    return "\n".join(linie)
 
 
 def _parsuj_uzytkownik(text):
@@ -179,8 +260,10 @@ def _parsuj_uzytkownik(text):
 
 def _numer_zlecenia_th(text):
     """Zwraca numer zlecenia (samo '119'); przy wielu zleceniach preferuje /LA/TH/."""
-    m = re.search(r'(?:Numer\s+zlecenia\s+laboratorium|Order\s+numbers?)\s*:\s*([^\n]+)',
-                  text, re.I)
+    # PZ bywa z jednym albo kilkoma zleceniami: 'Numer zlecenia laboratorium: 119/LA/TH/2026'
+    # oraz 'Numery zleceń laboratorium: 182/LA/TH/2026; 425/LA/TH/2026'.
+    m = re.search(r'(?:Numer(?:y)?\s+zlece(?:nia|ń|n)\s+laboratorium|Order\s+numbers?)'
+                  r'\s*:\s*([^\n]+)', text, re.I)
     if not m:
         return ""
     linia = m.group(1)
@@ -191,6 +274,136 @@ def _numer_zlecenia_th(text):
     return any_nr.group(1) if any_nr else _oczysc(linia)
 
 
+_RE_METODA = re.compile(
+    r'(?:Metoda\s+wzorcowania|Metody\s+wzorcowania|Calibration\s+methods?)\s*:(.*?)'
+    r'(?:Zakres\s+wzorcowania|Calibration\s+range|Uzupe[łl]nia\s+zleceniodawca|$)',
+    re.I | re.S)
+
+
+def _numery_pozycji(glowa):
+    """Numery pozycji z naglowka wiersza metody: '1), 8), 9)' oraz zakresy '2) ÷ 7)'."""
+    nums = set()
+    for a, b in re.findall(r'(\d+)\s*\)\s*[÷\-–—]\s*(\d+)\s*\)', glowa):
+        nums.update(range(int(a), int(b) + 1))
+    for n in re.findall(r'(\d+)\s*\)', glowa):
+        nums.add(int(n))
+    return nums
+
+
+def _pozycje_komory(text):
+    """
+    Numery pozycji wzorcowanych w KOMORZE KLIMATYCZNEJ (nasz protokol CC/CC-04) —
+    z sekcji 'Metoda wzorcowania', np.:
+        1), 8), 9) Metoda porownawcza ... w termostacie cieczowym ... ILAJ 5.4/3 ...
+        2) ÷ 7)    Metoda porownawcza w komorze klimatycznej ... ILAJ 5.4/11 ...
+    -> {2,3,4,5,6,7}.
+    Zwraca None, gdy sekcji nie ma albo nie rozpoznano zadnej pozycji (wtedy nie filtrujemy).
+    """
+    m = _RE_METODA.search(text)
+    if not m:
+        return None
+    sekcja = m.group(1)
+    pozycje = set()
+    # Kazdy wiersz metody zaczyna sie od numerow pozycji, potem opis ('Metoda porownawcza ...').
+    for frag in re.split(r'(?m)^(?=\s*\d+\s*\))', sekcja):
+        if not frag.strip():
+            continue
+        if not re.search(r'komor|5\.4/11|termohigrometr', frag, re.I):
+            continue           # inna metoda (np. termostat cieczowy) — pomijamy
+        glowa = re.split(r'metod', frag, maxsplit=1, flags=re.I)[0] or frag[:80]
+        pozycje |= _numery_pozycji(glowa)
+    return pozycje or None
+
+
+_RE_ZAKRES = re.compile(
+    r'(?:Zakres\s+wzorcowania|Calibration\s+range)\s*:(.*?)'
+    r'(?:Termin\s+wykonania|Dokument\s+us[łl]ugi|Koszt\s+us[łl]ugi|Uzupe[łl]nia|$)',
+    re.I | re.S)
+# '(25 °C, 30 %rh)'  — punkt temperatura + wilgotnosc
+_RE_PUNKT_TRH = re.compile(
+    r'\(\s*(-?[\d.,]+)\s*°?\s*C\s*[;,]\s*(-?[\d.,]+)\s*%\s*rh\s*\)', re.I)
+# '(0; 10; 20; 30) °C'  — lista punktow samej temperatury
+_RE_PUNKT_T   = re.compile(r'\(\s*(-?[\d.,]+(?:\s*;\s*-?[\d.,]+)+)\s*\)\s*°?\s*C', re.I)
+
+
+def _punkty_z_fragmentu(frag):
+    """Punkty (T, RH|None) z jednego fragmentu sekcji 'Zakres wzorcowania'."""
+    punkty = [(_do_float(t), _do_float(rh)) for t, rh in _RE_PUNKT_TRH.findall(frag)]
+    if punkty:
+        return [(t, rh) for t, rh in punkty if t is not None]
+    m2 = _RE_PUNKT_T.search(frag)          # wariant tylko-temperaturowy '(0; 10; 20) °C'
+    if m2:
+        return [(t, None) for t in (_do_float(k) for k in m2.group(1).split(';'))
+                if t is not None]
+    return []
+
+
+def punkty_wzorcowania(text, pozycje=None):
+    """
+    Punkty pomiarowe ZAMOWIONE w PZ (sekcja 'Zakres wzorcowania') — lista krotek
+    (temperatura, wilgotnosc|None) W KOLEJNOSCI z PZ, razem z powtorzeniami.
+
+    `pozycje` — zbior numerow pozycji, ktore nas interesuja (np. wzorcowane w komorze
+    klimatycznej). Sekcja bywa rozbita per pozycja i dotyczy roznych wielkosci, np.:
+        1) (25 °C, 30 %rh); (25 °C, 50 %rh); ...        <- termohigrometr (komora)
+        2) (950 ÷ 1050) hPa ...                          <- barometr (inne stanowisko)
+    Bez filtrowania wzielibysmy punkty obu. Gdy `pozycje` = None albo w sekcji nie ma
+    numeracji — bierzemy calosc.
+
+    Obslugiwane zapisy punktow:
+      '(25 °C, 30 %rh); (25 °C, 50 %rh); (25 °C, 70 %rh); (25 °C, 50 %rh) 1)'
+         -> [(25,30), (25,50), (25,70), (25,50)]   (ostatni to powtorka na histereze)
+      '2) ÷ 7) (0; 10; 20; 30) °C'
+         -> [(0,None), (10,None), (20,None), (30,None)]
+    """
+    m = _RE_ZAKRES.search(text)
+    if not m:
+        return []
+    sekcja = m.group(1)
+
+    if not pozycje:
+        return _punkty_z_fragmentu(sekcja)
+
+    fragmenty = [f for f in re.split(r'(?m)^(?=\s*\d+\s*\))', sekcja) if f.strip()]
+    if len(fragmenty) <= 1:
+        return _punkty_z_fragmentu(sekcja)   # brak numeracji pozycji — bierzemy calosc
+
+    out = []
+    for frag in fragmenty:
+        glowa = frag.split('(', 1)[0]        # numery stoja PRZED pierwszym nawiasem
+        nums = _numery_pozycji(glowa)
+        if nums and not (nums & set(pozycje)):
+            continue                          # fragment innej pozycji (np. cisnienie)
+        out.extend(_punkty_z_fragmentu(frag))
+    return out
+
+
+def wczytaj_punkty(folder_pz):
+    """
+    Punkty zamowione we wszystkich PZ z folderu (posklejane w kolejnosci plikow).
+    Zwraca liste (temperatura, wilgotnosc|None). Cicha gdy brak folderu/pypdf.
+    """
+    if not _PDF_OK or not os.path.isdir(folder_pz):
+        return []
+    punkty = []
+    for path in sorted(glob.glob(os.path.join(folder_pz, "*.pdf"))):
+        try:
+            reader = PdfReader(path)
+            text = "\n".join((p.extract_text() or "") for p in reader.pages)
+            # Bierzemy punkty TYLKO z pozycji wzorcowanych w komorze klimatycznej —
+            # ten sam przyrzad bywa w PZ takze na innym stanowisku (np. barometr, hPa).
+            p_lista = punkty_wzorcowania(text, _pozycje_komory(text))
+        except Exception as e:
+            print(f"  [PZ] Blad odczytu punktow z '{os.path.basename(path)}': {e}")
+            continue
+        if p_lista:
+            opis = ", ".join(f"{t:g}C/{rh:g}%" if rh is not None else f"{t:g}C"
+                             for t, rh in p_lista)
+            print(f"  [PZ] Punkty zamowione ({os.path.basename(path)}): {opis}")
+            punkty.extend(p_lista)
+    return punkty
+
+
 def parsuj_pdf(path):
     """Parsuje jeden PDF PZ -> lista PZPrzyrzad."""
     if not _PDF_OK:
@@ -199,6 +412,7 @@ def parsuj_pdf(path):
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
     nr_zlec = _numer_zlecenia_th(text)
     uzyt = _parsuj_uzytkownik(text)
+    zlec_adres = _parsuj_zleceniodawce(text)
 
     m = re.search(
         r'(?:Obiekty\s+wzorcowania|Calibration\s+objects)\s*:(.*?)'
@@ -207,18 +421,29 @@ def parsuj_pdf(path):
         return []
     sekcja = re.sub(r'\s+', ' ', m.group(1)).strip()
 
+    # Pozycje wzorcowane w komorze klimatycznej (nasz protokol) — z sekcji 'Metoda wzorcowania'.
+    komora_poz = _pozycje_komory(text)
+
     # podzial na wpisy numerowane '1) ... 2) ...'; brak numeracji => jeden wpis
     wpisy = re.split(r'(?<!\d)([1-9])\)\s', sekcja)
     przyrzady = []
     if len(wpisy) > 1:
         # re.split z grupa: [prefix, '1', tekst1, '2', tekst2, ...]
         for i in range(1, len(wpisy), 2):
-            tekst = wpisy[i + 1] if i + 1 < len(wpisy) else ""
-            przyrzady.extend(_parsuj_wpis(tekst, nr_zlec))
+            nr_poz = int(wpisy[i])
+            tekst  = wpisy[i + 1] if i + 1 < len(wpisy) else ""
+            for p in _parsuj_wpis(tekst, nr_zlec):
+                p.pozycja = nr_poz
+                # brak sekcji metody => nie filtrujemy (kazda pozycja traktowana jak nasza)
+                p.komora  = True if komora_poz is None else (nr_poz in komora_poz)
+                przyrzady.append(p)
     else:
-        przyrzady.extend(_parsuj_wpis(sekcja, nr_zlec))
+        for p in _parsuj_wpis(sekcja, nr_zlec):
+            p.komora = True
+            przyrzady.append(p)
     for p in przyrzady:
-        p.uzytkownik = uzyt   # to samo dla wszystkich przyrzadow w danym PZ
+        p.uzytkownik = uzyt          # to samo dla wszystkich przyrzadow w danym PZ
+        p.zleceniodawca = zlec_adres
     return przyrzady
 
 
@@ -242,16 +467,25 @@ def wczytaj_pz(folder_pz):
         except Exception as e:
             print(f"  [PZ] Blad odczytu '{os.path.basename(path)}': {e}")
             continue
-        for p in przyrzady:
-            lista.append(p)
-            # Klucz po nr fabrycznym I nr ewidencyjnym — pliki logerow bywaja nazwane
-            # jednym albo drugim (np. Vaisala: plik 'EV363499' = nr ewidencyjny, a nr
-            # fabryczny to 'D4940027'). Pierwszy przyrzad z danym kluczem wygrywa.
+        lista.extend(przyrzady)
+
+    # Klucz po nr fabrycznym I nr ewidencyjnym — pliki logerow bywaja nazwane jednym albo
+    # drugim (np. Vaisala: plik 'EV363499' = nr ewidencyjny, a nr fabryczny 'D4940027').
+    # KOLEJNOSC MA ZNACZENIE: najpierw pozycje z KOMORY KLIMATYCZNEJ (nasz protokol),
+    # potem pozostale. Ten sam przyrzad bywa w PZ dwa razy — raz jako wzorcowany w komorze
+    # (czujnik wewnetrzny, kanal 1), raz w termostacie z czujnikiem zewnetrznym (0572 1001).
+    # Bez tego do protokolu trafialy dane czujnika zewnetrznego.
+    for tylko_komora in (True, False):
+        for p in lista:
+            if bool(p.komora) is not tylko_komora:
+                continue
             for klucz in (normalizuj_serial(p.nr_fabr), normalizuj_serial(p.nr_ewid)):
                 if klucz:
                     mapa.setdefault(klucz, p)
+
+    n_kom = sum(1 for p in lista if p.komora)
     print(f"  [PZ] Wczytano {len(pliki)} PDF, {len(lista)} przyrzadow "
-          f"({len(mapa)} z nr fabrycznym).")
+          f"({n_kom} z komory klimatycznej, {len(mapa)} kluczy).")
     return mapa, lista
 
 

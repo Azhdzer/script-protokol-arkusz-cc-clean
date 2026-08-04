@@ -23,6 +23,7 @@ mogą zwrócić None zamiast wartości formuły.
 
 import os
 import re
+import time
 import shutil
 import zipfile
 import datetime
@@ -52,6 +53,71 @@ def _err(msg, indent="  "):
 def _ok(msg, indent="  "):
     """Potwierdzenie pomyslnej operacji."""
     print(f"{indent}[OK] {msg}")
+
+def _log_etap(msg, t0, indent="      "):
+    """
+    Log postepu z czasem od poczatku operacji na kopii. flush=True jest KLUCZOWE —
+    dzieki temu widac ostatni wykonany krok nawet gdy Excel sie zawiesi.
+    """
+    print(f"{indent}[{time.time() - t0:6.1f}s] {msg}", flush=True)
+
+
+def _zamknij_sesje_excel(app, linked_wbs):
+    """Zamyka pliki linkowane i konczy proces Excela (odporne na pad Excela)."""
+    for lwb in (linked_wbs or []):
+        try:
+            lwb.close()
+        except Exception:
+            pass
+    if app is not None:
+        try:
+            app.quit()
+        except Exception as _eq:
+            _warn(f"app.quit() nie powiodlo sie (Excel prawdopodobnie juz padl): "
+                  f"{type(_eq).__name__}: {_eq}")
+
+
+def _nowa_sesja_excel(folder):
+    """
+    Tworzy SWIEZA instancje Excela i otwiera w niej pliki linkowane (Wzory / Obliczenia).
+    Zwraca (app, linked_wbs, sciezki_linkowane).
+
+    Kazda kopia dostaje wlasna sesje: kopiowanie zakladek z obiektami OLE
+    (Equation/Word.Document) zostawia w procesie Excela zasoby, ktorych on nie zwalnia.
+    Przy kilku kopiach z wieloma punktami konczylo sie to padem Excela (RPC -2147023170).
+    Restart procesu miedzy kopiami kosztuje kilka sekund i eliminuje kumulacje.
+    """
+    app = xw.App(visible=False, add_book=False)
+    app.api.AutomationSecurity = 1   # msoAutomationSecurityLow — wlacza makra bez pytania
+    app.api.DisplayAlerts = False
+    app.api.AskToUpdateLinks = False
+    app.api.Visible = False
+    # Blokuj Workbook_Open/Worksheet_Calculate makr JUZ PRZED otwarciem plikow linkowanych
+    # (ich makra siegaja \\plum4 i moga uruchamiac Worda).
+    app.api.EnableEvents = False
+    try:
+        app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
+    except Exception:
+        pass
+
+    linked_wbs = []
+    sciezki_linkowane = {}
+    for plik_link in PLIKI_LINKOWANE:
+        sciezka_link = os.path.join(folder, plik_link)
+        if os.path.exists(sciezka_link):
+            try:
+                lwb = _open_book_hidden(app, sciezka_link, update_links=False)
+                linked_wbs.append(lwb)
+                sciezki_linkowane[plik_link.lower()] = lwb.fullname
+            except Exception as exc:
+                _warn(f"Nie mozna otworzyc pliku linkowanego: {plik_link}\n"
+                      f"      Sciezka lokalna: {sciezka_link}\n"
+                      f"      Blad: {type(exc).__name__}: {exc}")
+        else:
+            _warn(f"Brak pliku linkowanego w folderze roboczym: {plik_link}\n"
+                  f"      Sciezka serwerowa: {_info_serwer(plik_link)}\n"
+                  f"      Oczekiwano w: {sciezka_link}")
+    return app, linked_wbs, sciezki_linkowane
 
 def _open_book_hidden(app, path, **kwargs):
     """
@@ -92,7 +158,7 @@ FOLDER           = os.environ.get("CC_FOLDER") or \
                    r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"   # folder z plikami xlsx; "." = ten sam co skrypt  r"."
                            # możesz podać pełną ścieżkę, np. r"C:\Moje\Pliki"
 
-PROTOKOL_PLIK    = os.environ.get("CC_PROTOKOL") or "001_LA_TH_2026 - protokół CC-04.xlsx"
+PROTOKOL_PLIK    = os.environ.get("CC_PROTOKOL") or "177_LA_TH_2026 - protokół CC.xlsx"
 SZABLON_PLIK     = os.environ.get("CC_SZABLON") or "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx"
 
 ARKUSZ_STRONA2   = "Strona 2"   # arkusz z listą kopii do wygenerowania
@@ -122,7 +188,7 @@ HIGROMETR_K18    = "S8000"
 SZABLON_WORD_TYLKO_TEMP = "xxx_yyy_LA_TH_2026 - tylko temp.docx"      # szablon Word, gdy brak aktywnej wilgotnosci
 SZABLON_WORD_Z_RH       = "xxx_yyy_LA_TH_2026 - zakres.docx"          # szablon Word, gdy WSZYSTKIE zakladki maja aktywna wilgotnosc
 SZABLON_WORD_MIESZANY   = "xxx_yyy_LA_TH_2026 - zakres + temp.docx"   # szablon Word, gdy CZESC zakladek ma wilgotnosc, a czesc nie (dwie tabele)
-NR_SW_POCZATKOWY    = 993   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
+NR_SW_POCZATKOWY    = 1037   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
 
 NR_POMIESZCZENIA = 9          # numer pomieszczenia środowiskowego
 MODEL_CZUJNIKA   = "MX1101-02"  # model czujnika środowiskowego
@@ -132,7 +198,7 @@ MODEL_CZUJNIKA   = "MX1101-02"  # model czujnika środowiskowego
 #                       korzysta z juz istniejacych kopii (gdy GENERUJ_WORD=True).
 # - GENERUJ_WORD=False : pomija Etap 7 (Word).
 GENERUJ_EXCEL = True
-GENERUJ_WORD  = False
+GENERUJ_WORD  = True
 
 # Pliki linkowane wymagane do przeliczenia formul kalibracyjnych (D246/F246/G246).
 # Muszą być otwarte w tej samej sesji Excel — podaj dokładne nazwy z rozszerzeniem.
@@ -140,6 +206,20 @@ PLIKI_LINKOWANE     = [
     "Obliczenia tdp, RH, C.xls",
     "Wzory.xls",
 ]
+
+# Kazda zakladka szablonu zawiera ~41 obiektow OLE (Equation.3 + Word.Document.12).
+# Excel duplikuje je przy kazdym kopiowaniu zakladki i uruchamia do tego Worda —
+# stad ok. 14 s na zakladke i (przy wielu punktach) komunikat Worda „Za duzo otwartych
+# plikow" oraz pad Excela. Ponizsze stale sluza wylacznie do OSTRZEZENIA i szacowania
+# czasu w logu; trwale rozwiazanie to zamiana obiektow OLE w szablonie na obrazki.
+SEK_NA_KOPIE_ZAKLADKI  = 14   # zmierzony czas kopiowania jednej zakladki [s]
+PROG_OSTRZEZENIA_KOPII = 10   # od tylu kopii zakladek ostrzegamy w logu
+
+# Warunki srodowiskowe (Pom. nr 9): maksymalna odleglosc czasowa rekordu czujnika od
+# punktu pomiarowego. Gdy najblizszy rekord jest dalej — F/G zostaja PUSTE zamiast
+# wpisywac warunki z zupelnie innej chwili (wczesniej brany byl ostatni rekord z pliku,
+# przez co kilka punktow dostawalo te same wartosci).
+TOLERANCJA_CZUJNIKA_MIN = 30
 
 # Docelowe sciezki serwerowe dla linkow zewnetrznych, ktore maja byc
 # przywrocone na koncu (po wypelnieniu i odczycie kalibracji).
@@ -262,12 +342,26 @@ def _wczytaj_dane_czujnika_miesiac(sciezka_pliku, rok, miesiac):
         return []
 
 
-def _szukaj_th_w_danych_czujnika(dane, target_dt):
-    """Returns (temp, hum) closest in time to target_dt, or (None, None)."""
+def _szukaj_th_w_danych_czujnika(dane, target_dt, tol_min=None):
+    """
+    Zwraca (temp, hum) z rekordu czujnika NAJBLIZSZEGO czasowo target_dt — ale tylko gdy
+    miesci sie w tolerancji TOLERANCJA_CZUJNIKA_MIN.
+
+    Bez tego ograniczenia, gdy czujnik nie ma danych na dany czas (np. wzorcowanie trwalo
+    dluzej niz zapis czujnika), zwracany byl OSTATNI rekord z pliku — i te same warunki
+    srodowiskowe trafialy do wielu roznych punktow. Teraz w takim wypadku zwracamy
+    (None, None), a komorki F/G zostaja puste do recznego uzupelnienia.
+    Zwraca dodatkowo odchylke w sekundach jako trzeci element (do logu).
+    """
     if not dane:
-        return None, None
+        return None, None, None
+    if tol_min is None:
+        tol_min = TOLERANCJA_CZUJNIKA_MIN
     best = min(dane, key=lambda x: abs((x[0] - target_dt).total_seconds()))
-    return best[1], best[2]
+    odchylka_s = abs((best[0] - target_dt).total_seconds())
+    if odchylka_s > tol_min * 60:
+        return None, None, odchylka_s
+    return best[1], best[2], odchylka_s
 
 
 def _parse_date_s3(val):
@@ -317,13 +411,22 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model, _cache_f
     Returns: {"temp_min":..., "temp_max":..., "wilg_min":..., "wilg_max":...} or None.
     Wzory.xls is reverted to its original state after calculation (not saved).
     """
+    # Warunki srodowiskowe (pomieszczenie) sa IDENTYCZNE dla wszystkich kopii — zaleza od
+    # daty/godziny punktu, a nie od przyrzadu. Gdy komplet F/G jest juz w cache z pierwszej
+    # kopii, nie ma po co otwierac protokolu ani pliku czujnika (16 MB) po raz kolejny.
+    _bloki = [zd.get("block_idx", 0) for zd in dane_zakladek]
+    _komplet_z_cache = bool(_cache_fg) and all(b in _cache_fg for b in _bloki)
+    if _komplet_z_cache:
+        print(f"    [Srodowisko] Komplet F/G z cache ({len(_bloki)} blokow) — "
+              f"nie otwieram protokolu ani pliku czujnika.")
+
     ws_s3 = None
     if ARKUSZ_STRONA3 in {s.name for s in wb.sheets}:
         ws_s3 = wb.sheets[ARKUSZ_STRONA3]
 
     # Kopia pochodzi z szablonu bez Strona 3 — pisz F/G bezposrednio do protokolu.
     wb_protokol_s3 = None
-    if ws_s3 is None:
+    if ws_s3 is None and not _komplet_z_cache:
         protokol_sciezka = os.path.join(FOLDER, PROTOKOL_PLIK)
         try:
             for bk in app.books:
@@ -403,8 +506,14 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model, _cache_f
                 print(f"        -> {etykieta}: nie mozna sparsowac czasu ({czas_val!r}), pomijam")
                 continue
             target_dt = datetime.datetime.combine(data, czas)
-            temp, hum = _szukaj_th_w_danych_czujnika(dane, target_dt)
-            print(f"        -> {etykieta} {target_dt}: T={temp}, H={hum}")
+            temp, hum, odch_s = _szukaj_th_w_danych_czujnika(dane, target_dt)
+            if temp is None and odch_s is not None:
+                print(f"        -> {etykieta} {target_dt}: BRAK danych czujnika "
+                      f"(najblizszy rekord {odch_s/60:.0f} min od punktu, limit "
+                      f"{TOLERANCJA_CZUJNIKA_MIN} min) — F/G zostaja puste")
+            else:
+                print(f"        -> {etykieta} {target_dt}: T={temp}, H={hum}"
+                      f"{f' (rekord {odch_s/60:.0f} min od punktu)' if odch_s else ''}")
             if ws_s3 is not None and temp is not None:
                 ws_s3.range(f"F{row_base + row_offset}").value = temp
                 protokol_changed = True
@@ -2004,6 +2113,8 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
         # Dane przyrzadu z PZ (po nr fabrycznym): fallback pol Strony 2 + ew. UZYTKOWNIK.
         _pzdev = _pz_mapa_arkusze().get(pz_dane.normalizuj_serial(nr_fab))
         uzytkownik_v = (_pzdev.uzytkownik if _pzdev else "") or ""
+        # Blok adresowy ZLECENIODAWCY z PZ (nazwa + ulica + kod/miasto), wieloliniowy.
+        zleceniodawca_v = (getattr(_pzdev, "zleceniodawca", "") if _pzdev else "") or ""
         wytworca_v = str(rekord.get("B") or "") or (_pzdev.wytworca if _pzdev else "")
         typ_v      = str(rekord.get("D") or "") or (_pzdev.typ if _pzdev else "")
         nr_ewid_v  = _cell_to_str(rekord.get("F")) or (_pzdev.nr_ewid if _pzdev else "")
@@ -2056,6 +2167,7 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             "[typ]":              typ_v,            # Strona 2 kol. D (lub PZ)
             "[data_wzorcowania]": data_wzorcowania,
             "[użytkownik]":       uzytkownik_v,     # blok adresowy z PZ (tylko szablon uzytkownika)
+            "[zleceniodawca]":    zleceniodawca_v,  # blok adresowy ZLECENIODAWCY z PZ
             "[Podpis]":           PODPISUJACY_2,
         }.items():
             _zastap_tekst_w_dok(doc, placeholder, wartosc)
@@ -2585,15 +2697,18 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
 
     # EnableEvents=False: blokuje Application.WorkbookOpen/SheetActivate/
     # BeforeSave/BeforeClose w Obliczenia.xls/Wzory.xls → \\plum4 → crash.
-    # xlManual: tylko na czas Open() — blokuje auto-przeliczenie UDF podczas open.
-    # Natychmiast po open przywracamy xlAutomatic, zeby UDF dzialaly normalnie.
+    # xlManual: na czas Open() ORAZ calej fazy STRUKTURALNEJ (kopiowanie zakladek,
+    # zmiana nazw, wypelnianie komorek). Przy wielu punktach (np. 34 zakladki) kazde
+    # kopiowanie/zapis w trybie automatycznym wymuszalo pelne przeliczenie rosnacego
+    # skoroszytu z linkami zewnetrznymi — stad zawieszanie i pad Excela
+    # (OLE 0x800a01a8 'Object required'). xlAutomatic przywracamy dopiero przed
+    # etapem obliczen; miejsca, ktore potrzebuja wynikow, i tak wolaja Calculate().
+    _t0 = time.time()
     app.api.EnableEvents = False
-    app.api.Calculation = -4135  # xlCalculationManual — tylko na czas Open()
+    app.api.Calculation = -4135  # xlCalculationManual
+    _log_etap(f"otwieram kopie: {os.path.basename(sciezka_pliku)}", _t0)
     wb = _open_book_hidden(app, sciezka_pliku, update_links=False)
-    try:
-        app.api.Calculation = -4105  # przywroc xlAutomatic natychmiast po otwarciu
-    except Exception:
-        pass
+    _log_etap("otwarta (tryb przeliczania: RECZNY)", _t0)
     # Przekieruj linki zewnetrzne na lokalnie otwarte pliki (Obliczenia, Wzory).
     # Bez tego formuly lancuchujace do =[Obliczenia]!te_6(...) zwracaja None/blad
     # nawet gdy Obliczenia jest otwarte, bo Excel nie moze dopasowac zapisanej
@@ -2659,7 +2774,23 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 working = working[:N]
 
             elif len(working) < N:
-                for _ in range(N - len(working)):
+                do_dodania = N - len(working)
+                # Kazda zakladka szablonu ma ~41 obiektow OLE (Equation.3 + Word.Document.12).
+                # Excel musi je duplikowac przy kazdym kopiowaniu i uruchamia w tym celu
+                # Worda — stad ~14 s na zakladke, komunikat Worda „Za duzo otwartych plikow"
+                # i w skrajnym przypadku pad Excela (OLE 0x800a01a8). Ostrzegamy ZAWCZASU.
+                if do_dodania >= PROG_OSTRZEZENIA_KOPII:
+                    _warn(f"Do wykonania {do_dodania} kopii zakladek (punktow: {N}).\n"
+                          f"      Szablon ma ~41 obiektow OLE (Equation/Word) na zakladke,\n"
+                          f"      wiec jedna kopia trwa ok. {SEK_NA_KOPIE_ZAKLADKI} s "
+                          f"-> szacowany czas ~{do_dodania * SEK_NA_KOPIE_ZAKLADKI // 60} min NA PLIK.\n"
+                          f"      Przy duzej liczbie punktow Word moze zglosic 'Za duzo otwartych\n"
+                          f"      plikow', a Excel paść. Zalecenie: mniej punktow w jednym pomiarze\n"
+                          f"      albo jednorazowa zamiana obiektow OLE w szablonie na obrazki.")
+                _log_etap(f"kopiuje zakladki: {len(working)} -> {N} "
+                          f"({do_dodania} operacji kopiowania, ~"
+                          f"{do_dodania * SEK_NA_KOPIE_ZAKLADKI} s)", _t0)
+                for _i in range(do_dodania):
                     before = {s.name for s in wb.sheets}
                     src = wb.sheets[first_ws_name]
                     if chroniony in {s.name for s in wb.sheets}:
@@ -2669,10 +2800,13 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                     after = {s.name for s in wb.sheets}
                     new_name = (after - before).pop()
                     working.append(new_name)
+                    if (_i + 1) % 5 == 0 or _i + 1 == do_dodania:
+                        _log_etap(f"   skopiowano {_i + 1}/{do_dodania} zakladek", _t0)
 
             working = [s.name for s in wb.sheets if s.name not in wykluczone]
 
             # --- Zmien nazwy przez tymczasowe (unika konfliktow) ---
+            _log_etap(f"zmieniam nazwy {len(working)} zakladek", _t0)
             for i, ws_name in enumerate(working):
                 wb.sheets[ws_name].name = f"__tmp_{i}__"
 
@@ -2680,6 +2814,8 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             working_tmp = [s.name for s in wb.sheets if s.name not in wykluczone]
             for i, ws_name in enumerate(working_tmp):
                 wb.sheets[ws_name].name = docelowe_nazwy[i]
+            _log_etap(f"nazwy ustawione: {', '.join(docelowe_nazwy[:4])}"
+                      f"{' ...' if len(docelowe_nazwy) > 4 else ''}", _t0)
 
             # --- Wypelnij komorki ---
             working_final = [s.name for s in wb.sheets if s.name not in wykluczone]
@@ -2691,7 +2827,10 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             raw = _cell_to_str(rekord.get("CC04_RAW"))
             print(f"  [UWAGA] Nieznany typ CC-04 dla kopii '{nowa_nazwa}': '{raw}'.")
 
+        _log_etap(f"wypelniam komorki w {len(working_final)} zakladkach...", _t0)
         for i, ws_name in enumerate(working_final):
+            if (i + 1) % 5 == 0 or i == 0 or i + 1 == len(working_final):
+                _log_etap(f"   zakladka {i + 1}/{len(working_final)}: '{ws_name}'", _t0)
             ws = wb.sheets[ws_name]
             zd = dane_zakladek[i]
             ef = dane_ef_kopia[i] if i < len(dane_ef_kopia) else None
@@ -2797,16 +2936,25 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             ws.range("B230").value = PODPISUJACY_1
             ws.range("H230").value = PODPISUJACY_2
 
+        # Faza STRUKTURALNA skonczona — wracamy do trybu automatycznego, zeby UDF-y
+        # z Wzory.xls/Obliczenia liczyly sie tak jak dotad podczas Calculate() ponizej.
+        try:
+            app.api.Calculation = -4105  # xlCalculationAutomatic
+        except Exception:
+            pass
         app.api.DisplayAlerts = False
         app.api.AskToUpdateLinks = False
         app.api.EnableEvents = False
+        _log_etap(f"przeliczam {len(wb.sheets)} zakladek (1. przebieg)...", _t0)
         for _ws in wb.sheets:
             _ws.api.Calculate()   # przelicz tylko kopie (nie Obliczenia/Wzory) — blokuje Worksheet_Calculate w .xls
         app.api.EnableEvents = True
+        _log_etap("przeliczono", _t0)
 
         # --- Etap 6: arkusz Wyniki ---
         extra_rows = 0
         if chroniony in {s.name for s in wb.sheets}:
+            _log_etap(f"arkusz '{chroniony}': porzadkuje tabele wynikow...", _t0)
             ws_w = wb.sheets[chroniony]
             extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final)
             _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows)
@@ -2818,15 +2966,18 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             ws_w.range(f"E{32 + extra_rows}").value = PODPISUJACY_2   # scalone E32:G32
 
         # --- Etap 7: warunki środowiskowe (Strona 3 F/G + Wzory.xls) ---
+        _log_etap("licze warunki srodowiskowe (Pom. nr 9 + Wzory.xls)...", _t0)
         zakresy_srodowiskowe = _oblicz_warunki_srodowiskowe(
             app, wb, dane_zakladek, NR_POMIESZCZENIA, MODEL_CZUJNIKA, _cache_fg=_cache_fg
         )
+        _log_etap("warunki srodowiskowe policzone", _t0)
 
         # Przelicz i zapisz — wb.save() utrwala obliczone wartosci jako cache Excela.
         # Dzieki temu po otwarciu kopii bez plikow linkowanych (Obliczenia, Wzory)
         # i odrzuceniu aktualizacji linkow Excel pokazuje te zakeszowane wartosci.
         app.api.DisplayAlerts = False
         app.api.AskToUpdateLinks = False
+        _log_etap("przeliczam przed zapisem (2. przebieg)...", _t0)
         for _ws in wb.sheets:
             _ws.api.Calculate()   # przelicz tylko kopie przed zapisem
         # EnableEvents pozostaje False (ustawione przed open, przywrocone w finally)
@@ -2843,10 +2994,19 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         app.api.DisplayAlerts = False
         app.api.AskToUpdateLinks = False
         # EnableEvents pozostaje False — BeforeSave/AfterSave nie strzela
+        _log_etap("zapisuje plik...", _t0)
         try:
             wb.save()
         except Exception:
             wb.api.Save()
+        _log_etap("ZAPISANO — kopia gotowa", _t0)
+    except Exception as _exc:
+        # Najczestszy przypadek: Excel padl w trakcie (OLE 0x800a01a8 'Object required'
+        # albo RPC -2147023174). Log mowi, na ktorym etapie i po ilu sekundach.
+        _err(f"Przerwano prace nad kopia '{nowa_nazwa}' po {time.time() - _t0:.1f}s\n"
+             f"      {type(_exc).__name__}: {_exc}\n"
+             f"      (jesli to pad Excela — zamknij wszystkie okna Excela i uruchom ponownie)")
+        raise
     finally:
         try:
             wb.close()
@@ -3080,48 +3240,21 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
 
     print(f"  Skopiowano {n} plików. Modyfikuję zakładki i komórki przez Excel COM...")
 
-    # Krok 2: modyfikuj wszystkie kopie w jednej sesji Excel (COM)
-    app = xw.App(visible=False, add_book=False)
-    app.api.AutomationSecurity = 1   # msoAutomationSecurityLow — wlacza makra bez pytania
-    app.api.DisplayAlerts = False
-    app.api.AskToUpdateLinks = False
-    app.api.Visible = False
-    # Blokuj Workbook_Open/Worksheet_Calculate makr JUZ PRZED otwarciem plikow
-    # linkowanych (Wzory.xls / Obliczenia tdp, RH, C.xls) — ich makra siegaja
-    # \\plum4 i moga uruchamiac Worda, co zawiesza skrypt. UDF-y dzialaja i tak
-    # (EnableEvents nie dotyczy funkcji, tylko zdarzen). Poszczegolne operacje
-    # przywracaja EnableEvents wg potrzeby.
-    app.api.EnableEvents = False
+    # Krok 2: modyfikuj kopie — KAZDA w swiezej sesji Excela.
+    # Kopiowanie zakladek z obiektami OLE zostawia w procesie Excela zasoby, ktorych on
+    # nie zwalnia; przy kilku kopiach konczylo sie to padem (RPC -2147023170) w trakcie
+    # drugiej kopii. Restart procesu miedzy kopiami kosztuje kilka sekund.
+    app = None
+    linked_wbs = []
+    sciezki_linkowane = {}
+    dane_kalibracji = []
+    klasa_wilg_per_kopia = []
     try:
-        app.api.AutoRecover.Enabled = False  # nie twórz plików autoodzyskiwania (.xar)
-    except Exception:
-        pass
-    try:
-        # Otwieramy pliki linkowane PRZED modyfikacja kopii.
-        # Dzieki temu formuly odwolujace sie do tych plikow oblicza sie
-        # przy kazdym CalculateFullRebuild+wb.save() i sa zakeszowane w kopii.
-        linked_wbs = []
-        sciezki_linkowane = {}
-        for plik_link in PLIKI_LINKOWANE:
-            sciezka_link = os.path.join(folder, plik_link)
-            if os.path.exists(sciezka_link):
-                try:
-                    lwb = _open_book_hidden(app, sciezka_link, update_links=False)
-                    linked_wbs.append(lwb)
-                    sciezki_linkowane[plik_link.lower()] = lwb.fullname
-                    _ok(f"Otwarto plik linkowany: {plik_link}")
-                except Exception as exc:
-                    _warn(f"Nie mozna otworzyc pliku linkowanego: {plik_link}\n"
-                          f"      Sciezka lokalna: {sciezka_link}\n"
-                          f"      Blad: {type(exc).__name__}: {exc}")
-            else:
-                _warn(f"Brak pliku linkowanego w folderze roboczym: {plik_link}\n"
-                      f"      Sciezka serwerowa: {_info_serwer(plik_link)}\n"
-                      f"      Oczekiwano w: {sciezka_link}")
-
         _cache_fg = {}
         for j, nowa_nazwa, sciezka_kopii, rekord in kopie:
             print(f"[{j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
+            _zamknij_sesje_excel(app, linked_wbs)
+            app, linked_wbs, sciezki_linkowane = _nowa_sesja_excel(folder)
             dane_ef_kopia_surowe = dane_ef[j] if j < len(dane_ef) else []
 
             if USUWAJ_PUSTE_BLOKI_KOPII_S3:
@@ -3144,29 +3277,19 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
             zakresy_per_kopia.append(zakresy_srod)
 
         print("  Odczyt kalibracji po zakonczeniu wypelniania wszystkich kopii...")
-        dane_kalibracji = []
-        klasa_wilg_per_kopia = []
+        # Swieza sesja rowniez na odczyt kalibracji (poprzednia obrobila ostatnia kopie).
+        _zamknij_sesje_excel(app, linked_wbs)
+        app, linked_wbs, sciezki_linkowane = _nowa_sesja_excel(folder)
         for j, nowa_nazwa, sciezka_kopii, _ in kopie:
             print(f"    [Kalibracja {j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
             kal, klasa = _odczytaj_kalibracje_xlwings(
                 app, sciezka_kopii, chroniony, enable_diag=(j == 0), sciezki_linkowane=sciezki_linkowane)
             dane_kalibracji.append(kal or [])
             klasa_wilg_per_kopia.append(klasa)
-
-        for lwb in linked_wbs:
-            try:
-                lwb.close()
-            except Exception:
-                pass
     finally:
-        # app.quit() opakowane w try/except: jeśli Excel padł przez RPC crash,
-        # quit() też rzuca wyjątek — bez tego maskowałby oryginalny błąd
-        # i uniemożliwiał wykonanie przywracania linków poniżej.
-        try:
-            app.quit()
-        except Exception as _eq:
-            _err(f"Excel prawdopodobnie padl (RPC crash) — app.quit() nie powiodlo sie.\n"
-                 f"      {type(_eq).__name__}: {_eq}")
+        # Zamkniecie sesji odporne na pad Excela — inaczej maskowaloby oryginalny blad
+        # i uniemozliwialo przywrocenie linkow ponizej.
+        _zamknij_sesje_excel(app, linked_wbs)
 
         # Przywracanie linkow przez XML — tutaj w finally, żeby wykonało się
         # zawsze (nawet przy crash Excel podczas odczytu kalibracji).
