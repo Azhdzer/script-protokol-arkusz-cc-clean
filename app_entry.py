@@ -5,8 +5,9 @@ app_entry.py — punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).
 Jeden plik wykonywalny pelni trzy role. O trybie decyduje zmienna srodowiskowa
 CC_WORKER, ktora ustawia panel GUI przed uruchomieniem podprocesu:
 
-    CC_WORKER=arkusze     -> generuj_arkusze.main()
+    CC_WORKER=analiza     -> analizuj_excele.main()
     CC_WORKER=obserwacje  -> generuj_obserwacje.main()
+    CC_WORKER=arkusze     -> generuj_arkusze.main()
     (brak zmiennej)       -> uruchom panel GUI (app_gui.main())
 
 Dzieki temu GUI moze uruchamiac ten SAM exe jako worker, bez potrzeby
@@ -34,6 +35,8 @@ def _run_worker(mode: str) -> int:
         import generuj_arkusze as m
     elif mode == "obserwacje":
         import generuj_obserwacje as m
+    elif mode == "analiza":
+        import analizuj_excele as m
     else:
         print(f"[app_entry] Nieznany tryb workera: {mode!r}", file=sys.stderr)
         return 2

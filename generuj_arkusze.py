@@ -35,6 +35,7 @@ import openpyxl
 import xlwings as xw
 
 import pz_dane   # wspolny modul: dane przyrzadow z PZ (fallback, gdy Strona 2 pusta)
+import cc_config as C   # rejestr ustawien + odczyt zmiennych srodowiskowych z panelu
 
 # ---------------------------------------------------------------------------
 # Wizualne helpers logowania
@@ -148,50 +149,58 @@ except ImportError:
     _DOCX_OK = False
 
 # =============================================================================
-# KONFIGURACJA  ← edytuj tutaj przed uruchomieniem
+# KONFIGURACJA
+#
+# Wszystkie wartosci ponizej ustawia sie w PANELU (app_gui.py) — to, co widzisz
+# w kodzie, to tylko wartosci DOMYSLNE uzywane przy recznym uruchomieniu skryptu.
+# Panel podaje je przez zmienne srodowiskowe (nazwy w nawiasach przy C.*).
 # =============================================================================
 
-# Wartosci ponizej to DOMYSLNE. Panel GUI (app_gui.py) moze je nadpisac przez
-# zmienne srodowiskowe CC_FOLDER / CC_PROTOKOL / CC_SZABLON — dzieki temu uzytkownik
-# wybiera folder i pliki wejsciowe bez edycji skryptu.
 FOLDER           = os.environ.get("CC_FOLDER") or \
                    r"C:\Users\artisom.azhdzer\Desktop\Script protokoł - arkusz CC"   # folder z plikami xlsx; "." = ten sam co skrypt  r"."
                            # możesz podać pełną ścieżkę, np. r"C:\Moje\Pliki"
 
-PROTOKOL_PLIK    = os.environ.get("CC_PROTOKOL") or "177_LA_TH_2026 - protokół CC.xlsx"
+PROTOKOL_PLIK    = os.environ.get("CC_PROTOKOL") or "188_LA_TH_2026 - protokół CC_2.xlsx"
 SZABLON_PLIK     = os.environ.get("CC_SZABLON") or "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx"
 
-ARKUSZ_STRONA2   = "Strona 2"   # arkusz z listą kopii do wygenerowania
-ARKUSZ_STRONA3   = "Strona 3"   # arkusz z definicją zakładek
+# Uklad protokolu i szablonu opisuja stale w sekcji "UKLAD FORMULARZY" ponizej
+# (nazwy arkuszy, wiersze, kolumny) — to nie sa opcje do zmiany.
+PODPISUJACY_1    = C.tekst("GEN_PODPIS_1", "Artsiom Azhdzer")   # B230:C230 (scalona) — podpisujacy z lewej
+PODPISUJACY_2    = C.tekst("GEN_PODPIS_2", "Marek Szpakowski")  # H230:I230 (scalona) — podpisujacy z prawej
 
-START_ROW_S2     = 11    # wiersz startowy w Strona 2 (kolumna A)
-START_ROW_S3     = 20    # wiersz startowy w Strona 3 (kolumna A)
-BLOK_S3          = 5     # liczba wierszy zajmowanych przez jedną zakładkę w Strona 3
-
-ARKUSZ_CHRONIONY = "Wyniki"   # ta zakładka nigdy nie jest usuwana ani zmieniana
-
-START_COL_E_S3   = 17    # kolumna Q (1-indexed) — źródło dla E15:E19, kopia 1
-START_COL_F_S3   = 18    # kolumna R (1-indexed) — źródło dla F15:F19, kopia 1
-KROK_COL_EF      = 2     # przesunięcie kolumny dla każdej kolejnej kopii (co 2 w prawo)
-
-ARKUSZ_WNIOSKI   = "Wyniki"          # ostatni arkusz — nie jest modyfikowany
-PODPISUJACY_1    = "Artsiom Azhdzer"  # B230:C230 (scalona) — podpisujacy z lewej
-PODPISUJACY_2    = "Marek Szpakowski" # H230:I230 (scalona) — podpisujacy z prawej
-
-# Higrometr punktu rosy wpisywany do komorki K18 KAZDEJ kopii-zakladki.
-# Dozwolone wartosci: "S8000", "-", "S8000-2", "OPTIDEW".
+# --- K18: higrometr punktu rosy w kazdej kopii-zakladce -----------------------
+# Wartosc zalezy od KOMORY, w ktorej wykonano wzorcowanie, dlatego ustawia sie ja
+# osobno dla kazdej komory. Klucz to typ protokolu:
+#   "CC"    — komora CC        (protokol '... - protokół CC.xlsx')
+#   "CC-04" — komora CC-04     (protokol '... - protokół CC-04.xlsx')
+# Typowe wartosci: "S8000-02", "S8000", "OPTIDEW", "-".
+#
 # UWAGA: dla punktow TYLKO-TEMPERATURA (zakladka bez RH, np. nazwa '5, -') w K18
 # ZAWSZE wpisywane jest "-", niezaleznie od tego ustawienia.
 # Arkusza "Wyniki" to nie dotyczy (nie jest modyfikowany).
-HIGROMETR_K18    = "S8000"
+HIGROMETR_K18_WG_KOMORY = {
+    "CC":    C.tekst("GEN_K18_CC", "S8000-02"),
+    "CC-04": C.tekst("GEN_K18_CC04", "S8000"),
+}
+# Uzywane, gdy typ komory nie figuruje w slowniku powyzej.
+HIGROMETR_K18_DOMYSLNY = C.tekst("GEN_K18_DOM", "S8000")
 
-SZABLON_WORD_TYLKO_TEMP = "xxx_yyy_LA_TH_2026 - tylko temp.docx"      # szablon Word, gdy brak aktywnej wilgotnosci
-SZABLON_WORD_Z_RH       = "xxx_yyy_LA_TH_2026 - zakres.docx"          # szablon Word, gdy WSZYSTKIE zakladki maja aktywna wilgotnosc
-SZABLON_WORD_MIESZANY   = "xxx_yyy_LA_TH_2026 - zakres + temp.docx"   # szablon Word, gdy CZESC zakladek ma wilgotnosc, a czesc nie (dwie tabele)
-NR_SW_POCZATKOWY    = 1037   # numer świadectwa pierwszej kopii (771, 772, ... dla kolejnych)
 
-NR_POMIESZCZENIA = 9          # numer pomieszczenia środowiskowego
-MODEL_CZUJNIKA   = "MX1101-02"  # model czujnika środowiskowego
+def _higrometr_k18(is_cc04):
+    """Higrometr do K18 dla biezacego protokolu (CC albo CC-04)."""
+    return HIGROMETR_K18_WG_KOMORY.get("CC-04" if is_cc04 else "CC",
+                                       HIGROMETR_K18_DOMYSLNY)
+
+# szablon Word, gdy brak aktywnej wilgotnosci
+SZABLON_WORD_TYLKO_TEMP = C.tekst("GEN_WORD_TEMP", "xxx_yyy_LA_TH_2026 - tylko temp.docx")
+# szablon Word, gdy WSZYSTKIE zakladki maja aktywna wilgotnosc
+SZABLON_WORD_Z_RH       = C.tekst("GEN_WORD_RH", "xxx_yyy_LA_TH_2026 - zakres.docx")
+# szablon Word, gdy CZESC zakladek ma wilgotnosc, a czesc nie (dwie tabele)
+SZABLON_WORD_MIESZANY   = C.tekst("GEN_WORD_MIX", "xxx_yyy_LA_TH_2026 - zakres + temp.docx")
+NR_SW_POCZATKOWY    = C.calk("GEN_NR_SW", 1047)   # numer świadectwa pierwszej kopii (rosnaco dla kolejnych)
+
+NR_POMIESZCZENIA = C.calk("GEN_NR_POM", 9)                  # numer pomieszczenia środowiskowego
+MODEL_CZUJNIKA   = C.tekst("GEN_MODEL_CZUJ", "MX1101-02")   # model czujnika środowiskowego
 
 # Sterowanie etapami:
 # - GENERUJ_EXCEL=False: nie tworzy/nie modyfikuje kopii Excel,
@@ -202,30 +211,57 @@ GENERUJ_WORD  = True
 
 # Pliki linkowane wymagane do przeliczenia formul kalibracyjnych (D246/F246/G246).
 # Muszą być otwarte w tej samej sesji Excel — podaj dokładne nazwy z rozszerzeniem.
-PLIKI_LINKOWANE     = [
+PLIKI_LINKOWANE     = C.lista("GEN_LINKOWANE", [
     "Obliczenia tdp, RH, C.xls",
     "Wzory.xls",
-]
+])
 
-# Kazda zakladka szablonu zawiera ~41 obiektow OLE (Equation.3 + Word.Document.12).
-# Excel duplikuje je przy kazdym kopiowaniu zakladki i uruchamia do tego Worda —
-# stad ok. 14 s na zakladke i (przy wielu punktach) komunikat Worda „Za duzo otwartych
-# plikow" oraz pad Excela. Ponizsze stale sluza wylacznie do OSTRZEZENIA i szacowania
-# czasu w logu; trwale rozwiazanie to zamiana obiektow OLE w szablonie na obrazki.
-SEK_NA_KOPIE_ZAKLADKI  = 14   # zmierzony czas kopiowania jednej zakladki [s]
-PROG_OSTRZEZENIA_KOPII = 10   # od tylu kopii zakladek ostrzegamy w logu
+# Od ilu kopiowanych zakladek ostrzegac w logu, ze potrwa to dlugo. Czas jednej kopii
+# NIE jest zakladany z gory — mierzymy pierwsza i na tej podstawie szacujemy reszte
+# (zalezy od maszyny i od liczby obiektow OLE w szablonie).
+PROG_OSTRZEZENIA_KOPII = C.calk("GEN_PROG_OSTRZ", 10)
+
+# Szerokosc paska zakladek w zapisanej kopii (0.0-1.0; reszta miejsca idzie na poziomy
+# pasek przewijania). Domyslne 0.6 Excela bywa za male przy wielu punktach i zakladki
+# chowaja sie za strzalkami — 0.85 sprawia, ze po otwarciu widac cala liste.
+TAB_RATIO = C.liczba("GEN_TAB_RATIO", 0.85)
 
 # Warunki srodowiskowe (Pom. nr 9): maksymalna odleglosc czasowa rekordu czujnika od
 # punktu pomiarowego. Gdy najblizszy rekord jest dalej — F/G zostaja PUSTE zamiast
 # wpisywac warunki z zupelnie innej chwili (wczesniej brany byl ostatni rekord z pliku,
 # przez co kilka punktow dostawalo te same wartosci).
-TOLERANCJA_CZUJNIKA_MIN = 30
+# Czujnik Pom. nr 9 zapisuje co 60 s bez przerw (sprawdzone na pliku rocznym),
+# wiec najblizszy rekord jest zawsze w granicach ~30 s. Zapas 2 min pokrywa
+# ewentualna zmiane interwalu, a jednoczesnie nie pozwala wpisac warunkow
+# sprzed pol godziny. Gdy nic nie miesci sie w tolerancji, F/G zostaja PUSTE.
+TOLERANCJA_CZUJNIKA_MIN = C.liczba("GEN_TOL_CZUJ", 2.0)
+
+# =============================================================================
+# UKLAD FORMULARZY — stale wynikajace z wzorow PLUM (ILAJ 5.4/11).
+# To NIE sa opcje do zmiany: inna wartosc wymagalaby przerobienia samych formularzy.
+# Trzymane osobno, zeby nie mieszaly sie z konfiguracja powyzej.
+# =============================================================================
+ARKUSZ_STRONA2 = "Strona 2"   # protokol: tabela przyrzadow (= lista kopii do zrobienia)
+ARKUSZ_STRONA3 = "Strona 3"   # protokol: punkty pomiarowe (= zakladki w kopii)
+# Arkusz zbiorczy w kopii. NIE jest zakladka punktu pomiarowego, wiec nie podlega
+# usuwaniu/przemianowaniu razem z nimi — ale skrypt go modyfikuje (tabele wynikow,
+# formula histerezy, podpisy, F24/C28/C32).
+ARKUSZ_WYNIKI  = "Wyniki"
+
+START_ROW_S2   = 11   # pierwszy wiersz przyrzadu w Strona 2
+START_ROW_S3   = 20   # pierwszy wiersz bloku punktu w Strona 3
+BLOK_S3        = 5    # wierszy na jeden punkt pomiarowy w Strona 3
+
+START_COL_E_S3 = 17   # kolumna Q — odczyty 1. przyrzadu (zrodlo dla E15:E19 w kopii)
+START_COL_F_S3 = 18   # kolumna R — wilgotnosc 1. przyrzadu (zrodlo dla F15:F19)
+KROK_COL_EF    = 2    # kazdy kolejny przyrzad to para kolumn dalej w prawo
 
 # Docelowe sciezki serwerowe dla linkow zewnetrznych, ktore maja byc
 # przywrocone na koncu (po wypelnieniu i odczycie kalibracji).
 LINKI_SERWEROWE = {
-    "Obliczenia tdp, RH, C.xls": r"\\plum4\LabPomiarowe\Obliczenia tdp, RH, C.xls",
-    "Wzory.xls": r"\\plum4\LabPomiarowe\Wzory.xls",
+    "Obliczenia tdp, RH, C.xls": C.tekst(
+        "GEN_LINK_OBLICZENIA", r"\\plum4\LabPomiarowe\Obliczenia tdp, RH, C.xls"),
+    "Wzory.xls": C.tekst("GEN_LINK_WZORY", r"\\plum4\LabPomiarowe\Wzory.xls"),
 }
 
 # --- Sprzatanie plikow autoodzyskiwania Excela (%AppData%\Microsoft\Excel) ---
@@ -233,8 +269,8 @@ LINKI_SERWEROWE = {
 # nazbierac do setek MB, przez co Excel przy starcie probuje je odzyskac i pada.
 # Skrypt czysci je PRZED uruchomieniem, ale tylko starsze niz prog ponizej —
 # dzieki temu ewentualne dzisiejsze odzyskiwanie RECZNEJ pracy nie zostanie usuniete.
-CZYSC_AUTORECOVER = True              # False = nie ruszaj folderu autoodzyskiwania
-CZYSC_AUTORECOVER_STARSZE_NIZ_DNI = 1  # usuwaj tylko starsze niz tyle dni; 0 = czysc wszystko
+CZYSC_AUTORECOVER = True              # False = nie ruszaj folderu autoodzyskiwania (patrz GEN_AUTOREC nizej)
+CZYSC_AUTORECOVER_STARSZE_NIZ_DNI = C.calk("GEN_AUTOREC_DNI", 1)  # usuwaj tylko starsze niz tyle dni; 0 = czysc wszystko
 
 # Dla protokolow CC-04 dane E/F startuja od S/T zamiast Q/R.
 PRZESUNIECIE_STARTU_KOL_CC04 = 2
@@ -242,12 +278,27 @@ WIERSZ_TYPU_CC04_S3 = 14
 
 # Mapowanie typu z S14:T14 (kolejne kopie: U14:V14, W14:X14, ...)
 # na stale wartosci zapisywane do K11/K12/K13/K17 w zakladkach roboczych.
-MAPOWANIE_TYPU_CC04 = {
-    "LG": {"K11": "Pt100-09", "K12": "1586A-02", "K13": "101", "K17": "CC-04-LG"},
-    "LD": {"K11": "Pt100-01", "K12": "1586A-02", "K13": "105", "K17": "CC-04-LD"},
-    "PD": {"K11": "Pt100-18", "K12": "1586A-02", "K13": "107", "K17": "CC-04-PD"},
-    "PG": {"K11": "Pt100-13", "K12": "1586A-02", "K13": "103", "K17": "CC-04-PG"},
-}
+_MAP_CC04_DOMYSLNA = [
+    ["LG", "Pt100-09", "1586A-02", "101", "CC-04-LG"],
+    ["LD", "Pt100-01", "1586A-02", "105", "CC-04-LD"],
+    ["PD", "Pt100-18", "1586A-02", "107", "CC-04-PD"],
+    ["PG", "Pt100-13", "1586A-02", "103", "CC-04-PG"],
+]
+
+
+def _mapowanie_cc04(wiersze):
+    """Zamienia tabele [tag, K11, K12, K13, K17] na slownik uzywany w Etapie 5."""
+    mapa = {}
+    for w in wiersze:
+        if not w or not str(w[0]).strip():
+            continue
+        pola = [str(x).strip() if x is not None else "" for x in w] + [""] * 5
+        mapa[pola[0].upper()] = {"K11": pola[1], "K12": pola[2],
+                                 "K13": pola[3], "K17": pola[4]}
+    return mapa
+
+
+MAPOWANIE_TYPU_CC04 = _mapowanie_cc04(C.tabela("GEN_MAP_CC04", _MAP_CC04_DOMYSLNA))
 
 # Dla CC-04:
 # - C15:C19 bierzemy z kolumny zależnej od typu (LG/PG/LD/PD),
@@ -264,25 +315,24 @@ KOLUMNA_D_CC04_S3 = 15  # O
 # - komorki zielone (#CCFFCC) sa brane,
 # - komorki szare (#BFBFBF) sa pomijane,
 # - pozostale kolory wg BIERZ_INNE_KOLORY_S3.
-FILTRUJ_KOLOR_S3      = True
-KOLOR_AKTYWNY_S3      = "#CCFFCC"
-KOLOR_POMIJANY_S3     = "#BFBFBF"
-BIERZ_INNE_KOLORY_S3  = False
+FILTRUJ_KOLOR_S3      = C.flaga("GEN_FILTR_KOLOR", True)
+KOLOR_AKTYWNY_S3      = C.tekst("GEN_KOLOR_AKT", "#CCFFCC")
+KOLOR_POMIJANY_S3     = C.tekst("GEN_KOLOR_POM", "#BFBFBF")
+BIERZ_INNE_KOLORY_S3  = C.flaga("GEN_INNE_KOLORY", False)
 # Jesli True, kopia dostaje tylko te zakladki, ktore maja dane E/F
 # (po filtracji kolorow) dla konkretnej kopii.
-USUWAJ_PUSTE_BLOKI_KOPII_S3 = True
+USUWAJ_PUSTE_BLOKI_KOPII_S3 = C.flaga("GEN_PUSTE", True)
+
+# Przyrzad wyszarzony w CALOSCI na Stronie 3 (zaden blok E/F nie jest aktywny)
+# nie dostaje ani kopii Excel, ani swiadectwa Word. Bez tego powstawal plik z
+# samym arkuszem Wyniki i swiadectwo z pusta tabela kalibracji.
+POMIJAJ_PRZYRZADY_BEZ_DANYCH = C.flaga("GEN_POMIJAJ_PUSTE", True)
 
 
 # --- Nadpisania z panelu GUI (app_gui.py) przez zmienne srodowiskowe ---
-def _env_flag(_nazwa, _biezaca):
-    """Zwraca True/False z env (1/true/tak/on), albo _biezaca gdy brak zmiennej."""
-    _v = os.environ.get(_nazwa)
-    return _biezaca if _v is None else _v.strip().lower() in ("1", "true", "tak", "yes", "on")
-
-GENERUJ_EXCEL = _env_flag("GEN_EXCEL", GENERUJ_EXCEL)
-GENERUJ_WORD  = _env_flag("GEN_WORD", GENERUJ_WORD)
-USUWAJ_PUSTE_BLOKI_KOPII_S3 = _env_flag("GEN_PUSTE", USUWAJ_PUSTE_BLOKI_KOPII_S3)
-CZYSC_AUTORECOVER = _env_flag("GEN_AUTOREC", CZYSC_AUTORECOVER)
+GENERUJ_EXCEL = C.flaga("GEN_EXCEL", GENERUJ_EXCEL)
+GENERUJ_WORD  = C.flaga("GEN_WORD", GENERUJ_WORD)
+CZYSC_AUTORECOVER = C.flaga("GEN_AUTOREC", CZYSC_AUTORECOVER)
 
 # =============================================================================
 # WARUNKI ŚRODOWISKOWE — czujnik + Wzory.xls
@@ -601,15 +651,29 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model, _cache_f
     return zakresy
 
 
-def _formatuj_zakres_srodowiskowy(v):
-    """Formats an env range value for Word output (Polish decimal comma)."""
+def _formatuj_zakres_srodowiskowy(v, miejsca=1):
+    """
+    Formatuje wartosc warunkow srodowiskowych do swiadectwa Word.
+
+    miejsca=1 — temperatura otoczenia, np. '21,8' (przecinek dziesietny PL).
+    miejsca=0 — wilgotnosc wzgledna, np. '30' — BEZ przecinka.
+
+    Wilgotnosc w swiadectwach podaje sie w pelnych procentach; wczesniej kazda
+    wartosc dostawala doklejone ',0' ('30,0 ÷ 54,0 %'), co nie odpowiada
+    rozdzielczosci tego pomiaru.
+
+    Zaokraglamy „w gore od polowy" (30,5 -> 31), a nie bankowo jak wbudowane
+    round(), ktore dla 30,5 dalo by 30, a dla 31,5 — 32.
+    """
     if v is None:
         return "—"
     try:
         f = float(v)
-        return f"{f:.1f}".replace(".", ",")
     except (TypeError, ValueError):
         return str(v)
+    if miejsca == 0:
+        return str(int(math.floor(f + 0.5)) if f >= 0 else -int(math.floor(-f + 0.5)))
+    return f"{f:.{miejsca}f}".replace(".", ",")
 
 
 def _oblicz_zakresy_srodowiskowe_z_istniejacych_kopii(folder, nazwy, dane_zakladek_per_kopia):
@@ -798,6 +862,35 @@ def _wybierz_aktywne_bloki_kopii(dane_zakladek, dane_ef_kopia):
     return aktywne_idx, dane_zakladek_kopia, dane_ef_kopia_aktywne
 
 
+def _odfiltruj_przyrzady_bez_danych(dane_s2, dane_ef, f24_per_kopia):
+    """
+    Usuwa z obiegu przyrzady, ktore nie maja ANI JEDNEGO aktywnego bloku pomiarow.
+
+    Lista kopii do zrobienia pochodzi ze Strony 2 (tabela przyrzadow), a nie z
+    kolorow na Stronie 3. Gdy uzytkownik wyszarzy wszystkie pomiary przyrzadu,
+    zeby go pominac, przyrzad nadal siedzi na Stronie 2 — bez tego filtra
+    powstawala pusta kopia (sam arkusz Wyniki) i do tego bezuzyteczne
+    swiadectwo Word z zerowa tabela kalibracji.
+
+    Numer przyrzadu z protokolu jest zapamietywany w rekordzie, zeby nazwa
+    pozostalej kopii dalej zgadzala sie z pozycja na Stronie 2 (np. '... - 4 -').
+
+    Zwraca (dane_s2, dane_ef, f24_per_kopia, pominiete) po filtracji.
+    """
+    zachowane_s2, zachowane_ef, zachowane_f24, pominiete = [], [], [], []
+    for j, rekord in enumerate(dane_s2):
+        rekord["_nr_przyrzadu"] = j + 1          # pozycja w tabeli Strona 2
+        ef_kopia = dane_ef[j] if j < len(dane_ef) else []
+        ma_dane = any(_czy_blok_ef_aktywny(ef) for ef in ef_kopia)
+        if ma_dane:
+            zachowane_s2.append(rekord)
+            zachowane_ef.append(ef_kopia)
+            zachowane_f24.append(f24_per_kopia[j] if j < len(f24_per_kopia) else None)
+        else:
+            pominiete.append((j + 1, rekord))
+    return zachowane_s2, zachowane_ef, zachowane_f24, pominiete
+
+
 def _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef):
     """Buduje liste zakladek roboczych osobno dla kazdej kopii."""
     wynik = []
@@ -914,7 +1007,7 @@ def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe, cicho=False):
               f"      {type(exc).__name__}: {exc}", indent="    ")
 
 
-def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, chroniony):
+def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, ark_wyniki):
     """Czyta kalibracje z juz istniejacych kopii Excel (bez etapu tworzenia kopii)."""
     n = len(nazwy_kopii)
     dane_kalibracji = []
@@ -959,7 +1052,7 @@ def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, chroniony):
             sciezka = os.path.join(folder, nazwa)
             print(f"    [Kalibracja {j:>{len(str(n))}}/{n}] {nazwa}")
             kal, klasa = _odczytaj_kalibracje_xlwings(
-                app, sciezka, chroniony, enable_diag=(j == 1), sciezki_linkowane=sciezki_linkowane)
+                app, sciezka, ark_wyniki, enable_diag=(j == 1), sciezki_linkowane=sciezki_linkowane)
             dane_kalibracji.append(kal or [])
             klasa_wilg_per_kopia.append(klasa)
 
@@ -1297,9 +1390,14 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
             val_a = ws3.cells(r0, 1).value
             if val_a is None or str(val_a).strip() == "":
                 break
-            val_b = _cell_to_sheet_name_part(ws3.cells(r0, 2).value)
-            val_c = _cell_to_sheet_name_part(ws3.cells(r0, 3).value)
+            _raw_b = ws3.cells(r0, 2).value
+            _raw_c = ws3.cells(r0, 3).value
+            val_b = _cell_to_sheet_name_part(_raw_b)
+            val_c = _cell_to_sheet_name_part(_raw_c)
             nazwa = f"{val_b}, {val_c}"
+            # Surowe nastawy zostawiamy do dopasowania nazwy zakladki do punktu z PZ.
+            _nast_t  = pz_dane._do_float(_raw_b)
+            _nast_rh = pz_dane._do_float(_raw_c)
             # Dane L/M pobieramy tylko z komorek o dozwolonym kolorze.
             L_dane = []; L_fmt = []
             M_dane = []; M_fmt = []
@@ -1327,8 +1425,13 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                 "czas_start": czas_st,
                 "czas_koniec": czas_kon,
                 "o25_val": o25_val,
+                "nast_t": _nast_t,      # surowa nastawa komory — do dopasowania punktu z PZ
+                "nast_rh": _nast_rh,
             })
             blok_idx += 1
+
+        # Nazwy zakladek wg punktow ZAMOWIONYCH w PZ (nastawa komory bywa inna niz nominal).
+        _nazwy_zakladek_z_pz(dane_zakladek)
 
         # --- Strona 3: dane E/F per kopia ---
         n_kopii = len(dane_s2)
@@ -1408,14 +1511,40 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
 # GENEROWANIE NAZWY KOPII
 # =============================================================================
 
-def generuj_nazwe_pliku(szablon_nazwa, wartosc_O, wartosc_E):
+def _numer_do_nazwy(rekord):
     """
-    Zastępuje:
-      'xxx'     → wartosc_O
-      'RH (CC)' → wartosc_E
-    w nazwie pliku szablonu.
+    Numer przyrzadu uzywany w NAZWIE kopii: nr fabryczny (Strona 2 kol. E), a gdy go brak
+    ('-' albo pusto) — nr ewidencyjny (kol. F).
+
+    Czesc przyrzadow nie ma nadanego numeru fabrycznego i identyfikuje sie je numerem
+    ewidencyjnym; bez tego zapasu nazwa konczyla sie samym mysleikiem ('... - 3 - -.xlsx')
+    i pliki roznych przyrzadow bylyby nierozroznialne.
     """
-    nazwa = szablon_nazwa.replace("xxx", wartosc_O, 1)
+    fabr = _cell_to_str(rekord.get("E")).strip()
+    if fabr and fabr != "-":
+        return fabr
+    ewid = _cell_to_str(rekord.get("F")).strip()
+    return ewid if ewid and ewid != "-" else fabr
+
+
+def generuj_nazwe_pliku(szablon_nazwa, wartosc_O, wartosc_E, nr_przyrzadu=None):
+    """
+    Zastępuje w nazwie pliku szablonu:
+      'xxx'      → wartosc_O        (numer zlecenia)
+      '- N -'    → numer przyrzadu  (gdy podano nr_przyrzadu)
+      'RH (CC)'  → wartosc_E        (nr fabryczny przyrzadu)
+
+    Numer przyrzadu stoi w nazwie tuz PRZED nr fabrycznym ('... - 1 - RH (CC).xlsx')
+    i musi odpowiadac pozycji przyrzadu w protokole (Przyrzady wzorcowane 1, 2, 3...).
+    Wczesniej zostawala szablonowa '1' przy kazdej kopii, wiec pliki roznych przyrzadow
+    mialy ten sam numer. Podmieniamy TYLKO liczbe przylegajaca do miejsca na nr fabryczny
+    — inne liczby w nazwie (ILAJ 5.4_11#21, Wer.12, daty) zostaja nietkniete.
+    """
+    nazwa = szablon_nazwa
+    if nr_przyrzadu is not None:
+        nazwa = re.sub(r'-\s*\d+\s*-\s*(?=RH\s*\(CC\))',
+                       f'- {nr_przyrzadu} - ', nazwa, count=1)
+    nazwa = nazwa.replace("xxx", wartosc_O, 1)
     nazwa = nazwa.replace("RH (CC)", wartosc_E, 1)
     return nazwa
 
@@ -2054,7 +2183,7 @@ def generuj_nazwe_word(nr_sw, prefiks, rok):
 
 
 # PZ jako fallback danych przyrzadu (gdy Strona 2 pusta — np. protokol bez PZ-fill).
-PZ_FOLDER_ARK = os.environ.get("CC_PZ_FOLDER") or os.path.join(FOLDER, "PZ")
+PZ_FOLDER_ARK = C.sciezka("CC_PZ_FOLDER", "PZ", FOLDER)
 _PZ_CACHE = None
 
 def _pz_mapa_arkusze():
@@ -2063,6 +2192,82 @@ def _pz_mapa_arkusze():
     if _PZ_CACHE is None:
         _PZ_CACHE, _ = pz_dane.wczytaj_pz(PZ_FOLDER_ARK)
     return _PZ_CACHE
+
+
+_PZ_PUNKTY_CACHE = None
+
+
+def _pz_punkty_arkusze():
+    """
+    Leniwie wczytuje punkty ZAMOWIONE w PZ (wartosci nominalne, np. (25, 30));
+    cache na czas dzialania. Sluza do nazywania zakladek arkusza obliczeniowego.
+    """
+    global _PZ_PUNKTY_CACHE
+    if _PZ_PUNKTY_CACHE is None:
+        _PZ_PUNKTY_CACHE = pz_dane.wczytaj_punkty(PZ_FOLDER_ARK)
+    return _PZ_PUNKTY_CACHE
+
+
+# Tolerancje dopasowania nastawy komory do punktu NOMINALNEGO z PZ
+# (np. PZ '25 °C / 30 %' -> nastawa komory 25,0 / 28,0).
+TOL_NAZWA_T  = 1.5    # [st.C]
+TOL_NAZWA_RH = 4.0    # [%RH]
+
+
+def _nazwy_zakladek_z_pz(dane_zakladek):
+    """
+    Podmienia nazwy zakladek na wartosci NOMINALNE z PZ ('25, 30' zamiast '25, 28').
+
+    Nastawa komory bywa inna niz punkt zamowiony (25/28 zamiast 25/30, 24,9/48,5 zamiast
+    25/50), a w dokumentach obowiazuje punkt z zamowienia.
+
+    Dopasowanie jest PER BLOK — do kazdego bloku szukamy NAJBLIZSZEGO jeszcze nieuzytego
+    punktu z PZ. Liczby nie musza sie zgadzac: PZ obejmuje czesto wiecej punktow, niz
+    odbyto w danym wsadzie komory (np. 13 zamowionych, 4 wykonane), a przyrzady z jednego
+    PZ bywaja wzorcowane w kilku wsadach. Blok bez pasujacego punktu zachowuje nazwe
+    z nastawy komory.
+    """
+    punkty = _pz_punkty_arkusze()
+    if not punkty or not dane_zakladek:
+        return
+
+    uzyte, zmienione = set(), 0
+    for zd in dane_zakladek:
+        t_n, rh_n = zd.get("nast_t"), zd.get("nast_rh")
+        if t_n is None:
+            continue
+        najlepszy, najlepszy_dyst = None, None
+        for idx, (t_pz, rh_pz) in enumerate(punkty):
+            if idx in uzyte or t_pz is None:
+                continue
+            if abs(t_n - t_pz) > TOL_NAZWA_T:
+                continue
+            # punkt tylko-temperaturowy w PZ vs nastawa RH=0/'-' w protokole
+            if rh_pz is None:
+                if rh_n not in (None, 0.0):
+                    continue
+                dyst = abs(t_n - t_pz)
+            else:
+                if rh_n is None or abs(rh_n - rh_pz) > TOL_NAZWA_RH:
+                    continue
+                dyst = abs(t_n - t_pz) + abs(rh_n - rh_pz) / 10.0
+            if najlepszy_dyst is None or dyst < najlepszy_dyst - 1e-9:
+                najlepszy, najlepszy_dyst = idx, dyst
+        if najlepszy is None:
+            continue
+        uzyte.add(najlepszy)
+        t_pz, rh_pz = punkty[najlepszy]
+        czesc_t  = _cell_to_sheet_name_part(t_pz)
+        czesc_rh = _cell_to_sheet_name_part(rh_pz) if rh_pz is not None else "-"
+        zd["nazwa"] = f"{czesc_t}, {czesc_rh}"
+        zmienione += 1
+
+    if zmienione:
+        print(f"  Nazwy zakladek wg punktow z PZ ({zmienione}/{len(dane_zakladek)}): "
+              + " | ".join(f"'{zd['nazwa']}'" for zd in dane_zakladek))
+    else:
+        _warn("Zadnego bloku protokolu nie udalo sie dopasowac do punktow z PZ — "
+              "nazwy zakladek zostaja z nastaw komory.")
 
 
 def _wariant_uzytkownik(nazwa_szablonu):
@@ -2179,13 +2384,16 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
         zakresy = warunki_per_kopia[j] if warunki_per_kopia and j < len(warunki_per_kopia) else None
         if zakresy is None:
             zakresy = {}
-        for placeholder, klucz in [
-            ("[temp_min]", "temp_min"),
-            ("[temp_max]", "temp_max"),
-            ("[wilg_min]", "wilg_min"),
-            ("[wilg_max]", "wilg_max"),
+        # Temperatura otoczenia z jednym miejscem po przecinku, wilgotnosc —
+        # w pelnych procentach (bez ',0').
+        for placeholder, klucz, miejsca in [
+            ("[temp_min]", "temp_min", 1),
+            ("[temp_max]", "temp_max", 1),
+            ("[wilg_min]", "wilg_min", 0),
+            ("[wilg_max]", "wilg_max", 0),
         ]:
-            _zastap_tekst_w_dok(doc, placeholder, _formatuj_zakres_srodowiskowy(zakresy.get(klucz)))
+            _zastap_tekst_w_dok(doc, placeholder,
+                                _formatuj_zakres_srodowiskowy(zakresy.get(klucz), miejsca))
 
         doc.save(sciezka_docx)
         nazwy_word.append(nowa_nazwa_docx)
@@ -2198,7 +2406,7 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
 # ZARZĄDZANIE ZAKŁADKAMI I WYPEŁNIANIE KOMÓREK
 # =============================================================================
 
-def _dopasuj_liczbe_zakładek(wb, working, n, chroniony, first_ws_name):
+def _dopasuj_liczbe_zakładek(wb, working, n, ark_wyniki, first_ws_name):
     """
     Usuwa nadmiarowe zakładki robocze (od końca) lub dodaje kopie
     pierwszej zakładki roboczej gdy brakuje.
@@ -2216,14 +2424,14 @@ def _dopasuj_liczbe_zakładek(wb, working, n, chroniony, first_ws_name):
         for _ in range(n - len(working)):
             new_ws = wb.copy_worksheet(first_ws)
             # Przesuń nową zakładkę o jedną pozycję w lewo (tuż przed Wyniki)
-            if chroniony in wb.sheetnames:
+            if ark_wyniki in wb.sheetnames:
                 wb.move_sheet(new_ws.title, offset=-1)
             working.append(new_ws.title)
 
     return working
 
 
-def dostosuj_zakladki_i_wypelnij(sciezka_pliku, dane_zakladek, dane_ef_kopia, chroniony):
+def dostosuj_zakladki_i_wypelnij(sciezka_pliku, dane_zakladek, dane_ef_kopia, ark_wyniki):
     """
     Otwiera skopiowany plik xlsx i:
       1. Dopasowuje liczbę zakładek roboczych do len(dane_zakladek).
@@ -2234,16 +2442,16 @@ def dostosuj_zakladki_i_wypelnij(sciezka_pliku, dane_zakladek, dane_ef_kopia, ch
            E15:E19 ← dane_ef_kopia[i]["E_dane"]
            F15:F19 ← dane_ef_kopia[i]["F_dane"]
       4. Zapisuje plik (jedno wb.save() na końcu).
-    Zakładka ARKUSZ_CHRONIONY ("Wyniki") nie jest nigdy modyfikowana.
+    Zakładka ARKUSZ_WYNIKI ("Wyniki") nie jest nigdy modyfikowana.
     """
     wb = openpyxl.load_workbook(sciezka_pliku, keep_links=False)
 
-    wyniki_ok = chroniony in wb.sheetnames
+    wyniki_ok = ark_wyniki in wb.sheetnames
     if not wyniki_ok:
-        print(f"  [OSTRZEŻENIE] Brak zakładki '{chroniony}' w pliku.")
+        print(f"  [OSTRZEŻENIE] Brak zakładki '{ark_wyniki}' w pliku.")
 
     # Pobierz zakładki robocze (wszystkie poza chronioną)
-    working = [s for s in wb.sheetnames if s != chroniony]
+    working = [s for s in wb.sheetnames if s != ark_wyniki]
 
     if not working:
         print(f"  [BŁĄD] Brak zakładek roboczych — pomijam plik.")
@@ -2259,22 +2467,22 @@ def dostosuj_zakladki_i_wypelnij(sciezka_pliku, dane_zakladek, dane_ef_kopia, ch
     first_ws_name = working[0]
 
     # --- Etap 2: dopasuj liczbę zakładek roboczych ---
-    working = _dopasuj_liczbe_zakładek(wb, working, N, chroniony, first_ws_name)
+    working = _dopasuj_liczbe_zakładek(wb, working, N, ark_wyniki, first_ws_name)
 
     # Odśwież listę po zmianach struktury
-    working = [s for s in wb.sheetnames if s != chroniony]
+    working = [s for s in wb.sheetnames if s != ark_wyniki]
 
     # --- Etap 2: zmień nazwy przez tymczasowe (unika konfliktów między starymi a nowymi) ---
     for i, ws_name in enumerate(working):
         wb[ws_name].title = f"__tmp_{i}__"
 
     docelowe_nazwy = _unikalne_nazwy_zakladek(dane_zakladek)
-    working_tmp = [s for s in wb.sheetnames if s != chroniony]
+    working_tmp = [s for s in wb.sheetnames if s != ark_wyniki]
     for i, ws_name in enumerate(working_tmp):
         wb[ws_name].title = docelowe_nazwy[i]
 
     # --- Etap 3 & 4: wypełnij komórki w każdej zakładce roboczej ---
-    working_final = [s for s in wb.sheetnames if s != chroniony]
+    working_final = [s for s in wb.sheetnames if s != ark_wyniki]
 
     ADRESY_C = ["C15", "C16", "C17", "C18", "C19"]
     ADRESY_D = ["D15", "D16", "D17", "D18", "D19"]
@@ -2673,7 +2881,7 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
     return last_row - LAST_ROW_DEFAULT
 
 
-def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val, sciezki_linkowane=None, _pierwsza_kopia=True, _cache_fg=None):
+def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, nowa_nazwa, ark_wyniki, f24_val, sciezki_linkowane=None, _pierwsza_kopia=True, _cache_fg=None):
     """
     Otwiera kopie xlsx przez xlwings (COM Excel):
       1. Dopasowuje liczbe zakladek roboczych do len(dane_zakladek).
@@ -2744,7 +2952,8 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             _warn(f"LinkSources() — nie mozna odczytac linkow z pliku\n"
                   f"      {type(_le).__name__}: {_le}")
     try:
-        wykluczone = {chroniony, ARKUSZ_WNIOSKI}
+        # arkusz zbiorczy nie jest zakladka punktu — nie usuwamy go ani nie przemianowujemy
+        wykluczone = {ark_wyniki}
         working = [s.name for s in wb.sheets if s.name not in wykluczone]
         N = len(dane_zakladek)
 
@@ -2755,7 +2964,7 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         if N == 0:
             # Dla kopii bez aktywnych blokow usuwamy wszystkie zakladki robocze.
             wszystkie_nazwy = {s.name for s in wb.sheets}
-            if chroniony in wszystkie_nazwy:
+            if ark_wyniki in wszystkie_nazwy:
                 for ws_name in list(working):
                     wb.sheets[ws_name].delete()
             else:
@@ -2775,31 +2984,31 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
 
             elif len(working) < N:
                 do_dodania = N - len(working)
-                # Kazda zakladka szablonu ma ~41 obiektow OLE (Equation.3 + Word.Document.12).
-                # Excel musi je duplikowac przy kazdym kopiowaniu i uruchamia w tym celu
-                # Worda — stad ~14 s na zakladke, komunikat Worda „Za duzo otwartych plikow"
-                # i w skrajnym przypadku pad Excela (OLE 0x800a01a8). Ostrzegamy ZAWCZASU.
-                if do_dodania >= PROG_OSTRZEZENIA_KOPII:
-                    _warn(f"Do wykonania {do_dodania} kopii zakladek (punktow: {N}).\n"
-                          f"      Szablon ma ~41 obiektow OLE (Equation/Word) na zakladke,\n"
-                          f"      wiec jedna kopia trwa ok. {SEK_NA_KOPIE_ZAKLADKI} s "
-                          f"-> szacowany czas ~{do_dodania * SEK_NA_KOPIE_ZAKLADKI // 60} min NA PLIK.\n"
-                          f"      Przy duzej liczbie punktow Word moze zglosic 'Za duzo otwartych\n"
-                          f"      plikow', a Excel paść. Zalecenie: mniej punktow w jednym pomiarze\n"
-                          f"      albo jednorazowa zamiana obiektow OLE w szablonie na obrazki.")
                 _log_etap(f"kopiuje zakladki: {len(working)} -> {N} "
-                          f"({do_dodania} operacji kopiowania, ~"
-                          f"{do_dodania * SEK_NA_KOPIE_ZAKLADKI} s)", _t0)
+                          f"({do_dodania} operacji kopiowania)", _t0)
                 for _i in range(do_dodania):
+                    _t_kopii = time.time()
                     before = {s.name for s in wb.sheets}
                     src = wb.sheets[first_ws_name]
-                    if chroniony in {s.name for s in wb.sheets}:
-                        src.api.Copy(Before=wb.sheets[chroniony].api)
+                    if ark_wyniki in {s.name for s in wb.sheets}:
+                        src.api.Copy(Before=wb.sheets[ark_wyniki].api)
                     else:
                         src.api.Copy(After=wb.sheets[-1].api)
                     after = {s.name for s in wb.sheets}
                     new_name = (after - before).pop()
                     working.append(new_name)
+                    if _i == 0 and do_dodania >= PROG_OSTRZEZENIA_KOPII:
+                        # Czas MIERZYMY, nie zakladamy — zalezy od maszyny i od liczby
+                        # obiektow OLE (Equation/Word) w zakladce szablonu.
+                        _sek = time.time() - _t_kopii
+                        _warn(f"Do wykonania {do_dodania} kopii zakladek (punktow: {N}).\n"
+                              f"      Pierwsza trwala {_sek:.1f} s -> szacunkowo "
+                              f"~{do_dodania * _sek / 60:.0f} min NA PLIK.\n"
+                              f"      Kopiowanie jest wolne, bo zakladka szablonu zawiera obiekty\n"
+                              f"      OLE (Equation/Word) — Excel duplikuje kazdy z nich i uruchamia\n"
+                              f"      do tego Worda. Przy wielu punktach Word potrafi zglosic\n"
+                              f"      'Za duzo otwartych plikow', a Excel padnac. Trwale rozwiazanie:\n"
+                              f"      zamiana tych obiektow w szablonie na obrazki.")
                     if (_i + 1) % 5 == 0 or _i + 1 == do_dodania:
                         _log_etap(f"   skopiowano {_i + 1}/{do_dodania} zakladek", _t0)
 
@@ -2821,11 +3030,19 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             working_final = [s.name for s in wb.sheets if s.name not in wykluczone]
 
         prefiks, rok, nr_fab, _ = _parsuj_nazwe_pliku(nowa_nazwa)
-        dzis = datetime.datetime.now()
+        # SAMA data, bez godziny — wartosc trafia do komorek dat przy podpisach
+        # (B228/H228 oraz C28/C32 w 'Wyniki'). datetime.now() zapisywalby tam czas,
+        # ktory byl widoczny na pasku formuly ('06.08.2026 10:14:42').
+        dzis = datetime.date.today()
         parametry_cc04 = _parametry_typu_cc04(rekord)
         if rekord.get("IS_CC04_PROTO") and parametry_cc04 is None:
             raw = _cell_to_str(rekord.get("CC04_RAW"))
             print(f"  [UWAGA] Nieznany typ CC-04 dla kopii '{nowa_nazwa}': '{raw}'.")
+
+        # Higrometr do K18 zalezy od komory (CC / CC-04) — patrz konfiguracja na gorze pliku.
+        _k18_wartosc = _higrometr_k18(bool(rekord.get("IS_CC04_PROTO")))
+        _log_etap(f"K18 (higrometr) dla komory "
+                  f"{'CC-04' if rekord.get('IS_CC04_PROTO') else 'CC'}: '{_k18_wartosc}'", _t0)
 
         _log_etap(f"wypelniam komorki w {len(working_final)} zakladkach...", _t0)
         for i, ws_name in enumerate(working_final):
@@ -2919,10 +3136,10 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws.range("K13").value = parametry_cc04["K13"]
                 ws.range("K17").value = parametry_cc04["K17"]
 
-            # K18 — higrometr punktu rosy: wartosc z konfiguracji (HIGROMETR_K18),
+            # K18 — higrometr punktu rosy: wartosc wg KOMORY (HIGROMETR_K18_WG_KOMORY),
             # ale dla punktow TYLKO-TEMPERATURA (brak RH w nazwie zakladki) zawsze "-".
             _rh_nom = _rh_z_nazwy_zakladki(zd.get("nazwa"))
-            ws.range("K18").value = "-" if _rh_nom is None else HIGROMETR_K18
+            ws.range("K18").value = "-" if _rh_nom is None else _k18_wartosc
 
             o25 = zd.get("o25_val")
             if o25 is not None:
@@ -2953,9 +3170,9 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
 
         # --- Etap 6: arkusz Wyniki ---
         extra_rows = 0
-        if chroniony in {s.name for s in wb.sheets}:
-            _log_etap(f"arkusz '{chroniony}': porzadkuje tabele wynikow...", _t0)
-            ws_w = wb.sheets[chroniony]
+        if ark_wyniki in {s.name for s in wb.sheets}:
+            _log_etap(f"arkusz '{ark_wyniki}': porzadkuje tabele wynikow...", _t0)
+            ws_w = wb.sheets[ark_wyniki]
             extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final)
             _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows)
             if f24_val is not None:
@@ -2982,12 +3199,19 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             _ws.api.Calculate()   # przelicz tylko kopie przed zapisem
         # EnableEvents pozostaje False (ustawione przed open, przywrocone w finally)
 
-        # Przewin pasek zakladek do pierwszej zakladki, aktywna (widoczna) pozostaje Wyniki.
-        # Dzieki temu po otwarciu pliku zakladki nie sa "schowane" za strzalka.
+        # Pasek zakladek: po otwarciu pliku maja byc widoczne WSZYSTKIE zakladki punktow,
+        # a aktywny arkusz zbiorczy. KOLEJNOSC MA ZNACZENIE — activate() sam przewija pasek
+        # do aktywnego arkusza, wiec przewijanie musi byc PO aktywacji (wczesniej bylo
+        # odwrotnie i po otwarciu widac bylo tylko 'Wyniki').
         try:
-            wb.api.Windows(1).ScrollWorkbookTabs(Sheets=-wb.api.Sheets.Count)
-            if chroniony in {s.name for s in wb.sheets}:
-                wb.sheets[chroniony].activate()
+            if ark_wyniki in {s.name for s in wb.sheets}:
+                wb.sheets[ark_wyniki].activate()
+            okno = wb.api.Windows(1)
+            try:
+                okno.TabRatio = TAB_RATIO      # szerszy pasek zakladek kosztem paska przewijania
+            except Exception:
+                pass
+            okno.ScrollWorkbookTabs(Sheets=-wb.api.Sheets.Count)   # na sam poczatek
         except Exception:
             pass
 
@@ -3023,7 +3247,7 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
     return zakresy_srodowiskowe
 
 
-def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, chroniony, enable_diag=False, sciezki_linkowane=None):
+def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=False, sciezki_linkowane=None):
     """
     Czyta dane kalibracyjne z zakladek roboczych po pelnym przeliczeniu formul.
     Wykrywa obecnosc aktywnych danych wilgotnosci (RHm w F15:F19) NIEZALEZNIE
@@ -3098,7 +3322,8 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, chroniony, enable_diag=Fals
             _warn(f"LinkSources() — nie mozna odczytac linkow z pliku\n"
                   f"      {type(exc).__name__}: {exc}")
 
-        wykluczone = {chroniony, ARKUSZ_WNIOSKI}
+        # arkusz zbiorczy nie jest zakladka punktu — nie usuwamy go ani nie przemianowujemy
+        wykluczone = {ark_wyniki}
 
         app.api.DisplayAlerts = False
         app.api.AskToUpdateLinks = False
@@ -3215,7 +3440,7 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, chroniony, enable_diag=Fals
 # TWORZENIE KOPII
 # =============================================================================
 
-def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, f24_per_kopia):
+def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki, f24_per_kopia):
     """
     Dla każdego rekordu z Strona 2:
       1. Generuje nazwę kopii i kopiuje szablon (shutil.copy2).
@@ -3231,7 +3456,11 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
 
     # Krok 1: utwórz wszystkie kopie (szybkie kopiowanie pliku)
     for j, rekord in enumerate(dane):
-        nowa_nazwa = generuj_nazwe_pliku(szablon_plik, rekord["O"], rekord["E"])
+        # numer przyrzadu = jego pozycja w protokole (Przyrzady wzorcowane 1, 2, 3...).
+        # Bierzemy go z rekordu, bo po odfiltrowaniu przyrzadow bez pomiarow
+        # indeks w petli nie odpowiada juz pozycji na Stronie 2.
+        nowa_nazwa = generuj_nazwe_pliku(szablon_plik, rekord["O"], _numer_do_nazwy(rekord),
+                                         nr_przyrzadu=rekord.get("_nr_przyrzadu", j + 1))
         sciezka_kopii = os.path.join(folder, _bezpieczna_nazwa_pliku(nowa_nazwa))
         if os.path.exists(sciezka_kopii):
             print(f"  [UWAGA] Plik już istnieje, nadpisuję: {nowa_nazwa}")
@@ -3273,7 +3502,7 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
 
             dane_zakladek_per_kopia.append(dane_zakladek_kopia)
             f24_val = f24_per_kopia[j] if j < len(f24_per_kopia) else None
-            zakresy_srod = _dostosuj_xlwings(app, sciezka_kopii, dane_zakladek_kopia, dane_ef_kopia, rekord, nowa_nazwa, chroniony, f24_val, sciezki_linkowane=sciezki_linkowane, _pierwsza_kopia=(j == 0), _cache_fg=_cache_fg)
+            zakresy_srod = _dostosuj_xlwings(app, sciezka_kopii, dane_zakladek_kopia, dane_ef_kopia, rekord, nowa_nazwa, ark_wyniki, f24_val, sciezki_linkowane=sciezki_linkowane, _pierwsza_kopia=(j == 0), _cache_fg=_cache_fg)
             zakresy_per_kopia.append(zakresy_srod)
 
         print("  Odczyt kalibracji po zakonczeniu wypelniania wszystkich kopii...")
@@ -3283,7 +3512,7 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, chroniony, 
         for j, nowa_nazwa, sciezka_kopii, _ in kopie:
             print(f"    [Kalibracja {j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
             kal, klasa = _odczytaj_kalibracje_xlwings(
-                app, sciezka_kopii, chroniony, enable_diag=(j == 0), sciezki_linkowane=sciezki_linkowane)
+                app, sciezka_kopii, ark_wyniki, enable_diag=(j == 0), sciezki_linkowane=sciezki_linkowane)
             dane_kalibracji.append(kal or [])
             klasa_wilg_per_kopia.append(klasa)
     finally:
@@ -3363,6 +3592,22 @@ def _main_impl():
         print("[BŁĄD] Brak danych w Strona 2 — skrypt kończy pracę.")
         return
 
+    # Przyrzady wyszarzone w calosci na Stronie 3 nie maja po co dostawac kopii
+    # ani swiadectwa — wypadaja z obiegu tutaj, zanim ruszy Excel.
+    if POMIJAJ_PRZYRZADY_BEZ_DANYCH:
+        dane_s2, dane_ef, f24_per_kopia, pominiete = _odfiltruj_przyrzady_bez_danych(
+            dane_s2, dane_ef, f24_per_kopia)
+        if pominiete:
+            print(f"  Pomijam {len(pominiete)} przyrzad(ow) bez aktywnych pomiarow "
+                  f"(wszystkie bloki Strona 3 wyszarzone):")
+            for nr, rekord in pominiete:
+                print(f"    • przyrzad {nr}: {_numer_do_nazwy(rekord) or '(brak nr)'}")
+            print(f"  Do przetworzenia zostaje: {len(dane_s2)} przyrzad(ow).")
+        if not dane_s2:
+            print("[BŁĄD] Zaden przyrzad nie ma aktywnych pomiarow na Stronie 3 — "
+                  "nie ma czego generowac. Sprawdz kolory komorek E/F.")
+            return
+
     if not dane_zakladek:
         print("[OSTRZEŻENIE] Brak definicji zakładek w Strona 3.")
     else:
@@ -3388,7 +3633,7 @@ def _main_impl():
         nazwy, dane_kalibracji, dane_zakladek_per_kopia, klasa_wilg_per_kopia, zakresy_per_kopia = utworz_kopie(
             FOLDER, SZABLON_PLIK,
             dane_s2, dane_zakladek, dane_ef,
-            ARKUSZ_CHRONIONY,
+            ARKUSZ_WYNIKI,
             f24_per_kopia,
         )
 
@@ -3402,7 +3647,7 @@ def _main_impl():
         print(SEP)
         print(
             f"Zakończono etapy Excel. Utworzono {len(nazwy)} kopii. "
-            f"Liczba zakładek roboczych jest dobierana per kopia + {ARKUSZ_CHRONIONY}."
+            f"Liczba zakładek roboczych jest dobierana per kopia + {ARKUSZ_WYNIKI}."
         )
         print(SEP)
     else:
@@ -3410,7 +3655,9 @@ def _main_impl():
         print("ETAP Excel pominięty (GENERUJ_EXCEL=False)")
         print(SEP)
 
-        nazwy = [generuj_nazwe_pliku(SZABLON_PLIK, rekord["O"], rekord["E"]) for rekord in dane_s2]
+        nazwy = [generuj_nazwe_pliku(SZABLON_PLIK, rekord["O"], _numer_do_nazwy(rekord),
+                                     nr_przyrzadu=rekord.get("_nr_przyrzadu", j + 1))
+                 for j, rekord in enumerate(dane_s2)]
         brakujace = [nazwa for nazwa in nazwy if not os.path.exists(os.path.join(FOLDER, nazwa))]
         if brakujace:
             print("[BŁĄD] Brak gotowych kopii Excel wymaganych do dalszych etapów:")
@@ -3422,7 +3669,7 @@ def _main_impl():
         dane_kalibracji, klasa_wilg_per_kopia = _odczytaj_kalibracje_dla_istniejacych_kopii(
             FOLDER,
             nazwy,
-            ARKUSZ_CHRONIONY,
+            ARKUSZ_WYNIKI,
         )
 
         if GENERUJ_WORD and (SZABLON_WORD_TYLKO_TEMP or SZABLON_WORD_Z_RH or SZABLON_WORD_MIESZANY):

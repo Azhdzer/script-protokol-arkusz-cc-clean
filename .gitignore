@@ -30,6 +30,12 @@ archiwium/
 # Edytor
 .vscode/
 
+# Ustawienia panelu — sciezki lokalne tej maszyny, kazdy ma swoje.
+cc_ustawienia.json
+
+# Piaskownica testow — kopie plikow wejsciowych i artefakty przebiegow.
+testy/_piaskownica/
+
 # PyInstaller — artefakty budowy (nie commitujemy exe/build)
 build/
 dist/
@@ -39,6 +45,9 @@ crash.log
 # Dane pomiarowe (loggery / protokoly) — nie publikujemy
 excel_do_analizy/
 20??-*.txt
+# ...takze gdy nazwa zaczyna sie od numeru zlecenia,
+# np. '193_LA_TH_2026-08-15 10.50_199.txt'
+*_LA_TH_*.txt
 
 # Zdjecia punktow kopiowane przez skrypt (setki MB) — tylko lokalnie
 foto/

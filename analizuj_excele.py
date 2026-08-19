@@ -50,9 +50,19 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 # ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
-DEFAULT_INPUT  = Path("excel_do_analizy")
-DEFAULT_OUTPUT = Path("wyniki")
+# Foldery wejscia/wyjscia — panel (app_gui.py) podaje je przez ANL_INPUT / ANL_OUTPUT,
+# a folder roboczy przez CC_FOLDER. Przy recznym uruchomieniu dzialaja wartosci domyslne
+# wzgledem biezacego katalogu, dokladnie jak wczesniej.
+import cc_config as _C
+
+_BAZA          = os.environ.get("CC_FOLDER") or os.getcwd()
+DEFAULT_INPUT  = Path(_C.sciezka("ANL_INPUT", "excel_do_analizy", _BAZA))
+DEFAULT_OUTPUT = Path(_C.sciezka("ANL_OUTPUT", "wyniki", _BAZA))
 SUPPORTED_EXT  = {'.csv', '.xls', '.xlsx', '.txt', '.pdf', '.log'}
+
+# Zawezenie wsadu do wybranych nazw plikow (panel: lista z zaznaczaniem).
+# Pusta lista = bierz wszystko z folderu, czyli zachowanie sprzed panelu.
+WYBRANE_PLIKI  = _C.lista("ANL_PLIKI", [])
 
 # Angielskie skroty miesiecy → numer. Uzywane do parsowania dat 'DD-MMM-YY'
 # niezaleznie od locale systemu (tempmate zawsze zapisuje miesiac po angielsku,
@@ -60,7 +70,7 @@ SUPPORTED_EXT  = {'.csv', '.xls', '.xlsx', '.txt', '.pdf', '.log'}
 _MONTHS_EN = {m: i for i, m in enumerate(
     ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
      'jul', 'aug', 'sep', 'oct', 'nov', 'dec'], start=1)}
-DEBUG = '--debug' in sys.argv
+DEBUG = ('--debug' in sys.argv) or _C.flaga("ANL_DEBUG", False)
 
 # Zebrane wyniki biezacego przebiegu (label, DataFrame) — do zestawienia zbiorczego.
 _ZEBRANE = []
@@ -135,6 +145,13 @@ def parse_dt(val):
         '%d.%m.%Y %H:%M:%S', '%d.%m.%Y %H:%M',
         '%d-%m-%Y %H:%M:%S', '%d-%m-%Y %H:%M',
         '%d.%m.%y %H:%M:%S', '%d.%m.%y %H:%M',
+        # Ukosniki: NAJPIERW europejskie DD/MM (jak w reszcie skryptu i jak zaklada
+        # detect_dayfirst). Data '05/08/2026' to 5 sierpnia, nie 8 maja — wczesniej
+        # wygrywal wariant amerykanski i dane ladowaly o kilka miesiecy obok.
+        # Zapisy jednoznacznie amerykanskie (np. '12/25/2026') nie pasuja do %d/%m
+        # (miesiac 25 nie istnieje), wiec spadaja nizej do %m/%d i nadal dzialaja.
+        '%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M',
+        '%d/%m/%y %H:%M:%S', '%d/%m/%y %H:%M',
         '%m/%d/%y %H:%M:%S', '%m/%d/%Y %H:%M:%S',
         '%Y-%m-%dT%H:%M:%S',
         # Date-only fallbacks
@@ -218,6 +235,90 @@ def read_csv_robust(filepath):
             break
     return best
 
+# Identyfikator przyrzadu w naglowku arkusza — najczestsze zapisy:
+#   '1: 28:2C:02:40:30:A9'      (adres MAC, np. loggery Efento) -> '282C024030A9'
+#   'Numer seryjny: 37025101', 'Nr fabryczny: ...', 'S/N: ...'
+_RE_ID_MAC   = re.compile(r'\b((?:[0-9A-F]{2}:){5}[0-9A-F]{2})\b', re.I)
+_RE_ID_ETYK  = re.compile(
+    r'(?:numer\s+seryjny|nr\s*seryjny|nr\s*fabr\w*|serial\s*(?:no\.?|number)?|s/n)'
+    r'\s*[:\-]\s*([A-Za-z0-9][A-Za-z0-9._/-]{2,})', re.I)
+
+
+def _id_przyrzadu_z_arkusza(df_raw, max_wierszy=8):
+    """
+    Szuka identyfikatora przyrzadu w naglowku arkusza i zwraca go w postaci pasujacej
+    do numeru z PZ (bez dwukropkow i spacji), albo None.
+
+    Dzieki temu plik wynikowy nazywa sie numerem przyrzadu (jak przy innych loggerach),
+    a nie nazwa raportu — inaczej nie da sie go dopasowac do PZ i tabela przyrzadow
+    na Stronie 2 protokolu zostaje pusta.
+    """
+    try:
+        naglowek = df_raw.head(max_wierszy).astype(str)
+    except Exception:
+        return None
+    for _, wiersz in naglowek.iterrows():
+        for komorka in wiersz:
+            tekst = str(komorka).strip()
+            if not tekst or tekst.lower() in ('nan', 'none'):
+                continue
+            m = _RE_ID_MAC.search(tekst)
+            if m:
+                return m.group(1).replace(':', '').upper()
+            m = _RE_ID_ETYK.search(tekst)
+            if m:
+                return m.group(1).strip()
+    return None
+
+
+def _na_datetime_auto(seria):
+    """
+    Konwersja czasu z AUTOMATYCZNYM rozpoznaniem 'DD/MM' vs 'MM/DD'.
+
+    Loggery zapisuja date w formacie lokalnym: '05/08/2026' to u nas 5 sierpnia, ale pandas
+    domyslnie czyta to jako 8 maja — dane laduja wtedy o kilka miesiecy obok i nie da sie
+    ich dopasowac do punktow pomiarowych.
+
+    Kolejnosc rozstrzygania:
+      1. gdy ktorys skladnik > 12, format jest jednoznaczny (pandas sam sobie radzi),
+      2. gdy oba warianty sie parsuja — wybieramy ten o REGULARNIEJSZYCH odstepach:
+         bledna interpretacja rozrywa ciag zapisow na kilkudziesieciodniowe przeskoki
+         (np. 5 sie -> 4 sie to 3 min, ale 8 maj -> 8 kwi to 30 dni).
+    """
+    s = pd.Series(seria)
+    if pd.api.types.is_datetime64_any_dtype(s):
+        return pd.to_datetime(s, errors='coerce')
+
+    warianty = {}
+    # Kolejnosc ma znaczenie: przy remisie wygrywa pierwszy, a domyslnie chcemy
+    # europejskie DD/MM (tak samo jak detect_dayfirst).
+    for dayfirst in (True, False):
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                warianty[dayfirst] = pd.to_datetime(s, errors='coerce', dayfirst=dayfirst)
+        except Exception:
+            continue
+    if not warianty:
+        return pd.to_datetime(s, errors='coerce')
+
+    def _ocena(k):
+        """(liczba_bledow, nieregularnosc) — mniej = lepiej."""
+        braki = int(k.isna().sum())
+        czasy = k.dropna().sort_values()
+        if len(czasy) < 3:
+            return (braki, 0.0)
+        odstepy = czasy.diff().dropna().dt.total_seconds()
+        odstepy = odstepy[odstepy > 0]
+        if odstepy.empty:
+            return (braki, 0.0)
+        mediana = odstepy.median()
+        return (braki, (odstepy.max() / mediana) if mediana > 0 else 0.0)
+
+    najlepszy = min(warianty, key=lambda df: _ocena(warianty[df]))
+    return warianty[najlepszy]
+
+
 def save_result(times, temps, hums, source_name, output_dir, suffix=''):
     """Standardize and save output Excel file."""
     data = {'Czas': times, 'Temperatura [°C]': temps}
@@ -226,7 +327,7 @@ def save_result(times, temps, hums, source_name, output_dir, suffix=''):
         data['Wilgotność [%RH]'] = hums
 
     df = pd.DataFrame(data)
-    df['Czas'] = pd.to_datetime(df['Czas'], errors='coerce')
+    df['Czas'] = _na_datetime_auto(df['Czas'])
     df['Temperatura [°C]'] = pd.to_numeric(df['Temperatura [°C]'], errors='coerce')
     if has_hum:
         df['Wilgotność [%RH]'] = pd.to_numeric(df['Wilgotność [%RH]'], errors='coerce')
@@ -703,7 +804,15 @@ def parse_excel_inspect(filepath, output_dir):
 
                 temps = df[temp_cols[0]].apply(clean_num)
                 hums  = df[hum_cols[0]].apply(clean_num).tolist() if hum_cols else None
-                save_result(times.tolist(), temps.tolist(), hums, filepath.name, output_dir, tag)
+                # Gdy w naglowku arkusza jest numer przyrzadu (np. adres MAC loggera
+                # Efento), nazywamy nim plik wynikowy — tak jak dla innych loggerow.
+                # Bez tego nazwa to '<raport>_<arkusz>' i nie da sie dopasowac do PZ.
+                _id_dev = _id_przyrzadu_z_arkusza(df_raw)
+                if _id_dev:
+                    print(f"      → identyfikator przyrzadu z arkusza: {_id_dev}")
+                    save_result(times.tolist(), temps.tolist(), hums, _id_dev, output_dir, '')
+                else:
+                    save_result(times.tolist(), temps.tolist(), hums, filepath.name, output_dir, tag)
                 continue
             except Exception as e:
                 print(f"      ✗ Generic Excel parse error: {e}")
@@ -1185,10 +1294,26 @@ def main():
         if f.is_file() and f.suffix.lower() in SUPPORTED_EXT
     )
 
+    # Wybor z panelu zawezajacy wsad. Bez niego (uruchomienie reczne) bierzemy
+    # cala zawartosc folderu — tak jak dzialalo to wczesniej.
+    pominiete = []
+    if WYBRANE_PLIKI:
+        wybrane = {n.lower() for n in WYBRANE_PLIKI}
+        pominiete = [f for f in files if f.name.lower() not in wybrane]
+        files = [f for f in files if f.name.lower() in wybrane]
+        brakujace = wybrane - {f.name.lower() for f in files}
+        if brakujace:
+            print(f"  [UWAGA] Zaznaczono pliki, ktorych nie ma w folderze: "
+                  f"{', '.join(sorted(brakujace))}")
+
     print("=" * 60)
     print(f"  Folder wejściowy : {input_dir}/")
     print(f"  Folder wyjściowy : {output_dir}/")
-    print(f"  Znaleziono plików: {len(files)}")
+    print(f"  Znaleziono plików: {len(files) + len(pominiete)}")
+    if pominiete:
+        print(f"  Do przetworzenia : {len(files)} (wybrane w panelu)")
+        print(f"  Pominięto        : {len(pominiete)} "
+              f"— {', '.join(f.name for f in pominiete)}")
     print("=" * 60)
 
     for f in files:

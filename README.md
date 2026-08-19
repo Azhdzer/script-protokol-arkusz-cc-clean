@@ -185,7 +185,30 @@ Pliki `Wzory.xls` / `Pom. nr 9` wchodzą dopiero w **Etap 7** arkuszy; `Zestawie
 
 ---
 
-## ▶️ Uruchamianie — jeden exe, trzy tryby
+## 🖥️ Panel sterujący — jak się go używa
+
+Okno prowadzi przez obieg krok po kroku (lewa listwa), a każdy krok ma własny formularz:
+
+| Krok | Co robisz |
+|---|---|
+| **Przygotowanie** | Lista kontrolna: dla każdego pliku wejściowego widać **jego wiek** — `Wzory.xls` sprzed 40 dni dostaje pomarańczowe „ZAKTUALIZUJ przed uruchomieniem". Przycisk `Otworz` otwiera plik/folder. |
+| **1 · Analiza logów** | Podgląd plików wgranych do `excel_do_analizy/` (data, rozmiar) + uruchomienie. |
+| **2 · Obserwacja** | **Zaznaczanie plików TXT multimetru** z listy (posortowanej od najnowszego); kilka zaznaczeń = przerwany pomiar. Podpisy, szablony, PZ, progi filtra. |
+| **3 · Arkusze i Word** | Protokół, szablon, numer świadectwa, higrometr K18, podpisy, szablony Word, etapy. |
+| **Zaawansowane** | Reszta ustawień pogrupowana wg kroku: okno analizy, korekta zegara, filtr kolorów Strony 3, ścieżki serwerowe, mapowanie CC‑04. |
+
+Na dole okna zawsze widoczne są dwie zakładki:
+
+- **Log** — żywe wyjście workera, z kolorowaniem (`!!! BLAD` czerwony, `UWAGA` pomarańczowy,
+  `[OK]` zielony) i zapisem do pliku,
+- **Utworzone pliki** — różnica stanu folderu przed/po przebiegu: co powstało, co się
+  zmieniło, ile waży i **jakie zakładki są w środku** (dwuklik otwiera plik).
+
+`▶▶ Uruchom caly obieg` odpala kroki 1 → 2 → 3 po kolei i **przerywa się na pierwszym
+błędzie**. Przed startem panel sprawdza dane wejściowe (brak zaznaczonego TXT, brak
+protokołu, brak `Wzory.xls`…) i pokazuje listę zastrzeżeń do zatwierdzenia.
+
+## ▶️ Uruchamianie — jeden exe, cztery tryby
 
 Panel GUI uruchamia skrypty‑workery jako podprocesy. W zamrożonym `.exe` ten sam plik pełni
 rolę i GUI, i workera — o trybie decyduje zmienna `CC_WORKER`.
@@ -200,9 +223,10 @@ sequenceDiagram
   U->>E: dwuklik (brak CC_WORKER)
   E->>AE: start
   AE->>G: CC_WORKER puste -> uruchom GUI
-  U->>G: klik "Obserwacja / Protokol / Word"
-  G->>G: _run(tryb): zbierz env (GEN_*, OBS_*, CC_*)
-  G->>E: QProcess.start + CC_WORKER=obserwacje/arkusze
+  U->>G: klik "Uruchom caly obieg" albo pojedynczy krok
+  G->>G: _zapisz() -> cc_ustawienia.json, walidacja wejscia
+  G->>G: cc_config.do_env(wartosci) -> 65 zmiennych
+  G->>E: QProcess.start + CC_WORKER=analiza/obserwacje/arkusze
   E->>AE: start (worker)
   AE->>W: CC_WORKER ustawione -> import generuj_*, main()
   W-->>G: stdout przez potok QProcess -> zywy log
@@ -253,8 +277,11 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `generuj_obserwacje.py` | 1549 | 41 | Arkusz obserwacji + protokół (CC / CC‑04) z pliku TXT | openpyxl, xlwings (COM) |
 | `analizuj_excele.py` | 1093 | 28 | Uniwersalny parser loggerów → `wyniki/*.xlsx` | pandas, openpyxl, pypdf |
 | `pz_dane.py` | 346 | 16 | Parser PZ (PDF, PL/EN) + Zestawienie rozdzielczości | pypdf, openpyxl |
-| `app_gui.py` | 472 | 26 | Panel sterujący PySide6 (Windows 11 Fluent) | PySide6 |
-| `app_entry.py` | 83 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
+| `app_gui.py` | ~740 | 35 | Panel sterujący PySide6 — kroki obiegu, log, wyniki | PySide6 |
+| `cc_config.py` | ~500 | 12 | Rejestr **65 ustawień** + zapis `cc_ustawienia.json` + odczyt env | — (stdlib) |
+| `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
+| `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
+| `testy/` | ~1200 | 284 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -264,15 +291,23 @@ Wynik zawsze znormalizowany: **`Czas | Temperatura [°C] | Wilgotność [%RH]`**
 
 ## 🔌 Kontrakt env‑var (GUI ↔ workery)
 
-| Zmienna | Znaczenie |
-|---|---|
-| `CC_WORKER` | tryb: `arkusze` / `obserwacje` / (puste = GUI) |
-| `CC_FOLDER` | folder roboczy |
-| `CC_PROTOKOL` / `CC_SZABLON` | wybrany protokół / szablon |
-| `CC_PZ_FOLDER` | folder PZ |
-| `OBS_TXT_FILES` | lista TXT (średnik) — przerwany pomiar |
-| `OBS_FILTR` / `OBS_PROG` / `OBS_TOL` | filtr / próg % / tolerancja min |
-| `GEN_EXCEL` / `GEN_WORD` / `GEN_PUSTE` / `GEN_AUTOREC` | etapy i zachowania |
+**Nie ma już potrzeby edytowania skryptów w Notatniku.** Wszystkie 65 ustawień
+opisuje rejestr w [`cc_config.py`](cc_config.py) (typ, wartość domyślna, etykieta,
+opis, krok obiegu, poziom podstawowy/zaawansowany). Panel buduje z niego formularze
+automatycznie, zapisuje wybory do `cc_ustawienia.json` i przekazuje je workerowi
+przez zmienne środowiskowe. Stałe w skryptach pełnią rolę **wartości domyślnych** —
+uruchomienie `python generuj_obserwacje.py` bez panelu działa jak dawniej.
+
+| Prefiks | Zakres | Przykłady |
+|---|---|---|
+| `CC_WORKER` | tryb exe | `analiza` / `obserwacje` / `arkusze` / (puste = GUI) |
+| `CC_*` | wspólne | `CC_FOLDER`, `CC_PROTOKOL`, `CC_SZABLON`, `CC_PZ_FOLDER`, `CC_ZESTAWIENIE` |
+| `ANL_*` | krok 1 — analiza | `ANL_PLIKI`, `ANL_INPUT`, `ANL_OUTPUT`, `ANL_DEBUG` |
+| `OBS_*` | krok 2 — obserwacja | `OBS_TXT_FILES`, `OBS_PODPIS`, `OBS_STAB_PO_RH`, `OBS_PROG_T`, `OBS_KOREKTA_ZEGARA`, `OBS_FOTO`, `OBS_FOTO_ZRODLO`, `OBS_FOTO_CEL`, … |
+| `GEN_*` | krok 3 — arkusze/Word | `GEN_EXCEL`, `GEN_WORD`, `GEN_POMIJAJ_PUSTE`, `GEN_NR_SW`, `GEN_K18_CC`, `GEN_PODPIS_1`, `GEN_MAP_CC04`, `GEN_KOLOR_AKT`, … |
+
+Konwersję typów robią helpery `cc_config.flaga / liczba / calk / tekst / minuty /
+lista / tabela / sciezka` — niepoprawna wartość cofa się do domyślnej zamiast wywalać skrypt.
 
 ---
 
@@ -291,14 +326,35 @@ Wynik zawsze znormalizowany: **`Czas | Temperatura [°C] | Wilgotność [%RH]`**
 powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 ```
 
+### 🧪 Testy
+
+```powershell
+# Wszystko (z krokiem 3 — uruchamia Excel, ok. 3 min):
+.venv\Scripts\python.exe -m unittest discover -s testy -t testy
+
+# Szybko, bez Excela:
+$env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
+```
+
+**284 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
+`testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
+[`testy/README.md`](testy/README.md).
+
+Najważniejszy jest `testy/test_kontrakt.py`: pilnuje, że **każde** ustawienie
+widoczne w panelu naprawdę zmienia stałą w skrypcie (i że bez panelu obowiązuje
+wartość domyślna). Dodanie ustawienia do rejestru bez podłączenia go do skryptu
+wywala suite.
+
 **Wymagania środowiska:** Windows 10/11, zainstalowany **Excel** (xlwings/COM),
 dostęp do sieciowego `\\plum4\LabPomiarowe\Wzory.xls`. Zależności: `requirements.txt`
 (`openpyxl · xlwings · python-docx · PySide6 · pandas · pypdf`).
 
 ### Sterowanie etapami (`generuj_arkusze.py`)
 
-- `GENERUJ_EXCEL=True/False`, `GENERUJ_WORD=True/False`:
-  `True/True` = pełny obieg · `True/False` = tylko Excel · `False/True` = Word z istniejących kopii.
+Przełączniki `Generuj arkusze Excel` / `Generuj swiadectwa Word` w kroku 3 panelu
+(env `GEN_EXCEL` / `GEN_WORD`): `wł/wł` = pełny obieg · `wł/wył` = tylko Excel ·
+`wył/wł` = Word z już istniejących kopii.
 
 ### Warianty protokołu CC‑04
 
@@ -308,6 +364,16 @@ dostęp do sieciowego `\\plum4\LabPomiarowe\Wzory.xls`. Zależności: `requireme
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Wybór pojedynczego przyrządu przez wyszarzenie:** przyrząd, którego wszystkie
+  bloki na Stronie 3 są szare, nie dostaje już ani kopii Excel, ani świadectwa Word.
+  Wcześniej powstawała pusta kopia (sam arkusz `Wyniki`) i świadectwo z zerową
+  tabelą kalibracji — lista kopii idzie ze Strony 2, więc same kolory nie usuwały
+  przyrządu z obiegu. Numer przyrządu z protokołu jest zachowany (`… - 4 - <serial>`).
+- **Panel zamiast Notatnika:** wszystkie 65 ustawień z trzech skryptów ma teraz
+  formularz w aplikacji (rejestr `cc_config.py`), zapisywany do `cc_ustawienia.json`.
+  Doszły: lista kontrolna świeżości plików wejściowych, zaznaczanie plików TXT z listy,
+  uruchamianie kroków po kolei z przerwaniem na błędzie, kolorowany log i panel
+  „Utworzone pliki" pokazujący, co powstało i jakie ma zakładki.
 - **PZ (Potwierdzenie zamówienia):** automatyczne wypełnianie tabeli przyrządów na Stronie 2
   (dwujęzycznie **PL/EN**), dopasowanie po nr fabrycznym **i** nr ewidencyjnym, blok `UŻYTKOWNIK/USER`
   → warianty szablonów Word `(uzytkownik)`.

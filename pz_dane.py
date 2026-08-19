@@ -102,11 +102,14 @@ def _oczysc(s):
 # 'nr ewid .:'. Musza byc GRANICA konca numeru fabrycznego — inaczej tekst 'nr wew.: CL-1318A'
 # wpada do wartosci 'nr fabr.' i po rozdzieleniu przecinkiem tworzy fikcyjny drugi przyrzad.
 _END = (r'wytw[oó]rca|manufacturer|nr\s*wewn?|nr\s*ewid|identification|'
-        r'typ\s*:|type\s*:|nr\s*kat|year\s+of\s+production|oraz\s+czujnika')
+        r'typ\s*:|type\s*:|nr\s*kat|year\s+of\s+production|oraz\s+czujnika|adres\s*:')
 _RE_TYP    = re.compile(r'(?:typ|type|nr\s*kat\.?)\s*:\s*([^,\n]+)', re.I)
 # nr ewidencyjny: 'nr wew.:' / 'nr wewn.:' (starsze PZ) albo 'nr ewid.:' / 'nr ewid .:' (nowsze)
+# Srednik konczy wartosc tak samo jak przecinek: w PZ z lista wypunktowana
+# kazdy podpunkt konczy sie ';', a po ostatnim stoi jeszcze 'wytworca: ...'.
+# Bez tej granicy nr ewidencyjny wychodzil jako 'UR00044; wytworca: Testo'.
 _RE_WEWN   = re.compile(
-    r'(?:nr\s*wewn?\s*\.?|nr\s*ewid\s*\.?|identification\s+number)\s*:\s*([^,\n]+)', re.I)
+    r'(?:nr\s*wewn?\s*\.?|nr\s*ewid\s*\.?|identification\s+number)\s*:\s*([^,;\n]+)', re.I)
 _RE_WYTW   = re.compile(r'(?:wytw[oó]rca|manufacturer)\s*:\s*([^,.\n]+)', re.I)
 # serial: "nr fabr.:" / "serial number(s):" albo bare "nr:" (nie "nr kat.", nie "nr wewn.")
 _RE_FABR   = re.compile(
@@ -139,17 +142,35 @@ def _parsuj_pole(part):
 _RE_BULLET = re.compile(r'[•·●▪‣]\s*')
 
 
-def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia):
+# Goly numer fabryczny na poczatku podpunktu — gdy etykieta 'nr fabr.:' stoi
+# raz, w naglowku pozycji. Dopuszczamy cyfry, litery, myslnik i ukosnik.
+_RE_SERIAL_NA_POCZATKU = re.compile(r'\s*([A-Za-z0-9][\w\-/]{2,})\s*(?:,|;|$)')
+
+
+def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia, serial_z_naglowka=False):
     """
     Jeden wypunktowany podpunkt: '• nr fabr.: 40118669, nr ewid.: Q/LOG/36'
     (opcjonalnie z dopiskiem 'oraz czujnika temperatury typ: 0572 1001, nr ewid.: 8669').
     Typ i wytworca dziedziczy z naglowka pozycji. Zwraca liste PZPrzyrzad.
+
+    `serial_z_naglowka=True` obsluguje wariant PZ dla wielu przyrzadow na tych
+    samych punktach, gdzie etykieta stoi RAZ, w naglowku pozycji:
+
+        Termohigrometr (rejestrator, 9 szt.) typ: testo 174H, nr fabr.:
+          • 83623973, nr wew.: UR00045;
+          • 83617608, nr wew.: UR00052;
+
+    Podpunkt zaczyna sie wtedy wprost od numeru fabrycznego, bez etykiety.
     """
     czesci = _RE_CZUJNIK_SPLIT.split(fragment, maxsplit=1)
     obiekt  = czesci[0]
     czujnik = czesci[1] if len(czesci) > 1 else ""
 
     serials = _wytnij_serial_liste(obiekt)
+    if not serials and serial_z_naglowka:
+        m = _RE_SERIAL_NA_POCZATKU.match(obiekt)
+        if m:
+            serials = [m.group(1)]
     mw = _RE_WEWN.search(obiekt)
     nr_ewid = _oczysc(mw.group(1)) if mw else ""
 
@@ -189,9 +210,15 @@ def _parsuj_wpis(wpis, nr_zlecenia):
         wytworca = _oczysc(mw.group(1)) if mw else ""
 
     if podpunkty:
+        # Etykieta 'nr fabr.:' bez wartosci na koncu naglowka = numery stoja
+        # dopiero w podpunktach (PZ dla wielu przyrzadow na tych samych punktach).
+        serial_z_naglowka = bool(
+            re.search(r'(?:nr\s*fabr\.?|serial\s*numbers?)\s*:\s*$',
+                      naglowek.strip(), re.I))
         out = []
         for frag in podpunkty:
-            out.extend(_parsuj_bullet(frag, typ, wytworca, nr_zlecenia))
+            out.extend(_parsuj_bullet(frag, typ, wytworca, nr_zlecenia,
+                                      serial_z_naglowka))
         return out
 
     # --- uklad B: jedna linia ---
@@ -247,6 +274,36 @@ def _parsuj_zleceniodawce(text):
         return ""
     linie = [ln.strip() for ln in m.group(1).splitlines() if ln.strip()]
     return "\n".join(linie)
+
+
+def _parsuj_uzytkownikow_wg_pozycji(text):
+    """
+    Mapa: numer pozycji przyrzadu -> blok adresowy JEGO uzytkownika.
+
+    Pole 'UŻYTKOWNIK:' bywa lista numerowana, w ktorej numer odpowiada POZYCJI przyrzadu
+    w 'Obiekty wzorcowania' (przyrzad z pozycji 5 -> uzytkownik '5) GBA Polska ...').
+    Do swiadectwa musi trafic TYLKO jego uzytkownik — wczesniej wpisywana byla cala lista.
+    Numer z nawiasem jest usuwany. Gdy listy nie ma (jeden uzytkownik) -> {None: blok}.
+    """
+    m = _RE_UZYT.search(text)
+    if not m:
+        return {}
+    linie = [ln.strip() for ln in m.group(1).splitlines() if ln.strip()]
+    if not linie:
+        return {}
+    if not any(re.match(r'^\d+\)', ln) for ln in linie):
+        return {None: "\n".join(linie)}          # jeden uzytkownik, bez numeracji
+
+    mapa, biezacy = {}, None
+    for ln in linie:
+        m2 = re.match(r'^(\d+)\)\s*(.*)$', ln)
+        if m2:
+            biezacy = int(m2.group(1))
+            reszta = m2.group(2).strip()
+            mapa[biezacy] = [reszta] if reszta else []
+        elif biezacy is not None:
+            mapa[biezacy].append(ln)
+    return {nr: "\n".join(w) for nr, w in mapa.items() if w}
 
 
 def _parsuj_uzytkownik(text):
@@ -327,15 +384,61 @@ _RE_PUNKT_T   = re.compile(r'\(\s*(-?[\d.,]+(?:\s*;\s*-?[\d.,]+)+)\s*\)\s*°?\s*
 
 
 def _punkty_z_fragmentu(frag):
-    """Punkty (T, RH|None) z jednego fragmentu sekcji 'Zakres wzorcowania'."""
-    punkty = [(_do_float(t), _do_float(rh)) for t, rh in _RE_PUNKT_TRH.findall(frag)]
-    if punkty:
-        return [(t, rh) for t, rh in punkty if t is not None]
-    m2 = _RE_PUNKT_T.search(frag)          # wariant tylko-temperaturowy '(0; 10; 20) °C'
-    if m2:
-        return [(t, None) for t in (_do_float(k) for k in m2.group(1).split(';'))
-                if t is not None]
-    return []
+    """
+    Punkty (T, RH|None) z jednego fragmentu sekcji 'Zakres wzorcowania'.
+
+    Fragment potrafi laczyc OBA warianty zapisu, np.:
+
+        (-20; 0; 40) °C, (25 °C, 30 %rh); (25 °C, 60 %rh); (25 °C, 85 %rh)
+
+    czyli trzy punkty samej temperatury PLUS punkty z wilgotnoscia. Wczesniej,
+    gdy trafil sie choc jeden punkt z wilgotnoscia, funkcja konczyla prace i
+    lista '(-20; 0; 40) °C' przepadala — a poniewaz punkty do protokolu wybiera
+    sie wg PZ, te trzy po prostu znikaly z protokolu.
+
+    Zbieramy oba warianty i ustawiamy je w KOLEJNOSCI WYSTAPIENIA w tekscie,
+    zeby punkty w protokole szly tak jak w zamowieniu.
+    """
+    znalezione = []   # (pozycja_w_tekscie, indeks_w_grupie, (T, RH))
+
+    for m in _RE_PUNKT_TRH.finditer(frag):
+        t, rh = _do_float(m.group(1)), _do_float(m.group(2))
+        if t is not None:
+            znalezione.append((m.start(), 0, (t, rh)))
+
+    # '(0; 10; 20) °C' — jedna lista to kilka punktow; moze wystapic wiele razy.
+    for m in _RE_PUNKT_T.finditer(frag):
+        for i, kawalek in enumerate(m.group(1).split(';')):
+            t = _do_float(kawalek)
+            if t is not None:
+                znalezione.append((m.start(), i, (t, None)))
+
+    znalezione.sort(key=lambda x: (x[0], x[1]))
+    return [punkt for _poz, _i, punkt in znalezione]
+
+
+def _scal_punkty(grupy):
+    """
+    Laczy punkty z wielu POZYCJI (przyrzadow) i wielu PZ w jedna liste punktow komory.
+
+    Ten sam punkt zamowiony przez kilka przyrzadow to JEDEN wsad komory — nie powielamy go.
+    Ale powtorzenie WEWNATRZ jednej pozycji jest znaczace (np. drugi raz 50 %rh na
+    histereze), wiec dla kazdej wartosci zostawiamy tyle wystapien, ile MAKSYMALNIE
+    zamowiono w pojedynczej pozycji. Kolejnosc = pierwsze wystapienie.
+    """
+    maks, kolejnosc = {}, []
+    for grupa in grupy:
+        licznik = {}
+        for p in grupa:
+            licznik[p] = licznik.get(p, 0) + 1
+        for p, n in licznik.items():
+            if p not in maks:
+                kolejnosc.append(p)
+            maks[p] = max(maks.get(p, 0), n)
+    out = []
+    for p in kolejnosc:
+        out.extend([p] * maks[p])
+    return out
 
 
 def punkty_wzorcowania(text, pozycje=None):
@@ -356,51 +459,145 @@ def punkty_wzorcowania(text, pozycje=None):
       '2) ÷ 7) (0; 10; 20; 30) °C'
          -> [(0,None), (10,None), (20,None), (30,None)]
     """
+    return [p for grupa in punkty_wzorcowania_grupy(text, pozycje) for p in grupa]
+
+
+def punkty_wzorcowania_grupy(text, pozycje=None):
+    """
+    To samo co punkty_wzorcowania, ale z podzialem na POZYCJE (przyrzady) — jedna grupa
+    na pozycje. Kazda pozycja PZ ma zwykle WLASNY zestaw punktow, np.:
+        1) (29; 30; 31) °C     <- przyrzad 1
+        2) (36; 38) °C         <- przyrzad 2
+        3) (2; 8) °C           <- przyrzady 3
+    Podzial jest potrzebny, by odroznic powtorzenie punktu w JEDNEJ pozycji (histereza)
+    od tego samego punktu zamowionego przez ROZNE przyrzady (jeden wsad komory).
+    """
     m = _RE_ZAKRES.search(text)
     if not m:
         return []
     sekcja = m.group(1)
 
-    if not pozycje:
-        return _punkty_z_fragmentu(sekcja)
-
     fragmenty = [f for f in re.split(r'(?m)^(?=\s*\d+\s*\))', sekcja) if f.strip()]
     if len(fragmenty) <= 1:
-        return _punkty_z_fragmentu(sekcja)   # brak numeracji pozycji — bierzemy calosc
+        punkty = _punkty_z_fragmentu(sekcja)   # brak numeracji pozycji — calosc jako jedna grupa
+        return [punkty] if punkty else []
 
-    out = []
+    grupy = []
     for frag in fragmenty:
-        glowa = frag.split('(', 1)[0]        # numery stoja PRZED pierwszym nawiasem
+        glowa = frag.split('(', 1)[0]         # numery stoja PRZED pierwszym nawiasem
         nums = _numery_pozycji(glowa)
-        if nums and not (nums & set(pozycje)):
-            continue                          # fragment innej pozycji (np. cisnienie)
-        out.extend(_punkty_z_fragmentu(frag))
-    return out
+        if pozycje and nums and not (nums & set(pozycje)):
+            continue                           # fragment innej pozycji (np. cisnienie)
+        punkty = _punkty_z_fragmentu(frag)
+        if punkty:
+            grupy.append(punkty)
+    return grupy
 
 
-def wczytaj_punkty(folder_pz):
+def punkty_wg_pozycji(text, pozycje=None):
     """
-    Punkty zamowione we wszystkich PZ z folderu (posklejane w kolejnosci plikow).
-    Zwraca liste (temperatura, wilgotnosc|None). Cicha gdy brak folderu/pypdf.
+    Mapa: numer pozycji PZ -> lista punktow zamowionych DLA TEJ pozycji (przyrzadu).
+
+    W PZ kazdy przyrzad (pozycja) ma zwykle wlasny zestaw punktow:
+        1) (29; 30; 31) °C     <- pozycja 1
+        3) (2; 8) °C           <- pozycja 3
+    Gdy sekcja nie ma numeracji (jeden przyrzad), zwracamy {None: [punkty]}.
     """
+    m = _RE_ZAKRES.search(text)
+    if not m:
+        return {}
+    sekcja = m.group(1)
+    fragmenty = [f for f in re.split(r'(?m)^(?=\s*\d+\s*\))', sekcja) if f.strip()]
+    if len(fragmenty) <= 1:
+        punkty = _punkty_z_fragmentu(sekcja)
+        return {None: punkty} if punkty else {}
+
+    mapa = {}
+    for frag in fragmenty:
+        glowa = frag.split('(', 1)[0]
+        nums = _numery_pozycji(glowa)
+        if pozycje and nums and not (nums & set(pozycje)):
+            continue
+        punkty = _punkty_z_fragmentu(frag)
+        if not punkty:
+            continue
+        for nr in (nums or [None]):
+            mapa.setdefault(nr, []).extend(punkty)
+    return mapa
+
+
+def wczytaj_punkty_przyrzadow(folder_pz):
+    """
+    Mapa: nr fabryczny/ewidencyjny przyrzadu -> punkty ZAMOWIONE wlasnie dla niego.
+
+    Jeden wsad komory obsluguje kilka zlecen i kilka przyrzadow, a kazdy przyrzad bywa
+    zamowiony na INNE punkty. Protokol zawiera sume punktow, wiec odczyty przyrzadu w
+    punktach spoza JEGO zamowienia sa zbedne — dzieki tej mapie mozna je wyszarzyc.
+    """
+    wynik = {}
     if not _PDF_OK or not os.path.isdir(folder_pz):
-        return []
-    punkty = []
+        return wynik
     for path in sorted(glob.glob(os.path.join(folder_pz, "*.pdf"))):
         try:
             reader = PdfReader(path)
             text = "\n".join((p.extract_text() or "") for p in reader.pages)
-            # Bierzemy punkty TYLKO z pozycji wzorcowanych w komorze klimatycznej —
-            # ten sam przyrzad bywa w PZ takze na innym stanowisku (np. barometr, hPa).
-            p_lista = punkty_wzorcowania(text, _pozycje_komory(text))
+            komora = _pozycje_komory(text)
+            mapa_poz = punkty_wg_pozycji(text, komora)
+            przyrzady = parsuj_pdf(path)
+        except Exception as e:
+            print(f"  [PZ] Blad odczytu punktow przyrzadow z '{os.path.basename(path)}': {e}")
+            continue
+        if not mapa_poz:
+            continue
+        # Gdy sekcja punktow nie ma numeracji — ten sam zestaw dotyczy wszystkich pozycji.
+        wspolne = mapa_poz.get(None)
+        for p in przyrzady:
+            if not getattr(p, 'komora', True):
+                continue
+            punkty = mapa_poz.get(p.pozycja) or wspolne
+            if not punkty:
+                continue
+            for klucz in (normalizuj_serial(p.nr_fabr), normalizuj_serial(p.nr_ewid)):
+                if klucz:
+                    wynik.setdefault(klucz, list(punkty))
+    return wynik
+
+
+def _opis_punktow(punkty):
+    return ", ".join(f"{t:g}C/{rh:g}%" if rh is not None else f"{t:g}C" for t, rh in punkty)
+
+
+def wczytaj_punkty(folder_pz):
+    """
+    Punkty zamowione we WSZYSTKICH PZ z folderu i we wszystkich ich pozycjach.
+
+    Jeden wsad komory obsluguje zwykle kilka zlecen, a w kazdym zleceniu kazdy przyrzad
+    moze miec inny zestaw punktow. Do obserwacji potrzebna jest ICH SUMA — bez powielania
+    punktow zamowionych przez kilka przyrzadow (to jeden i ten sam wsad komory).
+    Zwraca liste (temperatura, wilgotnosc|None). Cicha gdy brak folderu/pypdf.
+    """
+    if not _PDF_OK or not os.path.isdir(folder_pz):
+        return []
+    grupy = []
+    for path in sorted(glob.glob(os.path.join(folder_pz, "*.pdf"))):
+        try:
+            reader = PdfReader(path)
+            text = "\n".join((p.extract_text() or "") for p in reader.pages)
+            # Punkty TYLKO z pozycji wzorcowanych w komorze klimatycznej — ten sam
+            # przyrzad bywa w PZ takze na innym stanowisku (np. barometr, hPa).
+            g = punkty_wzorcowania_grupy(text, _pozycje_komory(text))
         except Exception as e:
             print(f"  [PZ] Blad odczytu punktow z '{os.path.basename(path)}': {e}")
             continue
-        if p_lista:
-            opis = ", ".join(f"{t:g}C/{rh:g}%" if rh is not None else f"{t:g}C"
-                             for t, rh in p_lista)
-            print(f"  [PZ] Punkty zamowione ({os.path.basename(path)}): {opis}")
-            punkty.extend(p_lista)
+        if g:
+            plaskie = [p for grupa in g for p in grupa]
+            print(f"  [PZ] Punkty zamowione ({os.path.basename(path)}, "
+                  f"{len(g)} poz.): {_opis_punktow(plaskie)}")
+            grupy.extend(g)
+
+    punkty = _scal_punkty(grupy)
+    if punkty:
+        print(f"  [PZ] Razem punktow do obserwacji ({len(punkty)}): {_opis_punktow(punkty)}")
     return punkty
 
 
@@ -412,6 +609,7 @@ def parsuj_pdf(path):
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
     nr_zlec = _numer_zlecenia_th(text)
     uzyt = _parsuj_uzytkownik(text)
+    uzyt_wg_poz = _parsuj_uzytkownikow_wg_pozycji(text)
     zlec_adres = _parsuj_zleceniodawce(text)
 
     m = re.search(
@@ -442,7 +640,10 @@ def parsuj_pdf(path):
             p.komora = True
             przyrzady.append(p)
     for p in przyrzady:
-        p.uzytkownik = uzyt          # to samo dla wszystkich przyrzadow w danym PZ
+        # Uzytkownik JEGO pozycji; gdy lista nie jest numerowana — wspolny dla wszystkich.
+        p.uzytkownik = (uzyt_wg_poz.get(p.pozycja)
+                        or uzyt_wg_poz.get(None)
+                        or (uzyt if not uzyt_wg_poz else ""))
         p.zleceniodawca = zlec_adres
     return przyrzady
 
