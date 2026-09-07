@@ -174,5 +174,47 @@ class TestPunktyMieszane(unittest.TestCase):
         self.assertEqual(self.punkty("brak danych o punktach"), [])
 
 
+class TestNaglowekLiczbaPojedyncza(unittest.TestCase):
+    """
+    Zgloszenie z PZ 191: Strona 2 protokolu zostawala PUSTA.
+
+    Gdy zlecenie obejmuje JEDEN przyrzad, PLUM pisze naglowek w liczbie
+    pojedynczej — 'Obiekt wzorcowania:'. Parser wymagal liczby mnogiej, wiec
+    cala sekcja nie byla znajdowana i lista przyrzadow wychodzila pusta.
+    """
+
+    OPIS = ("Termohigrometr zlozony ze wskaznika (rejestratora) typ: testo 176H1, "
+            "nr fabr.: 40807872 oraz czujnika temperatury i wilgotnosci wzglednej "
+            "typ: 0636 9735, nr fabr.: 21201805 (kanal pomiarowy nr: 1), "
+            "wytworca: Testo.")
+
+    METODA = ("Metoda wzorcowania: Metoda porownawcza w komorze klimatycznej, "
+              "zgodnie z instrukcja ILAJ 5.4/11.")
+
+    def przyrzady(self, naglowek):
+        tekst = f"""{naglowek}
+{self.OPIS}
+{self.METODA}"""
+        return pz_dane.parsuj_tekst(tekst)
+
+    def test_liczba_pojedyncza_jest_rozpoznawana(self):
+        self.assertEqual(len(self.przyrzady("Obiekt wzorcowania:")), 1)
+
+    def test_liczba_mnoga_nadal_dziala(self):
+        self.assertEqual(len(self.przyrzady("Obiekty wzorcowania:")), 1)
+
+    def test_obiekt_i_czujnik_maja_swoje_dane(self):
+        p = self.przyrzady("Obiekt wzorcowania:")[0]
+        self.assertEqual((p.wytworca, p.typ, p.nr_fabr),
+                         ("Testo", "testo 176H1", "40807872"))
+        self.assertEqual((p.czuj_typ, p.czuj_nr_fabr), ("0636 9735", "21201805"))
+
+    def test_dopisek_w_nawiasie_nie_wchodzi_do_numeru(self):
+        """'21201805 (kanal pomiarowy nr: 1)' -> sam numer."""
+        p = self.przyrzady("Obiekt wzorcowania:")[0]
+        self.assertNotIn("(", p.czuj_nr_fabr)
+        self.assertNotIn("kanal", p.czuj_nr_fabr.lower())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -55,3 +55,8 @@ foto/
 # Potwierdzenia zamowienia (PDF) — zawieraja dane zleceniodawcy: nazwa firmy, adres,
 # osoba kontaktowa, telefon, e-mail, NIP. NIE publikujemy.
 PZ/
+# ...takze gdy PZ lezy luzem w katalogu projektu, np. 'PZ 204_LA_TH_2026.pdf'
+PZ*.pdf
+
+# Skrot z bezwzglednymi sciezkami tej maszyny — odtwarza go zrob_skrot.py
+*.lnk

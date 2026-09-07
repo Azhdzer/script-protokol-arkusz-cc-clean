@@ -371,6 +371,88 @@ def _raport_pominietych_kolumn(kolumny, naglowki, n_kol):
 
 
 
+def _rola_kolumny(naglowek):
+    """
+    (baza, czy_dotyczy_czujnika) — znaczenie kolumny bez numeru czujnika.
+
+    'Temperatura Pt100-13' -> ('temperatura', True)
+    'Temperatura'          -> ('temperatura', False)
+
+    Flaga jest istotna: bez niej temperatura KONKRETNEGO czujnika zlewala sie
+    z wyliczona temperatura komory i wykres czujnika trafial w zla kolumne.
+    """
+    tekst = str(naglowek or "")
+    czujnik = bool(re.search(r"Pt100|Ch\s*\d{3}", tekst, re.I))
+    baza = re.sub(r"Pt100[-\s]*\d*", "", tekst, flags=re.I)
+    baza = re.sub(r"Ch\s*\d{3}", "", baza, flags=re.I)
+    baza = re.sub(r"[\s_]+", " ", baza).strip().lower()
+    return baza, czujnik
+
+
+def _mapa_liter_wykresow(naglowki_szablonu, naglowki_wyniku):
+    """
+    Mapa 'litera kolumny w SZABLONIE' -> 'litera w gotowym arkuszu'.
+
+    Wykresy szablonu celuja w konkretne litery ($J, $N). Po pominieciu nieuzytych
+    kanalow te same wielkosci stoja gdzie indziej, wiec odwolania trzeba przeliczyc.
+
+    KLUCZOWE: dopasowujemy po ZNACZENIU kolumny, nie po pozycji. Arkusz szablonu
+    (21 kolumn dla 4 kanalow) to inna przestrzen niz wewnetrzny uklad danych
+    (33 kolumny dla 8 kanalow); mieszanie ich sprawialo, ze wykres punktu rosy
+    pokazywal wskazania multimetru.
+
+    Trzy przebiegi, od najpewniejszego:
+      1) identyczny naglowek ('Temperatura Pt100-01'),
+      2) ta sama rola wsrod niewykorzystanych kolumn (czujnik dobierany do czujnika),
+      3) ta sama rola gdziekolwiek — gdy kanal z szablonu nie byl uzywany, wykres
+         pokazuje pierwszy dostepny kanal zamiast trafiac w obca kolumne.
+    """
+    wynik = [(i, str(n)) for i, n in enumerate(naglowki_wyniku) if n]
+    szablon = [(i, str(n)) for i, n in enumerate(naglowki_szablonu) if n]
+    wolne = list(wynik)
+    mapa, zastapione = {}, []
+
+    def litera(i):
+        return get_column_letter(i + 1)
+
+    # 1) identyczne naglowki
+    do_dopasowania = []
+    for i_szab, nag in szablon:
+        trafienie = next((x for x in wolne if x[1] == nag), None)
+        if trafienie is not None:
+            wolne.remove(trafienie)
+            mapa[litera(i_szab)] = litera(trafienie[0])
+        else:
+            do_dopasowania.append((i_szab, nag))
+
+    # 2) ta sama rola wsrod wolnych — czujnik dobierany do czujnika
+    pozostale = []
+    for i_szab, nag in do_dopasowania:
+        baza, czujnik = _rola_kolumny(nag)
+        kandydaci = [x for x in wolne if _rola_kolumny(x[1])[0] == baza]
+        kandydaci.sort(key=lambda x: _rola_kolumny(x[1])[1] != czujnik)
+        if kandydaci:
+            wolne.remove(kandydaci[0])
+            mapa[litera(i_szab)] = litera(kandydaci[0][0])
+        else:
+            pozostale.append((i_szab, nag))
+
+    # 3) rola gdziekolwiek — kanal z szablonu nie byl uzyty w tym pomiarze
+    for i_szab, nag in pozostale:
+        baza, czujnik = _rola_kolumny(nag)
+        kandydaci = [x for x in wynik if _rola_kolumny(x[1])[0] == baza]
+        kandydaci.sort(key=lambda x: _rola_kolumny(x[1])[1] != czujnik)
+        if not kandydaci:
+            continue                       # takiej wielkosci nie ma w wyniku
+        mapa[litera(i_szab)] = litera(kandydaci[0][0])
+        zastapione.append((nag, kandydaci[0][1]))
+
+    for stary, nowy in zastapione:
+        print(f"    [WYKRES] '{stary}' nie wystepuje w tym pomiarze — "
+              f"seria pokazuje '{nowy}'.")
+    return mapa
+
+
 def _przelicz_odwolania_wykresu(xml, mapa_kolumn):
     """
     Przepisuje odwolania do kolumn w XML wykresu wg mapy 'stary -> nowy' (0-based).
@@ -387,12 +469,11 @@ def _przelicz_odwolania_wykresu(xml, mapa_kolumn):
 
     def zamien(m):
         litera = m.group(1)
-        stary = column_index_from_string(litera) - 1
-        nowy = mapa_kolumn.get(stary)
-        if nowy is None:
+        nowa = mapa_kolumn.get(litera)
+        if nowa is None:
             zgubione.append(litera)
             return m.group(0)
-        return f"${get_column_letter(nowy + 1)}$"
+        return f"${nowa}$"
 
     return re.sub(r"\$([A-Z]{1,3})\$", zamien, xml), sorted(set(zgubione))
 
@@ -1305,16 +1386,28 @@ def _oznacz_numery_punktow(ws, segments, file_type):
         cell.font = Font(name=fo.name, size=fo.size, bold=True)
 
 
-def _wybierz_okna_wg_pz(data, windows, punkty_pz):
+def _mediana_odczytow(data, si, ei, idx):
+    """Mediana ODCZYTU komory w oknie (None, gdy brak danych)."""
+    wartosci = [data[i][idx] for i in range(si, ei)
+                if idx < len(data[i]) and data[i][idx] is not None]
+    return statistics.median(wartosci) if wartosci else None
+
+
+def _wybierz_okna_wg_pz(data, windows, punkty_pz, idx_t_odcz=5, idx_rh_odcz=6):
     """
     Wybiera z wykrytych okien te, ktore odpowiadaja punktom ZAMOWIONYM w PZ.
 
-    Dla kazdego punktu z PZ (po kolei, razem z powtorzeniami) bierzemy NAJWCZESNIEJSZE
-    jeszcze niewykorzystane okno o zgodnych nastawach (tolerancje TOL_PUNKT_T/RH).
-    Dzieki temu:
-      • punkt powtorzony na histereze (np. drugi raz 50 %) NIE jest gubiony — PZ go zamawia,
-        wiec nie stosujemy tu reguly „suszenie/powtorzenie",
-      • okna z INNEGO zlecenia (ten sam wsad komory) nie trafiaja do protokolu.
+    Kandydatow zawezamy po NASTAWIE komory (tolerancje TOL_PUNKT_T/RH), ale o
+    wyborze decyduje ODCZYT — to, co komora naprawde utrzymywala.
+
+    Powod: nastawa bywa celowo przesunieta, zeby uzyskac zadany punkt (operator
+    ustawia 28 %, bo komora „przestrzeliwuje" do 30 %). Ranking po samej nastawie
+    wybieral wtedy segment o nastawie rownej punktowi — nawet gdy byl to etap
+    suszenia, na ktorym komora punktu nie utrzymala (nastawa 30 %, odczyt ~45 %),
+    a prawdziwy pomiar (nastawa 28 %, odczyt ~30 %) ladowal w koszu jako
+    „spoza zamowienia".
+
+    Gdy odczytow brak, wracamy do porownania po nastawie — jak dawniej.
     Zwraca liste okien w kolejnosci chronologicznej.
     """
     uzyte = set()
@@ -1334,9 +1427,15 @@ def _wybierz_okna_wg_pz(data, windows, punkty_pz):
                 continue
             if rh_exp is not None and (c is None or abs(c - rh_exp) > TOL_PUNKT_RH):
                 continue
-            dyst = abs(b - t_exp)
-            if rh_exp is not None and c is not None:
-                dyst += abs(c - rh_exp) / 10.0     # RH wazona slabiej (inna skala)
+            # Ranking po ODCZYCIE komory; nastawa tylko jako zapasowe kryterium.
+            t_fakt = _mediana_odczytow(data, si, _ei, idx_t_odcz)
+            rh_fakt = _mediana_odczytow(data, si, _ei, idx_rh_odcz)
+            t_por = t_fakt if t_fakt is not None else b
+            rh_por = rh_fakt if rh_fakt is not None else c
+
+            dyst = abs(t_por - t_exp)
+            if rh_exp is not None and rh_por is not None:
+                dyst += abs(rh_por - rh_exp) / 10.0   # RH wazona slabiej (inna skala)
             if najlepszy_dyst is None or dyst < najlepszy_dyst - 1e-9:
                 wybrany, najlepszy_dyst = idx, dyst
         if wybrany is None:
@@ -1383,7 +1482,8 @@ def analyze_and_highlight(ws, rows, file_type='CC', punkty_pz=None):
     if WYBIERAJ_PUNKTY_WG_PZ and punkty_pz:
         print(f"\n  Wybor punktow wg PZ ({len(punkty_pz)} zamowionych, "
               f"{len(windows)} segmentow w obserwacji):")
-        filtered = _wybierz_okna_wg_pz(data, windows, punkty_pz)
+        filtered = _wybierz_okna_wg_pz(data, windows, punkty_pz,
+                                       idx_t_odcz, idx_rh_odcz)
         print(f"  Do protokolu: {len(filtered)} punktow.")
         segments = []
         found = ostrzezenia = 0
@@ -3027,6 +3127,10 @@ def main():
         # trafiaja do arkusza — inaczej zostawaly puste, z samym naglowkiem.
         naglowki = _naglowki_cc04(kanal_pt)
         # Formaty liczbowe czytamy PRZED zapisem — potem kolumny sa nadpisane.
+        # Naglowki arkusza SZABLONU — potrzebne, by przeliczyc odwolania
+        # wykresow po pominieciu nieuzytych kanalow.
+        naglowki_szablonu_ark = [ws.cell(row=1, column=i).value
+                                 for i in range(1, ws.max_column + 1)]
         formaty_szablonu = _formaty_kolumn_szablonu(ws, N_KOL)
         kolumny = _kolumny_z_danymi(rows, N_KOL) if POMIJAJ_PUSTE_KOLUMNY \
             else list(range(N_KOL))
@@ -3050,6 +3154,10 @@ def main():
         _wyczysc_pozostalosci_szablonu(
             ws, len(kolumny) + 1, max(N_KOL, ws.max_column),
             wiersze_podpisow=((92, 24), (93, 24), (92, 25), (93, 25)))
+
+        naglowki_wyniku = [ws.cell(row=1, column=i).value
+                           for i in range(1, len(kolumny) + 1)]
+        mapa_kolumn = _mapa_liter_wykresow(naglowki_szablonu_ark, naglowki_wyniku)
 
         # Podpisy + data PRZENIESIONE na prawo od danych (z ramka jak w oryginale)
         SIG_COL = len(kolumny) + 3
@@ -3110,6 +3218,9 @@ def main():
         for nowy, stary in enumerate(kolumny):
             ws.cell(row=1, column=1 + nowy).value = naglowki_cc[stary]
         _wyczysc_pozostalosci_szablonu(ws, len(kolumny) + 1, n_kol_cc)
+        naglowki_wyniku = [ws.cell(row=1, column=i).value
+                           for i in range(1, len(kolumny) + 1)]
+        mapa_kolumn = _mapa_liter_wykresow(naglowki_cc, naglowki_wyniku)
         _przenies_formaty_kolumn(ws, kolumny, formaty_szablonu, len(rows))
 
         # J1 – aktualizacja czujnika wzorcowego

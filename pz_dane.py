@@ -122,12 +122,18 @@ _RE_CZUJNIK_SPLIT = re.compile(
     r'|with\s+\d+\b[^,]*?sensors?)\b', re.I)
 
 
+# Dopisek w nawiasie za numerem, np. '21201805 (kanal pomiarowy nr: 1)'.
+# To komentarz do przyrzadu, a nie czesc numeru fabrycznego.
+_RE_DOPISEK = re.compile(r'\s*\([^)]*\)\s*$')
+
+
 def _wytnij_serial_liste(part):
     """Zwraca liste serial-i z czesci 'obiekt' (obsluguje kilka po przecinku)."""
     m = _RE_FABR.search(part) or _RE_NR.search(part)
     if not m:
         return []
-    return [s.strip() for s in m.group(1).split(',') if s.strip()]
+    return [_RE_DOPISEK.sub('', s).strip()
+            for s in m.group(1).split(',') if _RE_DOPISEK.sub('', s).strip()]
 
 
 def _parsuj_pole(part):
@@ -607,13 +613,25 @@ def parsuj_pdf(path):
         return []
     reader = PdfReader(path)
     text = "\n".join((p.extract_text() or "") for p in reader.pages)
+    return parsuj_tekst(text)
+
+
+def parsuj_tekst(text):
+    """
+    Parsuje TEKST wyciagniety z PZ -> lista PZPrzyrzad.
+
+    Wydzielone z parsuj_pdf, zeby dalo sie sprawdzac uklady PZ bez plikow
+    PDF — te zawieraja dane zleceniodawcy i nie trafiaja do repozytorium.
+    """
     nr_zlec = _numer_zlecenia_th(text)
     uzyt = _parsuj_uzytkownik(text)
     uzyt_wg_poz = _parsuj_uzytkownikow_wg_pozycji(text)
     zlec_adres = _parsuj_zleceniodawce(text)
 
     m = re.search(
-        r'(?:Obiekty\s+wzorcowania|Calibration\s+objects)\s*:(.*?)'
+        # 'Obiekt' w liczbie pojedynczej, gdy zlecenie obejmuje JEDEN przyrzad —
+        # bez tego cala sekcja nie byla znajdowana i Strona 2 zostawala pusta.
+        r'(?:Obiekt(?:y)?\s+wzorcowania|Calibration\s+objects?)\s*:(.*?)'
         r'(?:(?:Metoda\s+wzorcowania|Calibration\s+methods?)\s*:|$)', text, re.I | re.S)
     if not m:
         return []

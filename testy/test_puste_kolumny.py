@@ -17,7 +17,9 @@ Jedyne, co zalezy od pozycji, to odwolania wykresow — i te sa przeliczane.
 
 import os
 import sys
+import io
 import unittest
+from contextlib import redirect_stdout
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -112,46 +114,101 @@ class TestMapaKolumn(unittest.TestCase):
 
 class TestPrzeliczenieOdwolanWykresu(unittest.TestCase):
     """
-    Wykresy szablonu celuja w konkretne litery ($J = Ch105). Po przesunieciu
-    kolumn musza wskazywac nowe pozycje, inaczej pokazywalyby sasiednie dane.
+    Wykresy szablonu celuja w konkretne litery kolumn. Po pominieciu nieuzytych
+    kanalow te same wielkosci stoja gdzie indziej — odwolania trzeba przeliczyc.
+
+    Mapa jest teraz LITERA -> LITERA i powstaje z porownania naglowkow, bo
+    arkusz szablonu i wewnetrzny uklad danych to rozne przestrzenie kolumn.
     """
 
-    def setUp(self):
-        # Realny uklad: kanaly Ch105 (J) i Ch107 (L) plus kolumny wyliczane
-        # tdp/temperatura/%RH (N, O, P), ktore sa zawsze wypelnione.
-        kolumny = G._kolumny_z_danymi(wiersze([9, 11, 13, 14, 15]), N_KOL_CC04)
-        self.mapa = G._raport_pominietych_kolumn(kolumny, G.CC04_KOLUMNY, N_KOL_CC04)
+    MAPA = {"B": "B", "D": "D", "E": "E", "J": "H", "N": "K"}
 
     def test_zakres_jest_przeliczony(self):
         nowy, _z = G._przelicz_odwolania_wykresu(
-            "obserwacje!$J$2:$J$25066", self.mapa)
-        self.assertEqual(nowy, "obserwacje!$F$2:$F$25066")
+            "obserwacje!$J$2:$J$25066", self.MAPA)
+        self.assertEqual(nowy, "obserwacje!$H$2:$H$25066")
 
     def test_naglowek_serii_jest_przeliczony(self):
-        nowy, _z = G._przelicz_odwolania_wykresu("obserwacje!$N$1", self.mapa)
-        self.assertEqual(nowy, "obserwacje!$H$1")
+        nowy, _z = G._przelicz_odwolania_wykresu("obserwacje!$N$1", self.MAPA)
+        self.assertEqual(nowy, "obserwacje!$K$1")
 
     def test_kolumny_ramki_zostaja_na_miejscu(self):
         nowy, _z = G._przelicz_odwolania_wykresu(
-            "obserwacje!$A$2:$A$99 obserwacje!$B$1", self.mapa)
-        self.assertEqual(nowy, "obserwacje!$A$2:$A$99 obserwacje!$B$1")
+            "obserwacje!$B$2:$B$99 obserwacje!$D$1", self.MAPA)
+        self.assertEqual(nowy, "obserwacje!$B$2:$B$99 obserwacje!$D$1")
 
     def test_zamiany_nie_nakladaja_sie(self):
-        """J->F i N->H w jednym przebiegu; F nie moze zostac zamienione powtornie."""
-        nowy, _z = G._przelicz_odwolania_wykresu(
-            "$J$1 $N$1 $L$1", self.mapa)
-        self.assertEqual(nowy, "$F$1 $H$1 $G$1")
+        """J->H i N->K w jednym przebiegu; H nie moze zostac zamienione powtornie."""
+        nowy, _z = G._przelicz_odwolania_wykresu("$J$1 $N$1 $D$1", self.MAPA)
+        self.assertEqual(nowy, "$H$1 $K$1 $D$1")
 
-    def test_usunieta_kolumna_jest_zgloszona(self):
-        nowy, zgubione = G._przelicz_odwolania_wykresu("obserwacje!$K$1", self.mapa)
-        self.assertEqual(zgubione, ["K"])
-        self.assertEqual(nowy, "obserwacje!$K$1")   # zostawiamy bez zmian
+    def test_kolumna_bez_odpowiednika_jest_zgloszona(self):
+        nowy, zgubione = G._przelicz_odwolania_wykresu("obserwacje!$Z$1", self.MAPA)
+        self.assertEqual(zgubione, ["Z"])
+        self.assertEqual(nowy, "obserwacje!$Z$1")
 
     def test_pusta_mapa_nic_nie_zmienia(self):
         tresc = "obserwacje!$J$2:$J$99"
         nowy, zgubione = G._przelicz_odwolania_wykresu(tresc, {})
         self.assertEqual((nowy, zgubione), (tresc, []))
 
+
+class TestMapaWykresowPoNaglowkach(unittest.TestCase):
+    """
+    Zgloszenie z obserwacji 204: wykres punktu rosy pokazywal wskazania
+    multimetru, a wykres temperatury czujnika — punkt rosy.
+
+    Przyczyna: odwolania przeliczano indeksami WEWNETRZNEGO ukladu danych
+    (33 kolumny, 8 kanalow), a wykresy celuja w kolumny ARKUSZA SZABLONU
+    (21 kolumn, 4 kanaly). Dwie rozne przestrzenie kolumn.
+    """
+
+    SZABLON = ["Data Czas", "Tzadana", "RHzadana", "Todczytana", "RHodczytana",
+               "Wskazania multimetru", "Wskazania multimetru",
+               "Wskazania multimetru", "Wskazania multimetru",
+               "TPunktuRosy", "Temperatura", "%RH",
+               "Temperatura Pt100-09", "Temperatura Pt100-13",
+               "Temperatura Pt100-01", "Temperatura Pt100-18"]
+
+    WYNIK = ["Data Czas", "Tzadana", "RHzadana", "Todczytana", "RHodczytana",
+             "Wskazania multimetru Pt100-01", "Wskazania multimetru Pt100-18",
+             "TPunktuRosy", "Temperatura", "%RH",
+             "Temperatura Pt100-01", "Temperatura Pt100-18"]
+
+    def setUp(self):
+        with redirect_stdout(io.StringIO()):
+            self.mapa = G._mapa_liter_wykresow(self.SZABLON, self.WYNIK)
+
+    def test_punkt_rosy_trafia_we_wlasciwa_kolumne(self):
+        """J (TPunktuRosy) -> H, a nie w kolumne wskazan multimetru."""
+        self.assertEqual(self.mapa["J"], "H")
+
+    def test_ramka_zostaje_na_miejscu(self):
+        for lit in ("A", "B", "C", "D", "E"):
+            with self.subTest(kolumna=lit):
+                self.assertEqual(self.mapa[lit], lit)
+
+    def test_identyczny_naglowek_ma_pierwszenstwo(self):
+        """'Temperatura Pt100-01' istnieje w obu — musi trafic dokladnie w nia."""
+        self.assertEqual(self.mapa["O"], "K")
+        self.assertEqual(self.mapa["P"], "L")
+
+    def test_temperatura_czujnika_nie_myli_sie_z_temperatura_komory(self):
+        """Bez rozroznienia 'Temperatura Pt100-01' zlewalo sie z 'Temperatura'."""
+        self.assertNotEqual(self.mapa["O"], self.mapa["K"])
+        self.assertEqual(self.mapa["K"], "I")      # sama 'Temperatura'
+
+    def test_nieuzyty_kanal_dostaje_pierwszy_dostepny(self):
+        """Pt100-13 nie bylo w pomiarze — wykres pokazuje istniejacy czujnik."""
+        self.assertEqual(self.mapa["N"], "K")
+
+    def test_wskazania_multimetru_dopasowane_po_kolei(self):
+        self.assertEqual(self.mapa["F"], "F")
+        self.assertEqual(self.mapa["G"], "G")
+
+    def test_zaden_wpis_nie_wskazuje_poza_wynik(self):
+        litery_wyniku = {get_column_letter(i + 1) for i in range(len(self.WYNIK))}
+        self.assertTrue(set(self.mapa.values()) <= litery_wyniku)
 
 
 class TestSzerokoscDanych(unittest.TestCase):
