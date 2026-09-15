@@ -872,6 +872,71 @@ def parse_comet_txt(filepath, output_dir):
     save_result(times, temps, hums, filepath.name, output_dir)
 
 
+# Jednostki rozpoznawane w kolumnie obok wartosci ('ChN_Unit') — to one, a nie
+# nazwa kolumny, mowia jaka wielkosc stoi w kolumnie poprzedniej.
+JEDN_TEMP = re.compile(r'^(?:deg(?:ree)?s?\s*c|[°º]\s*c|℃|grad\s*c|c)$', re.I)
+JEDN_TEMP_F = re.compile(r'^(?:deg(?:ree)?s?\s*f|[°º]\s*f|℉)$', re.I)
+JEDN_WILG = re.compile(r'^(?:%\s*r\.?h\.?|r\.?h\.?\s*%|%\s*h|%)$', re.I)
+
+
+def _licz_liczby(df, kolumna):
+    """Ile wartosci w kolumnie da sie odczytac jako liczbe (z przecinkiem tez)."""
+    return int(pd.to_numeric(
+        df[kolumna].map(lambda v: str(v).replace(',', '.')), errors='coerce'
+    ).notna().sum())
+
+
+def _dominujaca_jednostka(seria):
+    """
+    Jednostka kolumny — o ile kolumna JEST kolumna jednostki: ten sam krotki,
+    nieliczbowy napis w co najmniej 80% wierszy. Inaczej None.
+    """
+    from collections import Counter
+    wartosci = [str(v).strip() for v in seria.dropna()]
+    wartosci = [v for v in wartosci if v and v.lower() != 'nan']
+    if len(wartosci) < 3:
+        return None
+    napis, ile = Counter(wartosci).most_common(1)[0]
+    if ile < 0.8 * len(wartosci) or len(napis) > 12:
+        return None
+    return None if clean_num(napis) is not None else napis
+
+
+def _kolumny_wg_jednostek(df):
+    """
+    Uklad 'wartosc + jednostka obok'. Logger zapisuje kanaly ogolnie, wiec nazwa
+    kolumny nie mowi nic o wielkosci — mowi ja dopiero TRESC kolumny jednostki:
+
+        Ch1_Value   Ch1_Unit   Ch2_Value   Ch2_unit   Ch3_Value   Ch3_unit
+          000046,9      %RH      000024,5   DEGREE C   001005,0      hpa
+
+    Zwraca {'temp': kolumna, 'wilg': kolumna} — tylko role rozpoznane.
+    Cisnienie ('hpa') zostaje pominiete: protokol go nie uzywa.
+
+    Stopnie Fahrenheita rozpoznajemy po to, by ich NIE wziac za Celsjusze —
+    taki kanal pomijamy z ostrzezeniem zamiast cicho przepisac zla wartosc.
+    """
+    role = {}
+    kolumny = list(df.columns)
+    for i, kol in enumerate(kolumny):
+        if i == 0:
+            continue                       # kolumna jednostki ma cos po lewej
+        jedn = _dominujaca_jednostka(df[kol])
+        if not jedn:
+            continue
+        kol_wart = kolumny[i - 1]
+        if _licz_liczby(df, kol_wart) == 0:
+            continue                       # obok nie ma liczb — to nie ta para
+        if JEDN_TEMP_F.fullmatch(jedn):
+            print(f"    ⚠  Kanal '{kol_wart}' w stopniach Fahrenheita "
+                  f"({jedn}) — pomijam")
+        elif JEDN_TEMP.fullmatch(jedn):
+            role.setdefault('temp', kol_wart)
+        elif JEDN_WILG.fullmatch(jedn):
+            role.setdefault('wilg', kol_wart)
+    return role
+
+
 def _best_numeric_col(df, cols):
     """
     Spośród podanych kolumn zwróć (nazwa, liczba_wartości) tej z największą liczbą
@@ -881,9 +946,7 @@ def _best_numeric_col(df, cols):
     """
     best, best_count = None, 0
     for c in cols:
-        cnt = int(pd.to_numeric(
-            df[c].map(lambda v: str(v).replace(',', '.')), errors='coerce'
-        ).notna().sum())
+        cnt = _licz_liczby(df, c)
         if cnt > best_count:
             best, best_count = c, cnt
     return best, best_count
@@ -897,6 +960,10 @@ def parse_txt_generic(filepath, output_dir):
     Wykrywa kolumny czasu/temperatury/wilgotności po słowach kluczowych, a wśród
     kandydatów temp/wilg wybiera tę z REALNYMI danymi (pomija puste/NAN — np. gdy
     EMC_currTemp=NAN, użyje EMC_analogTemp; gdy wilgotność same NAN — pomija ją).
+
+    Gdy ani słowa kluczowe, ani pozycja niczego nie dają, zostaje jeszcze układ
+    'wartość + jednostka obok' (`Ch1_Value | Ch1_Unit | Ch2_Value | ...`) —
+    tam rolę kolumny określa treść sąsiedniej kolumny jednostki.
     """
     df = read_csv_robust(filepath)
     if df is None:
@@ -921,6 +988,20 @@ def parse_txt_generic(filepath, output_dir):
             and pd.to_numeric(df[c], errors='coerce').notna().sum() > len(df) * 0.4
         ]
         if not numeric_cols:
+            # Ostatnia proba: uklad 'wartosc + jednostka obok' (kanaly nazwane
+            # ogolnie, np. 'Ch1_Value | Ch1_Unit'). Wchodzi dopiero tutaj, zeby
+            # niczego nie zmieniac plikom, ktore rozpoznaja sie po nazwach.
+            wg_jedn = _kolumny_wg_jednostek(df)
+            if wg_jedn.get('temp'):
+                temp_col = wg_jedn['temp']
+                hum_col  = wg_jedn.get('wilg')
+                print(f"    → kanaly rozpoznane po jednostkach: "
+                      f"T={temp_col}, RH={hum_col or '—'}")
+                temps = df[temp_col].apply(clean_num)
+                hums = df[hum_col].apply(clean_num).tolist() if hum_col else None
+                save_result(times.tolist(), temps.tolist(), hums,
+                            filepath.name, output_dir)
+                return
             raise ValueError(
                 f"No temperature column with data. Columns: {list(df.columns)}"
             )

@@ -278,10 +278,11 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `analizuj_excele.py` | 1093 | 28 | Uniwersalny parser loggerów → `wyniki/*.xlsx` | pandas, openpyxl, pypdf |
 | `pz_dane.py` | 346 | 16 | Parser PZ (PDF, PL/EN) + Zestawienie rozdzielczości | pypdf, openpyxl |
 | `app_gui.py` | ~740 | 35 | Panel sterujący PySide6 — kroki obiegu, log, wyniki | PySide6 |
-| `cc_config.py` | ~500 | 12 | Rejestr **65 ustawień** + zapis `cc_ustawienia.json` + odczyt env | — (stdlib) |
+| `cc_config.py` | ~500 | 12 | Rejestr **74 ustawień** + zapis `cc_ustawienia.json` + odczyt env | — (stdlib) |
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
+| `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 304 testy | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 409 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -291,7 +292,7 @@ Wynik zawsze znormalizowany: **`Czas | Temperatura [°C] | Wilgotność [%RH]`**
 
 ## 🔌 Kontrakt env‑var (GUI ↔ workery)
 
-**Nie ma już potrzeby edytowania skryptów w Notatniku.** Wszystkie 65 ustawień
+**Nie ma już potrzeby edytowania skryptów w Notatniku.** Wszystkie 74 ustawień
 opisuje rejestr w [`cc_config.py`](cc_config.py) (typ, wartość domyślna, etykieta,
 opis, krok obiegu, poziom podstawowy/zaawansowany). Panel buduje z niego formularze
 automatycznie, zapisuje wybory do `cc_ustawienia.json` i przekazuje je workerowi
@@ -336,7 +337,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**304 testy** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**409 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -362,14 +363,57 @@ Przełączniki `Generuj arkusze Excel` / `Generuj swiadectwa Word` w kroku 3 pan
 - Typ CC‑04 z wiersza 14 (`S:T14`…): tagi `LG` / `LD` / `PD` / `PG` → stałe `K11–K17`
   (Pt100‑09/01/18/13, 1586A‑02, …).
 
+### 👁️ Wygląd pliku wynikowego — pasek zakładek
+
+> **Zasada: każdy `.xlsx`, który oddajemy użytkownikowi, przechodzi na końcu przez
+> [`cc_widok.py`](cc_widok.py) → `wymus_widok()`.** Jedno wywołanie na plik,
+> **po wszystkich zapisach — także tych przez Excel COM.**
+
+Chodzi o trzy atrybuty w `xl/workbook.xml`:
+
+| Atrybut | Znaczenie | Co ustawiamy |
+|---|---|---|
+| `tabRatio` | szerokość paska zakładek (0–1000) kosztem paska przewijania | `GEN_TAB_RATIO` × 1000 (domyślnie **850**) |
+| `firstSheet` | od której zakładki zaczyna się widoczny pasek | **0** — zawsze od pierwszej |
+| `activeTab` | zakładka otwarta po wczytaniu | bez zmian (kopia otwiera się na `Wyniki`) |
+
+**Dlaczego tak, a nie przez okno Excela.** Objaw — po otwarciu pliku widać jedną
+zakładkę, a resztę trzeba odsłonić przeciągając suwak w lewo — wracał dwiema drogami:
+
+1. **Protokół gubił `tabRatio`.** Krok 3 otwiera protokół przez COM (wpisanie F/G do
+   Strony 3) i przy zapisie Excel przepisuje `<workbookView>` po swojemu, kasując ten atrybut.
+2. **Kopie gubiły `firstSheet`.** Przewijanie szło przez żywe okno
+   (`Windows(1).ScrollWorkbookTabs`) i bywało nieskuteczne — w jednym przebiegu dwie
+   kopie z czterech wychodziły z `firstSheet=6`, czyli paskiem przewiniętym na sam
+   koniec, do zakładki `Wyniki`.
+
+Dlatego poprawka jest **chirurgiczna i deterministyczna**: `.xlsx` to archiwum ZIP,
+więc podmieniamy w nim jedną część — `xl/workbook.xml`. Reszta zostaje bajt w bajt,
+razem z **zapamiętanymi wynikami formuł** (ponowny zapis przez `openpyxl` skasowałby
+ten cache, a świadectwa Word czytają właśnie policzone wartości).
+
+**Gdzie to jest wpięte** — dwa miejsca, oba „na końcu":
+
+- `generuj_obserwacje.py` → `_zapisz_bezpiecznie()` — jedyny punkt zapisu kroku 2,
+  więc obejmuje arkusz obserwacji i protokół. `widok=False` tylko dla `Zestawienia`,
+  bo to plik użytkownika, nie nasz wynik.
+- `generuj_arkusze.py` → koniec `_main_impl()` — protokół + wszystkie kopie, po Etapie 7.
+  W logu: `[Widok] Pasek zakładek ustawiony w N z M plików`.
+
+**Dodając nowy plik wynikowy** — wywołaj `cc_widok.wymus_widok(ścieżka, TAB_RATIO)`
+jako ostatni krok, po zapisie. Testy: [`testy/test_widok_zakladek.py`](testy/test_widok_zakladek.py)
+oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
+
 ## 🆕 Ostatnie usprawnienia
 
+- **Wybrane okna widać też w plikach kroku 1:** wiersze, z których powstał punkt protokołu, są podświetlane w `wyniki/<serial>_wynik.xlsx` — zielono, a przy ostrzeżeniu pomarańczowo (jak w obserwacji), z numerem punktu w kolumnie obok. Dostaje je **każdy** dopasowany czasowo plik, także ten, który nie zmieścił się w kolumnach przyrządów protokołu.
+- **Pasek zakładek nie chowa się już po otwarciu pliku:** `tabRatio` i `firstSheet` ustawiane są na gotowym `.xlsx`, a nie na oknie Excela — patrz sekcja *Wygląd pliku wynikowego*.
 - **Wybór pojedynczego przyrządu przez wyszarzenie:** przyrząd, którego wszystkie
   bloki na Stronie 3 są szare, nie dostaje już ani kopii Excel, ani świadectwa Word.
   Wcześniej powstawała pusta kopia (sam arkusz `Wyniki`) i świadectwo z zerową
   tabelą kalibracji — lista kopii idzie ze Strony 2, więc same kolory nie usuwały
   przyrządu z obiegu. Numer przyrządu z protokołu jest zachowany (`… - 4 - <serial>`).
-- **Panel zamiast Notatnika:** wszystkie 65 ustawień z trzech skryptów ma teraz
+- **Panel zamiast Notatnika:** wszystkie 74 ustawień z trzech skryptów ma teraz
   formularz w aplikacji (rejestr `cc_config.py`), zapisywany do `cc_ustawienia.json`.
   Doszły: lista kontrolna świeżości plików wejściowych, zaznaczanie plików TXT z listy,
   uruchamianie kroków po kolei z przerwaniem na błędzie, kolorowany log i panel

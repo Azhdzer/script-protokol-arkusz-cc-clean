@@ -42,6 +42,8 @@ KONTRAKT = {
          "['a.xls', 'b.xls']", "[]"),
     ],
     "generuj_obserwacje": [
+        # --- wyglad plikow (wspolne z krokiem 3) ---
+        ("GEN_TAB_RATIO", "m.TAB_RATIO_ZAKLADEK", "0.5", "0.5", "0.85"),
         # --- pliki i podpisy ---
         ("OBS_TEMPLATE",      "m.TEMPLATE", "T_obs.xlsx", "T_obs.xlsx",
          "xxx_LA_TH_2026 - obserwacje CC.xlsx"),
@@ -147,9 +149,13 @@ KONTRAKT = {
         ("GEN_KOLOR_AKT",   "m.KOLOR_AKTYWNY_S3", "#00FF00", "#00FF00", "#CCFFCC"),
         ("GEN_KOLOR_POM",   "m.KOLOR_POMIJANY_S3", "#808080", "#808080", "#BFBFBF"),
         ("GEN_INNE_KOLORY", "m.BIERZ_INNE_KOLORY_S3", "1", "True", "False"),
-        # --- mapowanie CC-04 ---
+        # --- czujniki wzorcowe komor ---
         ("GEN_MAP_CC04", "m.MAPOWANIE_TYPU_CC04['LG']['K11']",
          '[["LG","Pt100-99","1586A-02","101","CC-04-LG"]]', "Pt100-99", "Pt100-09"),
+        ("GEN_CC_CZUJNIK",  "m.PARAMETRY_CC['K11']", "Pt100-31", "Pt100-31", "Pt100-11"),
+        ("GEN_CC_PRZYRZAD", "m.PARAMETRY_CC['K12']", "K2002", "K2002", "K2001"),
+        ("GEN_CC_WEJSCIE",  "m.PARAMETRY_CC['K13']", "104", "104", "-"),
+        ("GEN_CC_KOMORA",   "m.PARAMETRY_CC['K17']", "CC-02", "CC-02", "CC"),
         # --- PZ ---
         ("CC_PZ_FOLDER", "m.PZ_FOLDER_ARK", "PZ_inne",
          os.path.join(BAZA, "PZ_inne"), os.path.join(BAZA, "PZ")),

@@ -39,6 +39,10 @@ SZYBKIE = os.environ.get("CC_TESTY_SZYBKIE", "").strip() in ("1", "true", "tak")
 # wiec ich obecnosc w wyniku dowodzi, ze panel naprawde steruje obiegiem.
 PODPIS_TESTOWY = "Testowy Podpisujacy"
 NR_SW_TESTOWY = "5000"
+# Numer czujnika wzorcowego komory CC. Rozny od tego w szablonie arkusza
+# obliczeniowego ('Pt100-11') — inaczej test przeszedlby takze wtedy, gdyby
+# ustawienie bylo ignorowane, a numer pochodzil z szablonu.
+CZUJNIK_CC_TESTOWY = "Pt100-31"
 
 TXT_POMIARU = ["2026-08-06 12.10_188.txt", "2026-08-10 13.57_188.txt"]
 
@@ -76,6 +80,7 @@ class TestPelnyObieg(unittest.TestCase):
             "CC_PROTOKOL": PROTOKOL_CC,
             "CC_SZABLON": SZABLON_ARKUSZA,
             "GEN_NR_SW": NR_SW_TESTOWY,
+            "GEN_CC_CZUJNIK": CZUJNIK_CC_TESTOWY,
         }, limit_s=1200)
 
     # ── pomocnicze ────────────────────────────────────────────────────────
@@ -225,6 +230,81 @@ class TestPelnyObieg(unittest.TestCase):
                 wb.close()
                 self.assertIn("Wyniki", nazwy)
                 self.assertGreater(len(nazwy), 1, "kopia bez zakladek punktow")
+
+    def test_3_czujnik_wzorcowy_z_panelu_trafia_do_kopii(self):
+        """
+        Numer czujnika komory CC siedzial tylko w szablonie arkusza obliczeniowego
+        (K11), wiec po wymianie czujnika kopie i tak dostawaly stary numer.
+        Teraz steruje nim panel — K11 w KAZDEJ zakladce ma byc z ustawien.
+        """
+        self.pomin_gdy_szybkie()
+        for plik in self.kopie_excel():
+            wb = openpyxl.load_workbook(plik, read_only=True)
+            try:
+                for nazwa in [n for n in wb.sheetnames if n != "Wyniki"]:
+                    with self.subTest(plik=os.path.basename(plik), zakladka=nazwa):
+                        self.assertEqual(wb[nazwa]["K11"].value, CZUJNIK_CC_TESTOWY)
+            finally:
+                wb.close()
+
+    def test_3_rozdzielczosc_z_protokolu_trafia_do_kopii(self):
+        """
+        Strona 2 -> kopia: kolumna K (temperatura) do H57, kolumna L (wilgotnosc)
+        do H55. Kolumna L nie byla czytana w ogole, wiec H55 zostawalo szablonowe
+        (0,1) niezaleznie od protokolu — a od niego zalezy niepewnosc wilgotnosci.
+        """
+        self.pomin_gdy_szybkie()
+        wb = openpyxl.load_workbook(self.sciezka(PROTOKOL_CC), read_only=True,
+                                    data_only=True)
+        try:
+            ws2 = wb["Strona 2"]
+            wg_serialu = {}
+            for r in range(5, 61):
+                serial = str(ws2.cell(row=r, column=5).value or "").strip()
+                if serial:
+                    wg_serialu[serial] = (ws2.cell(row=r, column=11).value,
+                                          ws2.cell(row=r, column=12).value)
+        finally:
+            wb.close()
+        self.assertTrue(wg_serialu, "Strona 2 protokolu jest pusta")
+
+        for plik in self.kopie_excel():
+            nazwa = os.path.basename(plik)
+            serial = next((s for s in wg_serialu if s in nazwa), None)
+            self.assertIsNotNone(serial, f"nie wiem, czyja to kopia: {nazwa}")
+            rozdz_t, rozdz_rh = wg_serialu[serial]
+            kopia = openpyxl.load_workbook(plik, read_only=True)
+            try:
+                for zakladka in [n for n in kopia.sheetnames if n != "Wyniki"]:
+                    ws = kopia[zakladka]
+                    with self.subTest(serial=serial, zakladka=zakladka):
+                        self.assertEqual(ws["H57"].value, rozdz_t)
+                        self.assertEqual(ws["H55"].value, rozdz_rh)
+            finally:
+                kopia.close()
+
+    def test_3_pasek_zakladek_widoczny_w_kazdym_pliku(self):
+        """
+        Po otwarciu pliku maja byc widoczne wszystkie zakladki, bez przeciagania
+        suwaka. Krok 3 zapisuje protokol przez Excel COM (gubil tabRatio), a pasek
+        kopii przewijal przez zywe okno (czesc kopii wychodzila z firstSheet=6,
+        czyli widoczna tylko zakladka 'Wyniki').
+        """
+        self.pomin_gdy_szybkie()
+        pliki = self.kopie_excel() + [self.sciezka(PROTOKOL_CC)]
+        self.assertTrue(pliki)
+        for plik in pliki:
+            wb = openpyxl.load_workbook(plik, read_only=True)
+            try:
+                widok = wb.views[0] if wb.views else None
+            finally:
+                wb.close()
+            with self.subTest(plik=os.path.basename(plik)):
+                self.assertIsNotNone(widok, "brak <workbookView> w pliku")
+                self.assertGreaterEqual(widok.tabRatio or 0, 600,
+                                        "pasek zakladek wezszy niz domyslny Excela")
+                self.assertIn(widok.firstSheet, (0, None),
+                              "pasek zakladek przewiniety — pierwsze zakladki schowane")
 
     def test_3_powstaje_swiadectwo_dla_kazdej_kopii(self):
         self.pomin_gdy_szybkie()

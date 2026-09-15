@@ -216,5 +216,251 @@ class TestNaglowekLiczbaPojedyncza(unittest.TestCase):
         self.assertNotIn("kanal", p.czuj_nr_fabr.lower())
 
 
+class TestWskaznikDopisanyZaObiektem(unittest.TestCase):
+    """
+    Zgloszenie z PZ 207: przyrzad zlozony, w ktorym panel odczytowy ma WLASNY
+    typ i numer fabryczny, a w tekscie stoi ZA termohigrometrem:
+
+        Termohigrometr typ: LB-701, nr fabr .: 2783 z panelem odczytowym
+        (rejestratorem) typ: LB-706B, nr fabr.: 568, nr ewid.: DNW/PP/002/WS,
+        wytworca: LAB-EL.
+
+    Strona 2 protokolu wychodzila z tego bledna: typ brany byl z przodu
+    (LB-701), numer fabryczny z konca (568), a kolumny czujnika zostawaly puste.
+    W protokole OBIEKTEM jest panel odczytowy, a termohigrometr z przodu jest
+    CZUJNIKIEM POMIAROWYM — kolejnosc odwrotna niz w tekscie PZ.
+
+    Osobno: warstwa tekstowa tego PDF daje 'nr fabr .:' (odstep przed kropka).
+    Wzorzec tego nie obejmowal, wiec numer fabryczny czujnika gubil sie cicho.
+    """
+
+    WPIS = ("Termohigrometr typ: LB-701, nr fabr .: 2783 z panelem odczytowym "
+            "(rejestratorem) typ: LB-706B, nr fabr.: 568, "
+            "nr ewid.: DNW/PP/002/WS, wytwórca: LAB-EL.")
+
+    def setUp(self):
+        self.p = parsuj(self.WPIS)[0]
+
+    def test_jeden_przyrzad_a_nie_dwa(self):
+        self.assertEqual(len(parsuj(self.WPIS)), 1)
+
+    def test_obiektem_jest_panel_odczytowy(self):
+        self.assertEqual((self.p.typ, self.p.nr_fabr), ("LB-706B", "568"))
+
+    def test_czujnikiem_jest_termohigrometr(self):
+        self.assertEqual((self.p.czuj_typ, self.p.czuj_nr_fabr), ("LB-701", "2783"))
+
+    def test_nr_ewidencyjny_nalezy_do_panelu(self):
+        self.assertEqual(self.p.nr_ewid, "DNW/PP/002/WS")
+
+    def test_wytworca_wspolny_dla_obu_czesci(self):
+        self.assertEqual((self.p.wytworca, self.p.czuj_wytworca), ("LAB-EL", "LAB-EL"))
+
+    def test_odstep_przed_kropka_w_nr_fabr(self):
+        """'nr fabr .:' to artefakt PDF — numer ma sie znalezc mimo niego."""
+        self.assertEqual(self.p.czuj_nr_fabr, "2783")
+
+    def test_numer_nie_zbiera_ogona_z_fraza(self):
+        """Regresja: nr fabr wychodzil jako '2783 z panelem odczytowym'."""
+        self.assertNotIn("panel", self.p.czuj_nr_fabr.lower())
+
+    def test_wariant_wraz_z_rejestratorem(self):
+        p = parsuj("Termohigrometr typ: T1, nr fabr.: 111 wraz z rejestratorem "
+                   "typ: R2, nr fabr.: 222, wytwórca: Testo.")[0]
+        self.assertEqual((p.typ, p.nr_fabr), ("R2", "222"))
+        self.assertEqual((p.czuj_typ, p.czuj_nr_fabr), ("T1", "111"))
+
+    def test_rozpoznanie_nie_zalezy_od_nazw_przyrzadow(self):
+        """Liczy sie fraza, nie konkretny model — inaczej dzialaloby dla jednego PZ."""
+        p = parsuj("Termohigrometr typ: HD-9817, nr fabr.: A1122 z wyświetlaczem "
+                   "typ: HD-2301, nr fabr.: B7788, nr ewid.: Q/LOG/40, "
+                   "wytwórca: Delta Ohm.")[0]
+        self.assertEqual((p.wytworca, p.typ, p.nr_fabr), ("Delta Ohm", "HD-2301", "B7788"))
+        self.assertEqual((p.czuj_typ, p.czuj_nr_fabr), ("HD-9817", "A1122"))
+
+
+class TestWskaznikPrzyWieluPrzyrzadach(unittest.TestCase):
+    """
+    PZ rzadko ma jeden przyrzad — zwykle jest ich kilka albo kilkanascie, w
+    roznych ukladach naraz. Uklad z panelem musi dzialac tak samo w kazdym
+    z nich, a nie tylko w pojedynczej linii.
+    """
+
+    def test_kazda_pozycja_parsowana_osobno(self):
+        """Rozne uklady w jednym PZ nie moga sobie nawzajem przeszkadzac."""
+        tekst = (
+            "Obiekty wzorcowania:\n"
+            "1) Termohigrometr typ: LB-701, nr fabr .: 2783 z panelem odczytowym "
+            "(rejestratorem) typ: LB-706B, nr fabr.: 568, nr ewid.: DNW/PP/002/WS, "
+            "wytwórca: LAB-EL.\n"
+            "2) Termometr typ: 175T2, nr fabr.: 40118669, nr ewid.: Q/LOG/36, "
+            "wytwórca: Testo.\n"
+            "3) Termohigrometr złożony ze wskaźnika (rejestratora) typ: testo 176H1, "
+            "nr fabr.: 40807872 oraz czujnika typ: 0636 9735, nr fabr.: 21201805, "
+            "wytwórca: Testo.\n"
+            "Metoda wzorcowania:\n")
+        p = pz_dane.parsuj_tekst(tekst)
+        self.assertEqual(len(p), 3)
+        self.assertEqual((p[0].typ, p[0].nr_fabr, p[0].czuj_typ), ("LB-706B", "568", "LB-701"))
+        self.assertEqual((p[1].typ, p[1].nr_fabr, p[1].czuj_typ), ("175T2", "40118669", ""))
+        self.assertEqual((p[2].typ, p[2].nr_fabr, p[2].czuj_typ),
+                         ("testo 176H1", "40807872", "0636 9735"))
+
+    def test_uklad_wypunktowany_z_panelem(self):
+        """Kilka sztuk pod jednym naglowkiem, kazda z wlasnym panelem."""
+        wpis = ("Termohigrometr (rejestrator, 2 szt.) typ: LB-701, "
+                "• nr fabr.: 2783 z panelem odczytowym typ: LB-706B, "
+                "nr fabr.: 568, nr ewid.: UR1; "
+                "• nr fabr.: 2784 z panelem odczytowym typ: LB-706B, "
+                "nr fabr.: 569, nr ewid.: UR2; wytwórca: LAB-EL.")
+        p = parsuj(wpis)
+        self.assertEqual(len(p), 2)
+        self.assertEqual([(x.typ, x.nr_fabr, x.nr_ewid) for x in p],
+                         [("LB-706B", "568", "UR1"), ("LB-706B", "569", "UR2")])
+        self.assertEqual([(x.czuj_typ, x.czuj_nr_fabr) for x in p],
+                         [("LB-701", "2783"), ("LB-701", "2784")])
+
+    def test_typ_czujnika_dziedziczy_z_naglowka_pozycji(self):
+        """W podpunkcie stoja same numery — typ czujnika jest wyzej."""
+        wpis = ("Termohigrometr (rejestrator, 2 szt.) typ: LB-701, nr fabr.: "
+                "• 2783 z panelem odczytowym typ: LB-706B, nr fabr.: 568, nr ewid.: UR1; "
+                "• 2784 z panelem odczytowym typ: LB-706B, nr fabr.: 569, nr ewid.: UR2; "
+                "wytwórca: LAB-EL.")
+        p = parsuj(wpis)
+        self.assertEqual([x.czuj_nr_fabr for x in p], ["2783", "2784"])
+        self.assertEqual([x.czuj_typ for x in p], ["LB-701", "LB-701"])
+
+    def test_wytworca_trafia_do_obu_czesci_kazdej_sztuki(self):
+        wpis = ("Termohigrometr (rejestrator, 2 szt.) typ: LB-701, "
+                "• nr fabr.: 2783 z panelem odczytowym typ: LB-706B, nr fabr.: 568; "
+                "• nr fabr.: 2784 z panelem odczytowym typ: LB-706B, nr fabr.: 569; "
+                "wytwórca: LAB-EL.")
+        for x in parsuj(wpis):
+            with self.subTest(nr=x.nr_fabr):
+                self.assertEqual((x.wytworca, x.czuj_wytworca), ("LAB-EL", "LAB-EL"))
+
+    def test_numerowana_lista_sztuk_jednej_pozycji(self):
+        """
+        Zgloszenie z PZ 211: cztery termohigrometry jednego typu, a numeracja
+        '1) 2) 3) 4)' wylicza SZTUKI, nie osobne pozycje:
+
+            Termohigrometr (rejestrator) typ: TERMIOPLUS,
+            1) nr fabr.: 5000722, nr CLDK: CLDK/B-49;
+            ...
+            4) nr fabr.: 2950722, nr CLDK: CLDK/B-52, wytworca: Termoprodukt.
+
+        Numeracja byla brana za podzial na pozycje, wiec naglowek z typem
+        przepadal, a wytworca — stojacy raz, po ostatnim podpunkcie — trafial
+        tylko do ostatniej sztuki. W protokole trzy z czterech wierszy mialy
+        pusta kolumne 'Wytworca'.
+        """
+        tekst = ("Obiekty wzorcowania:\n"
+                 "Termohigrometr (rejestrator) typ: TERMIOPLUS,\n"
+                 "1) nr fabr.: 5000722, nr CLDK: CLDK/B-49;\n"
+                 "2) nr fabr.: 4180722, nr CLDK: CLDK/B-50;\n"
+                 "3) nr fabr.: 3780722, nr CLDK: CLDK/B-51;\n"
+                 "4) nr fabr.: 2950722, nr CLDK: CLDK/B-52, wytwórca: Termoprodukt.\n"
+                 "Metoda wzorcowania:\n")
+        p = pz_dane.parsuj_tekst(tekst)
+        self.assertEqual(len(p), 4)
+        self.assertEqual([x.nr_fabr for x in p],
+                         ["5000722", "4180722", "3780722", "2950722"])
+        self.assertEqual([x.wytworca for x in p], ["Termoprodukt"] * 4)
+        self.assertEqual([x.typ for x in p], ["TERMIOPLUS"] * 4)
+
+    def test_wlasna_etykieta_numeru_nie_tworzy_widma(self):
+        """
+        'nr CLDK:' nie byl znany jako granica, wiec wartosc 'nr fabr.' siegala do
+        konca podpunktu i po rozdzieleniu przecinkiem powstawal drugi, nieistniejacy
+        przyrzad o numerze 'nr CLDK: CLDK/B-49'. Z czterech sztuk robilo sie osiem.
+        """
+        p = parsuj("typ: X, nr fabr.: 5000722, nr CLDK: CLDK/B-49, wytwórca: Termoprodukt.")
+        self.assertEqual(len(p), 1)
+        self.assertEqual(p[0].nr_fabr, "5000722")
+
+    def test_dowolny_wlasny_skrot_konczy_numer(self):
+        """Zasada jest ogolna — nie lista znanych skrotow."""
+        p = parsuj("typ: X, nr fabr.: 111222, nr inw.: INW/7, wytwórca: Testo.")
+        self.assertEqual(len(p), 1)
+        self.assertEqual(p[0].nr_fabr, "111222")
+
+    def test_wlasny_skrot_to_numer_ewidencyjny(self):
+        """'nr CLDK:' pelni te sama role co 'nr ewid.:' — idzie do tej samej kolumny."""
+        p = parsuj("typ: X, nr fabr.: 5000722, nr CLDK: CLDK/B-49, wytwórca: Termoprodukt.")
+        self.assertEqual(p[0].nr_ewid, "CLDK/B-49")
+
+    def test_numer_katalogowy_to_nie_ewidencyjny(self):
+        """'nr kat.:' opisuje model, a nie egzemplarz — nie wolno go tu wpisac."""
+        p = parsuj("typ: Y, nr fabr.: 999, nr kat.: KAT-5, wytwórca: Testo.")
+        self.assertEqual((p[0].nr_fabr, p[0].nr_ewid), ("999", ""))
+
+    def test_znane_zapisy_maja_pierwszenstwo(self):
+        for wpis, oczekiwany in (
+                ("typ: X, nr fabr.: 111, nr wew.: AB-1; wytwórca: Testo.", "AB-1"),
+                ("typ: 174H, nr fabr.: 123456, nr wewn.: CL-1318A, wytwórca: Testo.", "CL-1318A"),
+                ("typ: M1, nr fabr.: TMM1605, nr ewid.: Q/LOG/19, wytwórca: Tempmate.", "Q/LOG/19"),
+        ):
+            with self.subTest(wpis=wpis[:28]):
+                self.assertEqual(parsuj(wpis)[0].nr_ewid, oczekiwany)
+
+    def test_prawdziwe_pozycje_nadal_sa_pozycjami(self):
+        """Gdy podpunkt zaczyna sie od NAZWY przyrzadu — to osobna pozycja PZ."""
+        tekst = ("Obiekty wzorcowania:\n"
+                 "1) Termometr typ: 175T2, nr fabr.: 40118669, wytwórca: Testo.\n"
+                 "2) Termohigrometr typ: 174H, nr fabr.: 83623973, wytwórca: Testo.\n"
+                 "Metoda wzorcowania:\n")
+        p = pz_dane.parsuj_tekst(tekst)
+        self.assertEqual([(x.pozycja, x.typ) for x in p],
+                         [(1, "175T2"), (2, "174H")])
+
+    def test_bez_typu_w_naglowku_numeracja_to_pozycje(self):
+        """Sam naglowek 'Przyrzady:' nie opisuje przyrzadu — nie wolno scalac."""
+        tekst = ("Obiekty wzorcowania: Przyrządy zleceniodawcy:\n"
+                 "1) nr fabr.: 111, wytwórca: Testo.\n"
+                 "2) nr fabr.: 222, wytwórca: Testo.\n"
+                 "Metoda wzorcowania:\n")
+        p = pz_dane.parsuj_tekst(tekst)
+        self.assertEqual([x.pozycja for x in p], [1, 2])
+
+    def test_wypunktowany_bez_panelu_bez_zmian(self):
+        """Regresja: uklad z PZ 197 ma isc stara droga."""
+        wpis = ("Termohigrometr (rejestrator, 2 szt.) typ: testo 174H, nr fabr.:\n"
+                "• 83623973, nr wew.: UR00045;\n"
+                "• 83617608, nr wew.: UR00052;\n"
+                "wytwórca: Testo.")
+        p = parsuj(wpis)
+        self.assertEqual([x.nr_fabr for x in p], ["83623973", "83617608"])
+        self.assertEqual([x.typ for x in p], ["testo 174H", "testo 174H"])
+        self.assertEqual([x.czuj_typ for x in p], ["", ""])
+
+
+class TestKolejnoscNieOdwraca_Sie_Bez_Powodu(unittest.TestCase):
+    """
+    Nowy uklad wolno wlaczyc TYLKO wtedy, gdy dopisana czesc ma wlasny 'typ:'.
+    Inaczej zwykly opis ('z wyswietlaczem LCD') zamienialby role kolumn.
+    """
+
+    def test_uklad_ze_wskaznikiem_z_przodu_bez_zmian(self):
+        """'zlozony ze wskaznika ... oraz czujnika ...' — kolejnosc jak dotad."""
+        p = parsuj("Termohigrometr złożony ze wskaźnika (rejestratora) "
+                   "typ: testo 176H1, nr fabr.: 40807872 oraz czujnika "
+                   "temperatury typ: 0636 9735, nr fabr.: 21201805, "
+                   "wytwórca: Testo.")[0]
+        self.assertEqual((p.typ, p.nr_fabr), ("testo 176H1", "40807872"))
+        self.assertEqual((p.czuj_typ, p.czuj_nr_fabr), ("0636 9735", "21201805"))
+
+    def test_wzmianka_bez_typu_nie_przestawia_kolumn(self):
+        p = parsuj("Termohigrometr z wyświetlaczem typ: 174H, nr fabr.: 123456, "
+                   "nr ewid.: UR1, wytwórca: Testo.")[0]
+        self.assertEqual((p.typ, p.nr_fabr, p.nr_ewid), ("174H", "123456", "UR1"))
+        self.assertEqual((p.czuj_typ, p.czuj_nr_fabr), ("", ""))
+
+    def test_zwykly_jednoliniowy_bez_zmian(self):
+        p = parsuj("typ: M1, nr fabr.: TMM160500502, nr ewid.: Q/LOG/19, "
+                   "wytwórca: Tempmate.")[0]
+        self.assertEqual((p.typ, p.nr_fabr, p.nr_ewid),
+                         ("M1", "TMM160500502", "Q/LOG/19"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

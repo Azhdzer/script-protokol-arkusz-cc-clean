@@ -118,6 +118,15 @@ _WSPOLNE = [
        grupa="Sciezki",
        opis="Folder z protokolami, szablonami i plikami TXT. Wszystkie sciezki "
             "wzgledne liczone sa od niego."),
+    # Dotyczy KAZDEGO pliku .xlsx, ktory oddajemy: protokolu, arkusza obserwacji
+    # i kopii arkusza obliczeniowego. Dlatego stoi tu, a nie przy jednym kroku.
+    _U("GEN_TAB_RATIO", "Szerokosc paska zakladek w plikach wynikowych", "liczba",
+       0.85, "przygotowanie",
+       poziom=ZAAWANSOWANY, grupa="Wyglad plikow", minimum=0.1, maksimum=1.0,
+       krok_wart=0.05,
+       opis="Domyslne 0,6 Excela chowa zakladki za strzalkami — po otwarciu pliku "
+            "widac jedna zakladke i trzeba przeciagac suwak w lewo. Pasek zakladek "
+            "dostaje tyle szerokosci kosztem paska przewijania."),
 ]
 
 # ── KROK 1 — analizuj_excele.py ──────────────────────────────────────────────
@@ -367,10 +376,6 @@ _ARKUSZE = [
        opis="0 = czysc wszystko. Wartosc 1 chroni dzisiejsze odzyskiwanie recznej pracy."),
     _U("GEN_PROG_OSTRZ", "Ostrzegaj od tylu kopiowanych zakladek", "calk", 10, "ark",
        poziom=ZAAWANSOWANY, grupa="Stabilnosc Excela", minimum=1, maksimum=200),
-    _U("GEN_TAB_RATIO", "Szerokosc paska zakladek w kopii", "liczba", 0.85, "ark",
-       poziom=ZAAWANSOWANY, grupa="Wyglad kopii", minimum=0.1, maksimum=1.0,
-       krok_wart=0.05,
-       opis="Domyslne 0,6 Excela chowa zakladki za strzalkami przy wielu punktach."),
     _U("GEN_TOL_CZUJ", "Tolerancja czasu czujnika srodowiskowego", "liczba", 2.0, "ark",
        poziom=ZAAWANSOWANY, grupa="Warunki srodowiskowe", przyrostek=" min",
        minimum=0.1, maksimum=600.0, krok_wart=0.5,
@@ -399,17 +404,36 @@ _ARKUSZE = [
        poziom=ZAAWANSOWANY, grupa="Filtr kolorow Strony 3"),
     _U("GEN_INNE_KOLORY", "Bierz komorki w pozostalych kolorach", "flaga", False, "ark",
        poziom=ZAAWANSOWANY, grupa="Filtr kolorow Strony 3"),
-    _U("GEN_MAP_CC04", "Mapowanie typu CC-04 -> stale K11/K12/K13/K17", "tabela",
+    # --- Czujniki wzorcowe komor ---------------------------------------------
+    # Po wymianie czujnika w komorze trzeba tu wpisac nowy numer. Wczesniej numer
+    # dla komory CC siedzial TYLKO w szablonie arkusza obliczeniowego (K11), wiec
+    # kopie dostawaly stary czujnik, nawet gdy w komorze wisial juz inny.
+    _U("GEN_CC_CZUJNIK", "Komora CC — czujnik wzorcowy", "tekst", "Pt100-11", "ark",
+       grupa="Czujniki wzorcowe komor", przyrostek="K11",
+       opis="Numer czujnika wpisywany do kazdej zakladki roboczej kopii. "
+            "Zmien po wymianie czujnika w komorze — wartosc z szablonu arkusza "
+            "zostanie nadpisana."),
+    _U("GEN_MAP_CC04", "Komora CC-04 — czujniki w naroznikach", "tabela",
        [
            ["LG", "Pt100-09", "1586A-02", "101", "CC-04-LG"],
            ["LD", "Pt100-01", "1586A-02", "105", "CC-04-LD"],
            ["PD", "Pt100-18", "1586A-02", "107", "CC-04-PD"],
            ["PG", "Pt100-13", "1586A-02", "103", "CC-04-PG"],
        ], "ark",
-       poziom=ZAAWANSOWANY, grupa="Mapowanie CC-04",
-       kolumny=["Tag (S14)", "K11", "K12", "K13", "K17"],
-       opis="Tag czytany z wiersza 14 Strony 3 (S:T14, U:V14, ...) decyduje o "
-            "stalych wpisywanych do zakladek roboczych kopii."),
+       grupa="Czujniki wzorcowe komor",
+       kolumny=["Narożnik (S14)", "Czujnik wzorcowy", "Multimetr",
+                "Wejście Ch", "Oznaczenie komory"],
+       opis="Narożnik czytany z wiersza 14 Strony 3 (S:T14, U:V14, ...) decyduje, "
+            "ktory czujnik trafi do zakladek roboczych kopii."),
+    _U("GEN_CC_PRZYRZAD", "Komora CC — multimetr", "tekst", "K2001", "ark",
+       poziom=ZAAWANSOWANY, grupa="Czujniki wzorcowe komor", przyrostek="K12",
+       opis="Przyrzad odczytowy komory CC."),
+    _U("GEN_CC_WEJSCIE", "Komora CC — wejscie pomiarowe Ch", "tekst", "-", "ark",
+       poziom=ZAAWANSOWANY, grupa="Czujniki wzorcowe komor", przyrostek="K13",
+       opis="Komora CC ma jeden tor pomiarowy, wiec zwykle '-'."),
+    _U("GEN_CC_KOMORA", "Komora CC — oznaczenie", "tekst", "CC", "ark",
+       poziom=ZAAWANSOWANY, grupa="Czujniki wzorcowe komor", przyrostek="K17",
+       opis="Oznaczenie komory wpisywane do zakladek roboczych kopii."),
 ]
 
 USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE

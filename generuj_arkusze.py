@@ -10,7 +10,7 @@ Etap 3 – wypełnianie C15:C19 i D15:D19
          (dla CC: dane stałe z kol. L/M; dla CC-04: dynamiczne kolumny C/D)
 Etap 4 – wypełnianie E15:E19 i F15:F19 (dane zmienne per kopia, kol. Q/R i dalej)
 Etap 5 – wypełnianie komórek nagłówkowych i stopkowych
-         (E4:F4, G6, E5, E6, H57, B228, H228, B230:C230, H230:I230)
+         (E4:F4, G6, E5, E6, H55, H57, B228, H228, B230:C230, H230:I230)
 Etap 6 – wypełnianie arkusza Wyniki: F24 (per kopia z Strona 3 Q17/S17/…),
          C28, C32 (daty), E28:G28, E32:G32 (podpisy)
 Etap 7 – tworzenie kopii dokumentów Word (świadectwa wzorcowania):
@@ -36,6 +36,7 @@ import xlwings as xw
 
 import pz_dane   # wspolny modul: dane przyrzadow z PZ (fallback, gdy Strona 2 pusta)
 import cc_config as C   # rejestr ustawien + odczyt zmiennych srodowiskowych z panelu
+import cc_widok   # widok paska zakladek w gotowych plikach .xlsx
 
 # ---------------------------------------------------------------------------
 # Wizualne helpers logowania
@@ -299,6 +300,18 @@ def _mapowanie_cc04(wiersze):
 
 
 MAPOWANIE_TYPU_CC04 = _mapowanie_cc04(C.tabela("GEN_MAP_CC04", _MAP_CC04_DOMYSLNA))
+
+# Komora CC ma jeden czujnik wzorcowy. Do tej pory jego numer siedzial WYLACZNIE
+# w szablonie arkusza obliczeniowego (K11 = 'Pt100-11'), wiec po wymianie czujnika
+# w komorze kopie i tak dostawaly stary numer — nie bylo gdzie go zmienic.
+# Wartosci domyslne sa takie jak w szablonie, wiec bez zmian w panelu kopie
+# wygladaja dokladnie jak dotad (pilnuje tego testy/test_czujnik_komory.py).
+PARAMETRY_CC = {
+    "K11": C.tekst("GEN_CC_CZUJNIK", "Pt100-11"),
+    "K12": C.tekst("GEN_CC_PRZYRZAD", "K2001"),
+    "K13": C.tekst("GEN_CC_WEJSCIE", "-"),
+    "K17": C.tekst("GEN_CC_KOMORA", "CC"),
+}
 
 # Dla CC-04:
 # - C15:C19 bierzemy z kolumny zależnej od typu (LG/PG/LD/PD),
@@ -1367,7 +1380,11 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
             val_B = ws2.cells(row, 2).value   # kolumna B -> E5 kopii
             val_D = ws2.cells(row, 4).value   # kolumna D -> E6 kopii
             val_F = ws2.cells(row, 6).value   # kolumna F -> [nr_ewid] w Word
-            val_K = ws2.cells(row, 11).value  # kolumna K -> H57 kopii
+            val_K = ws2.cells(row, 11).value  # kolumna K -> H57 kopii (rozdz. temperatury)
+            # Kolumna L to rozdzielczosc odczytu RH. Nie byla czytana, wiec H55 w
+            # kopii zostawalo szablonowe (0,1) niezaleznie od tego, co stalo w
+            # protokole — a od H55 zalezy niepewnosc wilgotnosci.
+            val_L = ws2.cells(row, 12).value  # kolumna L -> H55 kopii (rozdz. RH)
             dane_s2.append({
                 "O": _cell_to_str(val_O),
                 "E": _cell_to_str(val_E),
@@ -1375,6 +1392,7 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                 "D": val_D,
                 "F": val_F,
                 "K": val_K,
+                "L": val_L,
                 "IS_CC04_PROTO": protokol_cc04,
                 "CC04_RAW": "",
                 "CC04_TAG": None,
@@ -3043,6 +3061,13 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         _k18_wartosc = _higrometr_k18(bool(rekord.get("IS_CC04_PROTO")))
         _log_etap(f"K18 (higrometr) dla komory "
                   f"{'CC-04' if rekord.get('IS_CC04_PROTO') else 'CC'}: '{_k18_wartosc}'", _t0)
+        # Numer czujnika wzorcowego widoczny w logu — po wymianie czujnika latwo
+        # sprawdzic, czy kopie dostaly nowy numer, czy stary z szablonu.
+        if rekord.get("IS_CC04_PROTO"):
+            if parametry_cc04:
+                _log_etap(f"K11 (czujnik wzorcowy) CC-04: '{parametry_cc04['K11']}'", _t0)
+        else:
+            _log_etap(f"K11 (czujnik wzorcowy) CC: '{PARAMETRY_CC['K11']}'", _t0)
 
         _log_etap(f"wypelniam komorki w {len(working_final)} zakladkach...", _t0)
         for i, ws_name in enumerate(working_final):
@@ -3128,6 +3153,8 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws.range("E6").value = rekord["D"]
             if rekord.get("K") is not None:
                 ws.range("H57").value = rekord["K"]
+            if rekord.get("L") is not None:
+                ws.range("H55").value = rekord["L"]
 
             # Dla protokolow CC-04 wpisz stale parametry przyrzadu.
             if parametry_cc04 is not None:
@@ -3135,6 +3162,10 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws.range("K12").value = parametry_cc04["K12"]
                 ws.range("K13").value = parametry_cc04["K13"]
                 ws.range("K17").value = parametry_cc04["K17"]
+            elif not rekord.get("IS_CC04_PROTO"):
+                # Komora CC — jeden czujnik wzorcowy, tak samo z ustawien panelu.
+                for _kom in ("K11", "K12", "K13", "K17"):
+                    ws.range(_kom).value = PARAMETRY_CC[_kom]
 
             # K18 — higrometr punktu rosy: wartosc wg KOMORY (HIGROMETR_K18_WG_KOMORY),
             # ale dla punktow TYLKO-TEMPERATURA (brak RH w nazwie zakladki) zawsze "-".
@@ -3695,6 +3726,17 @@ def _main_impl():
         print(SEP)
         print(f"Zakończono Etap 7. Utworzono {len(nazwy_word)} dokumentów Word.")
         print(SEP)
+
+    # --- Widok paska zakladek — ZAWSZE na koncu, po wszystkich zapisach -------
+    # Excel przy zapisie przez COM potrafi skasowac tabRatio z protokolu, a
+    # przewijanie paska ustawiane na zywym oknie bywalo nieskuteczne (czesc kopii
+    # dostawala firstSheet=6, czyli widoczna tylko zakladka 'Wyniki'). Tutaj
+    # poprawiamy to juz w gotowym pliku — patrz cc_widok.py.
+    do_poprawy = [protokol] + [os.path.join(FOLDER, n) for n in (nazwy or [])]
+    poprawione = sum(1 for p in do_poprawy
+                     if cc_widok.wymus_widok(p, TAB_RATIO, pierwszy=0))
+    print(f"  [Widok] Pasek zakladek ustawiony w {poprawione} z {len(do_poprawy)} plikow "
+          f"(tabRatio={TAB_RATIO}, od pierwszej zakladki).")
 
 def _excel_options_subkey():
     """Zwraca podklucz rejestru Excel\\Options dla zainstalowanej wersji Office."""

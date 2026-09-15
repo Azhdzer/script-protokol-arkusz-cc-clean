@@ -101,8 +101,13 @@ def _oczysc(s):
 # UWAGA na warianty zapisu numeru ewidencyjnego w PZ: 'nr wew.:', 'nr wewn.:', 'nr ewid.:',
 # 'nr ewid .:'. Musza byc GRANICA konca numeru fabrycznego — inaczej tekst 'nr wew.: CL-1318A'
 # wpada do wartosci 'nr fabr.' i po rozdzieleniu przecinkiem tworzy fikcyjny drugi przyrzad.
+# Zleceniodawcy opisuja swoj numer ewidencyjny wlasnymi skrotami ('nr CLDK:',
+# 'nr inw.:'). Kazda kolejna etykieta 'nr <slowo>:' konczy numer fabryczny —
+# inaczej wpada do jego wartosci i po rozdzieleniu przecinkiem robi sie z niej
+# drugi, nieistniejacy przyrzad.
 _END = (r'wytw[oó]rca|manufacturer|nr\s*wewn?|nr\s*ewid|identification|'
-        r'typ\s*:|type\s*:|nr\s*kat|year\s+of\s+production|oraz\s+czujnika|adres\s*:')
+        r'typ\s*:|type\s*:|nr\s*kat|year\s+of\s+production|oraz\s+czujnika|adres\s*:|'
+        r'nr\s+(?!fabr)[A-Za-zĄ-ż]{2,12}\s*\.?\s*:')
 _RE_TYP    = re.compile(r'(?:typ|type|nr\s*kat\.?)\s*:\s*([^,\n]+)', re.I)
 # nr ewidencyjny: 'nr wew.:' / 'nr wewn.:' (starsze PZ) albo 'nr ewid.:' / 'nr ewid .:' (nowsze)
 # Srednik konczy wartosc tak samo jak przecinek: w PZ z lista wypunktowana
@@ -110,10 +115,19 @@ _RE_TYP    = re.compile(r'(?:typ|type|nr\s*kat\.?)\s*:\s*([^,\n]+)', re.I)
 # Bez tej granicy nr ewidencyjny wychodzil jako 'UR00044; wytworca: Testo'.
 _RE_WEWN   = re.compile(
     r'(?:nr\s*wewn?\s*\.?|nr\s*ewid\s*\.?|identification\s+number)\s*:\s*([^,;\n]+)', re.I)
+# Zleceniodawcy nazywaja swoj numer ewidencyjny po swojemu ('nr CLDK:', 'nr inw.:').
+# Rola jest ta sama, wiec kazda etykieta 'nr <slowo>:' poza numerem fabrycznym,
+# katalogowym i numerem zlecenia czytana jest jako numer ewidencyjny. Wzorzec
+# ogolny wchodzi DOPIERO wtedy, gdy nie pasuje zaden ze znanych zapisow wyzej.
+_RE_WEWN_OGOLNY = re.compile(
+    r'\bnr\s+(?!fabr|kat|seryjn|serii|zlec|protok|pozyc)'
+    r'[A-Za-zĄ-ż]{2,12}\s*\.?\s*:\s*([^,;\n]+)', re.I)
 _RE_WYTW   = re.compile(r'(?:wytw[oó]rca|manufacturer)\s*:\s*([^,.\n]+)', re.I)
 # serial: "nr fabr.:" / "serial number(s):" albo bare "nr:" (nie "nr kat.", nie "nr wewn.")
+# Odstep przed kropka ('nr fabr .:') to artefakt warstwy tekstowej PDF — dokladnie
+# taki sam jak juz obsluzony 'nr ewid .:'. Bez niego numer fabryczny gubil sie cichu.
 _RE_FABR   = re.compile(
-    r'(?:nr\s*fabr\.?|serial\s*numbers?)\s*:\s*(.+?)(?=,?\s*(?:' + _END + r')|$)', re.I)
+    r'(?:nr\s*fabr\s*\.?|serial\s*numbers?)\s*:\s*(.+?)(?=,?\s*(?:' + _END + r')|$)', re.I)
 _RE_NR     = re.compile(
     r'(?<!kat)(?<!wewn)\bnr\s*:\s*(.+?)(?=,?\s*(?:' + _END + r')|$)', re.I)
 # podzial obiekt / czujnik pomiarowy (PL/EN, rozne sformulowania)
@@ -144,6 +158,12 @@ def _parsuj_pole(part):
             _oczysc(mw.group(1)) if mw else "")
 
 
+def _numer_ewidencyjny(part):
+    """Numer ewidencyjny z fragmentu opisu (znane zapisy, potem dowolna etykieta)."""
+    m = _RE_WEWN.search(part) or _RE_WEWN_OGOLNY.search(part)
+    return _oczysc(m.group(1)) if m else ""
+
+
 # Znaki wypunktowania w PZ (pypdf zwraca rozne warianty, m.in. z fontu Symbol).
 _RE_BULLET = re.compile(r'[•·●▪‣]\s*')
 
@@ -168,6 +188,15 @@ def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia, serial_z_naglowka=False
 
     Podpunkt zaczyna sie wtedy wprost od numeru fabrycznego, bez etykiety.
     """
+    # Podpunkt tez moze miec wskaznik dopisany ZA numerem ('... nr fabr.: 2783
+    # z panelem odczytowym typ: LB-706B, nr fabr.: 568'). Ma wlasny 'typ:',
+    # wiec bez tego numer fabryczny zbieralby ogon z fraza.
+    wskaznik_po = _parsuj_wskaznik_po_obiekcie(
+        fragment, nr_zlecenia, typ_dom=typ, wytworca_dom=wytworca,
+        serial_z_naglowka=serial_z_naglowka)
+    if wskaznik_po is not None:
+        return wskaznik_po
+
     czesci = _RE_CZUJNIK_SPLIT.split(fragment, maxsplit=1)
     obiekt  = czesci[0]
     czujnik = czesci[1] if len(czesci) > 1 else ""
@@ -177,8 +206,7 @@ def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia, serial_z_naglowka=False
         m = _RE_SERIAL_NA_POCZATKU.match(obiekt)
         if m:
             serials = [m.group(1)]
-    mw = _RE_WEWN.search(obiekt)
-    nr_ewid = _oczysc(mw.group(1)) if mw else ""
+    nr_ewid = _numer_ewidencyjny(obiekt)
 
     czuj_typ, czuj_wytworca = _parsuj_pole(czujnik) if czujnik else ("", "")
     czuj_serials = _wytnij_serial_liste(czujnik) if czujnik else []
@@ -189,6 +217,114 @@ def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia, serial_z_naglowka=False
         nr_fabr=_oczysc(s), nr_ewid=nr_ewid,
         czuj_wytworca=czuj_wytworca, czuj_typ=czuj_typ, czuj_nr_fabr=czuj_serial,
     ) for s in (serials or [""])]
+
+
+# Wskaznik dopisany PO obiekcie:
+#   'Termohigrometr typ: LB-701, nr fabr.: 2783 z panelem odczytowym
+#    (rejestratorem) typ: LB-706B, nr fabr.: 568, nr ewid.: DNW/PP/002/WS'
+# Kolejnosc jest ODWROTNA niz przy 'oraz czujnika': z przodu stoi czujnik
+# pomiarowy, a dopiero za fraza — wskaznik, czyli obiekt wzorcowania.
+_RE_WSKAZNIK_PO = re.compile(
+    r'\b(?:wraz\s+z|z)\s+(?:panelem\s+odczytowym|panelem\s+pomiarowym|panelem'
+    r'|wy[śs]wietlaczem|rejestratorem|wska[źz]nikiem)\b', re.I)
+
+
+def _parsuj_wskaznik_po_obiekcie(wpis, nr_zlecenia, typ_dom="", wytworca_dom="",
+                                 serial_z_naglowka=False):
+    """
+    Uklad 'czujnik + wskaznik': polaczony przyrzad, w ktorym czesc odczytowa ma
+    WLASNY typ i numer fabryczny i jest dopisana za obiektem:
+
+        Termohigrometr typ: LB-701, nr fabr.: 2783 z panelem odczytowym
+        (rejestratorem) typ: LB-706B, nr fabr.: 568, nr ewid.: DNW/PP/002/WS,
+        wytworca: LAB-EL.
+
+    Do protokolu idzie to na krzyz wzgledem kolejnosci w tekscie: wskaznik
+    (panel) jest OBIEKTEM, a termohigrometr z przodu — CZUJNIKIEM POMIAROWYM.
+    Nr ewidencyjny nalezy do panelu, bo to on jest pozycja ewidencyjna.
+
+    Rozpoznanie idzie po SAMEJ FRAZIE, nie po nazwach przyrzadow — dziala tak
+    samo dla kazdego typu i dla dowolnej liczby pozycji w PZ.
+
+    `typ_dom` / `wytworca_dom` to typ i wytworca z naglowka pozycji. Uzywane w
+    ukladzie wypunktowanym, gdzie podpunkt ma tylko numery, a typ stoi wyzej:
+
+        Termohigrometr (rejestrator, 3 szt.) typ: LB-701,
+          • nr fabr.: 2783 z panelem odczytowym typ: LB-706B, nr fabr.: 568;
+          • nr fabr.: 2784 z panelem odczytowym typ: LB-706B, nr fabr.: 569;
+
+    Zwraca liste PZPrzyrzad albo None, gdy to nie ten uklad.
+    """
+    czesci = _RE_WSKAZNIK_PO.split(wpis, maxsplit=1)
+    if len(czesci) < 2:
+        return None
+    czesc_czuj, czesc_obiekt = czesci[0], czesci[1]
+
+    typ, wytworca = _parsuj_pole(czesc_obiekt)
+    if not typ:
+        return None          # fraza bez wlasnego 'typ:' — to zwykly opis, nie uklad
+
+    serials = _wytnij_serial_liste(czesc_obiekt)
+    nr_ewid = _numer_ewidencyjny(czesc_obiekt)
+
+    czuj_typ, czuj_wytworca = _parsuj_pole(czesc_czuj)
+    czuj_serials = _wytnij_serial_liste(czesc_czuj)
+    if not czuj_serials and serial_z_naglowka:
+        m = _RE_SERIAL_NA_POCZATKU.match(czesc_czuj)
+        if m:
+            czuj_serials = [m.group(1)]
+    czuj_serial = _oczysc(czuj_serials[0]) if czuj_serials else ""
+
+    # Typ czujnika bierzemy z naglowka pozycji, gdy podpunkt sam go nie podaje.
+    if not czuj_typ:
+        czuj_typ = typ_dom
+    # Wytworca stoi w PZ raz — w naglowku albo na koncu opisu. Dotyczy obu czesci.
+    if not wytworca:
+        wytworca = wytworca_dom
+    if not czuj_wytworca:
+        czuj_wytworca = wytworca_dom or wytworca
+    if not wytworca:
+        wytworca = czuj_wytworca
+
+    return [PZPrzyrzad(
+        nr_zlecenia=nr_zlecenia, wytworca=wytworca, typ=typ,
+        nr_fabr=_oczysc(s), nr_ewid=nr_ewid,
+        czuj_wytworca=czuj_wytworca, czuj_typ=czuj_typ, czuj_nr_fabr=czuj_serial,
+    ) for s in (serials or [""])]
+
+
+# Podpunkt numerowanej listy SZTUK zaczyna sie od etykiety numeru, a nie od
+# nazwy przyrzadu — sam przyrzadu nie opisuje.
+_RE_PODPUNKT_OD_NUMERU = re.compile(
+    r'^\s*(?:nr\s*fabr|nr\s*seryjny|serial\s*numbers?|nr\s*:)', re.I)
+
+
+def _numeracja_to_podpunkty(wpisy):
+    """
+    Czy '1) 2) 3)' to SZTUKI jednej pozycji, a nie osobne pozycje PZ?
+
+    Tak wyglada uklad, w ktorym jeden typ przyrzadu idzie w kilku egzemplarzach,
+    a numeracja sluzy tylko do ich wyliczenia:
+
+        Termohigrometr (rejestrator) typ: TERMIOPLUS,
+        1) nr fabr.: 5000722, nr CLDK: CLDK/B-49;
+        2) nr fabr.: 4180722, nr CLDK: CLDK/B-50;
+        ...
+        4) nr fabr.: 2950722, nr CLDK: CLDK/B-52, wytworca: Termoprodukt.
+
+    Rozpoznajemy to po dwoch cechach naraz: przed '1)' stoi naglowek OPISUJACY
+    przyrzad (ma 'typ:'), a kazdy podpunkt zaczyna sie od etykiety numeru — czyli
+    zaden z nich nie jest osobnym przyrzadem. Gdy pozycje sa prawdziwe (PZ 207:
+    '1) Termohigrometr ... 2) Cisnieniomierz ...'), podpunkty zaczynaja sie od
+    nazwy przyrzadu i warunek nie jest spelniony.
+
+    Bez tego naglowek przepadal: typ gubil sie dla wszystkich sztuk, a wytworca
+    — stojacy raz, po ostatnim podpunkcie — trafial tylko do ostatniej.
+    """
+    if not _RE_TYP.search(wpisy[0]):
+        return False
+    tresci = [wpisy[i + 1] for i in range(1, len(wpisy), 2) if i + 1 < len(wpisy)]
+    return bool(tresci) and all(_RE_PODPUNKT_OD_NUMERU.match(t) for t in tresci)
 
 
 def _parsuj_wpis(wpis, nr_zlecenia):
@@ -204,6 +340,9 @@ def _parsuj_wpis(wpis, nr_zlecenia):
          -> po jednym rekordzie na wypunktowanie (typ/wytworca z naglowka).
       B) JEDNOLINIOWY: 'typ: M1, nr fabr.: TMM160500502, nr ewid.: Q/LOG/19, wytworca: Tempmate.'
          (obsluguje tez kilka seriali po przecinku oraz opcjonalny czujnik pomiarowy).
+      C) POLACZONY: 'Termohigrometr typ: LB-701, nr fabr.: 2783 z panelem
+         odczytowym (rejestratorem) typ: LB-706B, nr fabr.: 568, ...'
+         -> panel jest obiektem, termohigrometr z przodu — czujnikiem.
     """
     bullety = _RE_BULLET.split(wpis)
     naglowek = bullety[0]
@@ -219,7 +358,7 @@ def _parsuj_wpis(wpis, nr_zlecenia):
         # Etykieta 'nr fabr.:' bez wartosci na koncu naglowka = numery stoja
         # dopiero w podpunktach (PZ dla wielu przyrzadow na tych samych punktach).
         serial_z_naglowka = bool(
-            re.search(r'(?:nr\s*fabr\.?|serial\s*numbers?)\s*:\s*$',
+            re.search(r'(?:nr\s*fabr\s*\.?|serial\s*numbers?)\s*:\s*$',
                       naglowek.strip(), re.I))
         out = []
         for frag in podpunkty:
@@ -228,12 +367,17 @@ def _parsuj_wpis(wpis, nr_zlecenia):
         return out
 
     # --- uklad B: jedna linia ---
+    # Najpierw wariant z wskaznikiem dopisanym ZA obiektem — ma wlasny 'typ:',
+    # wiec zwykly podzial wzialby typ czujnika jako typ obiektu.
+    wskaznik_po = _parsuj_wskaznik_po_obiekcie(wpis, nr_zlecenia)
+    if wskaznik_po is not None:
+        return wskaznik_po
+
     czesci = _RE_CZUJNIK_SPLIT.split(wpis, maxsplit=1)
     obiekt = czesci[0]
     czujnik = czesci[1] if len(czesci) > 1 else ""
 
-    mw = _RE_WEWN.search(obiekt)
-    nr_ewid = _oczysc(mw.group(1)) if mw else ""
+    nr_ewid = _numer_ewidencyjny(obiekt)
     serials = _wytnij_serial_liste(obiekt)
 
     czuj_typ, czuj_wytworca = _parsuj_pole(czujnik) if czujnik else ("", "")
@@ -643,7 +787,17 @@ def parsuj_tekst(text):
     # podzial na wpisy numerowane '1) ... 2) ...'; brak numeracji => jeden wpis
     wpisy = re.split(r'(?<!\d)([1-9])\)\s', sekcja)
     przyrzady = []
-    if len(wpisy) > 1:
+    if len(wpisy) > 1 and _numeracja_to_podpunkty(wpisy):
+        # Numeracja opisuje SZTUKI jednej pozycji, nie osobne pozycje — oddajemy
+        # calosc jako jeden wpis z wypunktowaniem, zeby typ i wytworca z naglowka
+        # trafily do kazdej sztuki.
+        tresci = [wpisy[i + 1] for i in range(1, len(wpisy), 2) if i + 1 < len(wpisy)]
+        jeden = wpisy[0].rstrip() + " " + " ".join("• " + t.strip() for t in tresci)
+        for nr, p in enumerate(_parsuj_wpis(jeden, nr_zlec), 1):
+            p.pozycja = nr
+            p.komora = True if komora_poz is None else (1 in komora_poz)
+            przyrzady.append(p)
+    elif len(wpisy) > 1:
         # re.split z grupa: [prefix, '1', tekst1, '2', tekst2, ...]
         for i in range(1, len(wpisy), 2):
             nr_poz = int(wpisy[i])

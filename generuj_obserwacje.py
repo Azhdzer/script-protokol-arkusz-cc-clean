@@ -37,6 +37,7 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 
 import pz_dane   # wspolny modul: dane przyrzadow z PZ + Zestawienie
 import cc_config as C   # rejestr ustawien + odczyt zmiennych srodowiskowych z panelu
+import cc_widok   # widok paska zakladek w gotowych plikach .xlsx
 
 # =============================================================================
 # KONFIGURACJA
@@ -137,6 +138,10 @@ WYNIKI_TOLERANCJA_MIN = C.liczba("OBS_TOL", 3.0)
 # protokolu to nie dotyczy: obie pracuja na sparsowanych wierszach w pamieci,
 # a nie na kolumnach arkusza. Odwolania wykresow sa przeliczane po przesunieciu.
 POMIJAJ_PUSTE_KOLUMNY = C.flaga("OBS_POMIJAJ_PUSTE_KOL", True)
+
+# Szerokosc paska zakladek w zapisanych plikach — ta sama zasada co w kroku 3
+# (jedno ustawienie panelu). Szczegoly: cc_widok.py.
+TAB_RATIO_ZAKLADEK = C.liczba("GEN_TAB_RATIO", cc_widok.TAB_RATIO_DOMYSLNY)
 
 # Maksymalna roznica miedzy odczytem przyrzadu a nastawa komory [st.C].
 # Sam czas NIE wystarcza do przypisania pliku wynikow do pomiaru: w tej samej dobie
@@ -1928,24 +1933,66 @@ def _znajdz_5_wierszy(wyniki_rows, target_times):
     return matched
 
 
-def _oznacz_wyniki_xlsx(path, row_indices):
-    """Koloruje podane wiersze w pliku wynikow na ciemno-zielono + bold."""
+def _oznacz_wyniki_xlsx(path, wiersze_wg_punktu, powody=None):
+    """
+    Koloruje w pliku wynikow (krok 1) wiersze wybrane przez obserwacje.
+
+    Zasada jest ta sama, co w arkuszu obserwacji i w zestawieniu zbiorczym:
+      • punkt spelniajacy kryteria  -> ZIELONY,
+      • punkt z ostrzezeniem        -> POMARANCZOWY (ten sam powod co w obserwacji).
+    Wczesniej kazdy punkt byl tu zielony, wiec plik wynikow pokazywal jako dobre
+    takze te punkty, ktore w obserwacji byly pomaranczowe.
+
+    Dodatkowo w kolumnie z prawej wpisujemy NUMER punktu (jak w zestawieniu) —
+    po nim mozna skakac po pliku w Excelu zamiast szukac wzrokiem.
+
+    `wiersze_wg_punktu`: {indeks_punktu (0-based) -> set(numer wiersza Excela)}
+    `powody`:            {indeks_punktu -> powod ostrzezenia albo None}
+    """
+    if not wiersze_wg_punktu:
+        return
+    powody = powody or {}
     try:
         wb = openpyxl.load_workbook(path)
         ws = wb.active
         n_cols = ws.max_column
-        for r_idx in row_indices:
-            for col in range(1, n_cols + 1):
-                cell = ws.cell(row=r_idx, column=col)
-                cell.fill = FILL_DARK
-                f = cell.font
-                cell.font = Font(
-                    name=f.name, size=f.size, italic=f.italic,
-                    underline=f.underline, strike=f.strike, color=f.color,
-                    bold=True,
-                )
+        marker_col = n_cols + 2          # jedna kolumna odstepu, jak w zestawieniu
+        ws.cell(row=1, column=marker_col).value = "Nr punktu"
+
+        ile_wierszy = 0
+        ostrzezenia = 0
+        for punkt_idx in sorted(wiersze_wg_punktu):
+            wiersze = sorted(wiersze_wg_punktu[punkt_idx])
+            if not wiersze:
+                continue
+            powod = powody.get(punkt_idx)
+            fill = FILL_WARN_DARK if powod else FILL_DARK
+            for r_idx in wiersze:
+                for col in range(1, n_cols + 1):
+                    cell = ws.cell(row=r_idx, column=col)
+                    cell.fill = fill
+                    f = cell.font
+                    cell.font = Font(
+                        name=f.name, size=f.size, italic=f.italic,
+                        underline=f.underline, strike=f.strike, color=f.color,
+                        bold=True,
+                    )
+            mcell = ws.cell(row=wiersze[0], column=marker_col)
+            mcell.value = punkt_idx + 1
+            mcell.fill = fill
+            fo = mcell.font
+            mcell.font = Font(name=fo.name, size=fo.size, bold=True)
+            ile_wierszy += len(wiersze)
+            if powod:
+                ostrzezenia += 1
+
         wb.save(path)
-        print(f"    [WYNIKI] Oznaczono {len(row_indices)} wierszy: {os.path.basename(path)}")
+        ogon = f", w tym {ostrzezenia} pomaranczowych" if ostrzezenia else ""
+        print(f"    [WYNIKI] Oznaczono {ile_wierszy} wierszy w {len(wiersze_wg_punktu)} "
+              f"punktach{ogon}: {os.path.basename(path)}")
+    except PermissionError:
+        print(f"    [WYNIKI] '{os.path.basename(path)}' jest OTWARTY w Excelu — "
+              f"nie moge nanieść oznaczen punktow. Zamknij plik i uruchom krok 2 ponownie.")
     except Exception as exc:
         print(f"    [WYNIKI] Blad oznaczania '{os.path.basename(path)}': {exc}")
 
@@ -2019,7 +2066,13 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
         r0 = rows_obs[rep_indices[0]]
         nastawy.append(_s_to_float(r0[1]) if len(r0) > 1 else None)
 
-    oznaczenia_per_plik = {}   # fname -> set(row_idx)
+    # fname -> {indeks_punktu -> set(numer wiersza Excela)}. Zbierane dla KAZDEGO
+    # pliku, ktory pasuje czasowo do punktow — takze wtedy, gdy jego danych nie ma
+    # gdzie wpisac w protokole (limit kolumn przyrzadow). Wczesniej oznaczenia
+    # powstawaly przy okazji wpisywania do protokolu, wiec nadmiarowe pliki
+    # zostawaly bez zielonego zaznaczenia.
+    oznaczenia_per_plik = {}
+    powody_punktow = {i: powod for i, (_rep, powod, *_) in enumerate(rep_groups)}
     dev = 0                    # numer przyrzadu (0-based) -> para kolumn w prawo
     uzyte = []                 # per przyrzad (w kolejnosci dev): (serial, temps, rhs)
 
@@ -2048,7 +2101,7 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
                     fmt = _format_rozdz(res_rh)
                     if fmt:
                         c.number_format = fmt
-                oznaczenia_per_plik.setdefault(fname, set()).add(row_idx)
+                _ = row_idx        # oznaczenia zbieramy wyzej, dla kazdego pliku
 
     for fname in pliki:
         if fname not in baza:
@@ -2062,6 +2115,15 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
                                                        fname=fname)
         if not dopasowania:
             continue
+
+        # Zielone (albo pomaranczowe) zaznaczenie wybranych okien nalezy sie
+        # kazdemu dopasowanemu plikowi wynikow — niezaleznie od tego, czy jego
+        # dane zmieszcza sie pozniej w kolumnach przyrzadow protokolu.
+        for punkt_idx, matched in dopasowania.items():
+            wiersze = {k[3] for k in matched if k[3] is not None}
+            if wiersze:
+                oznaczenia_per_plik.setdefault(fname, {}).setdefault(
+                    punkt_idx, set()).update(wiersze)
 
         odch_sr, odch_max = _odchylki_dopasowania(dopasowania, punkty, _shift)
 
@@ -2108,8 +2170,9 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
         print(f"  [WYNIKI] Zaden plik nie pasowal czasowo do punktow — brak danych srodowiskowych.")
 
     # Oznacz wiersze w plikach wynikow
-    for fname, row_set in oznaczenia_per_plik.items():
-        _oznacz_wyniki_xlsx(os.path.join(WYNIKI_FOLDER, fname), sorted(row_set))
+    for fname, wg_punktu in oznaczenia_per_plik.items():
+        _oznacz_wyniki_xlsx(os.path.join(WYNIKI_FOLDER, fname), wg_punktu,
+                            powody_punktow)
 
     return uzyte
 
@@ -2543,14 +2606,21 @@ def _kolumna_roku_s3(ws3, wiersz=5):
     return None
 
 
-def _zapisz_bezpiecznie(wb, path, opis="plik"):
+def _zapisz_bezpiecznie(wb, path, opis="plik", widok=True):
     """
     Zapisuje skoroszyt; gdy plik jest OTWARTY w Excelu (zablokowany) — daje czytelny
     komunikat zamiast surowego PermissionError. To najczestsza przyczyna „braku danych":
     plik otwarty w Excelu w trakcie pracy skryptu przerywa zapis.
+
+    `widok=True` (domyslnie) porzadkuje po zapisie pasek zakladek — patrz
+    cc_widok.py. To jedyne miejsce, w ktorym krok 2 zapisuje pliki, wiec zasada
+    obowiazuje wszystkie nasze wyniki bez wyjatku. `widok=False` zostawiamy dla
+    plikow, ktore NALEZA DO UZYTKOWNIKA (Zestawienie) — tam nie zmieniamy widoku.
     """
     try:
         wb.save(path)
+        if widok:
+            cc_widok.wymus_widok(path, TAB_RATIO_ZAKLADEK, pierwszy=0)
     except PermissionError:
         raise PermissionError(
             f"\n  Nie moge zapisac ({opis}):\n    {path}\n"
@@ -2900,7 +2970,8 @@ def oznacz_zestawienie_punkty(rep_groups, rows):
         mcell.font = Font(name=fo.name, size=fo.size, bold=True)
         oznaczone += 1
 
-    _zapisz_bezpiecznie(wb, zest_path, "zestawienie")
+    # Zestawienie to plik uzytkownika — zapisujemy dane, ale widoku nie ruszamy.
+    _zapisz_bezpiecznie(wb, zest_path, "zestawienie", widok=False)
     print(f"  [Zestawienie] Oznaczono {oznaczone}/{len(rep_groups)} punktow "
           f"({os.path.basename(zest_path)}).")
 
