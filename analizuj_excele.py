@@ -429,6 +429,74 @@ def _na_datetime_auto(seria):
     return warianty[najlepszy]
 
 
+# ─── WYGLAD ARKUSZA WYNIKOW ───────────────────────────────────────────────────
+# Pliki wynikow oglada sie recznie (sprawdzenie, z czego powstal punkt protokolu),
+# wiec maja wygladac jak tabela, a nie jak surowy zrzut: czas w calosci widoczny
+# (bez '########'), naglowek wyrozniony i przyklejony przy przewijaniu.
+
+FORMAT_CZASU = 'yyyy-mm-dd hh:mm:ss'
+SZEROKOSC_CZASU = 21          # tyle miesci 'yyyy-mm-dd hh:mm:ss' z zapasem
+SZEROKOSC_MIN = 14            # kolumny wartosci — naglowek '[°C]' ma sie zmiescic
+# Naglowki w zestawieniu zbiorczym zawieraja nazwe pliku przyrzadu i bywaja bardzo
+# dlugie. Powyzej tej szerokosci nie rozpychamy kolumny — naglowek sie zawija.
+SZEROKOSC_MAX = 24
+
+
+def sformatuj_arkusz_wynikow(ws, kolumna_czasu=1):
+    """
+    Nadaje arkuszowi wyglad tabeli: pogrubiony i wysrodkowany naglowek na szarym
+    tle, ramki, wysrodkowane dane, szerokosci kolumn dobrane do tresci i czas
+    pokazany w calosci.
+
+    Zwraca liczbe sformatowanych kolumn.
+    """
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    n_kol = ws.max_column
+    n_wier = ws.max_row
+    if not n_kol or not n_wier:
+        return 0
+
+    krawedz = Side(style='thin', color='B0B0B0')
+    ramka = Border(left=krawedz, right=krawedz, top=krawedz, bottom=krawedz)
+    srodek = Alignment(horizontal='center', vertical='center')
+    naglowek_tlo = PatternFill(fill_type='solid', fgColor='D9D9D9')
+
+    for kol in range(1, n_kol + 1):
+        komorka = ws.cell(row=1, column=kol)
+        komorka.font = Font(bold=True)
+        komorka.alignment = Alignment(horizontal='center', vertical='center',
+                                      wrap_text=True)
+        komorka.fill = naglowek_tlo
+        komorka.border = ramka
+
+        dlugosc = len(str(komorka.value or ''))
+        szerokosc = (SZEROKOSC_CZASU if kol == kolumna_czasu
+                     else min(max(SZEROKOSC_MIN, dlugosc + 2), SZEROKOSC_MAX))
+        ws.column_dimensions[get_column_letter(kol)].width = szerokosc
+
+    for wiersz in range(2, n_wier + 1):
+        for kol in range(1, n_kol + 1):
+            komorka = ws.cell(row=wiersz, column=kol)
+            komorka.alignment = srodek
+            komorka.border = ramka
+            if kol == kolumna_czasu:
+                komorka.number_format = FORMAT_CZASU
+
+    ws.row_dimensions[1].height = 30
+    ws.freeze_panes = 'A2'        # naglowek zostaje widoczny przy przewijaniu
+    return n_kol
+
+
+def _zapisz_z_formatem(df, sciezka):
+    """Zapis DataFrame do .xlsx razem z formatowaniem tabeli."""
+    with pd.ExcelWriter(sciezka, engine='openpyxl') as w:
+        df.to_excel(w, index=False)
+        arkusz = next(iter(w.sheets.values()))
+        sformatuj_arkusz_wynikow(arkusz)
+
+
 def save_result(times, temps, hums, source_name, output_dir, suffix=''):
     """Standardize and save output Excel file."""
     data = {'Czas': times, 'Temperatura [°C]': temps}
@@ -451,8 +519,7 @@ def save_result(times, temps, hums, source_name, output_dir, suffix=''):
 
     stem = Path(source_name).stem
     out_path = Path(output_dir) / f"{stem}{suffix}_wynik.xlsx"
-    with pd.ExcelWriter(out_path, engine='openpyxl') as w:
-        df.to_excel(w, index=False)
+    _zapisz_z_formatem(df, out_path)
     _ZEBRANE.append((f"{stem}{suffix}", df))
 
     cols_desc = 'Czas + Temp' + (' + Wilg' if has_hum else ' (brak wilgotności)')
@@ -1192,8 +1259,7 @@ def _save_xtherm(times, t_wewn, t_zewn, hums, source_name, output_dir, suffix=''
 
     stem = Path(source_name).stem
     out_path = Path(output_dir) / f"{stem}{suffix}_wynik.xlsx"
-    with pd.ExcelWriter(out_path, engine='openpyxl') as w:
-        df.to_excel(w, index=False)
+    _zapisz_z_formatem(df, out_path)
     _ZEBRANE.append((f"{stem}{suffix}", df))
 
     cols_desc = ' + '.join(c for c in df.columns if c != 'Czas')
@@ -1466,8 +1532,7 @@ def zbuduj_zestawienie(zebrane, output_dir):
         return
 
     out_path = Path(output_dir) / 'zestawienie_pomiarow.xlsx'
-    with pd.ExcelWriter(out_path, engine='openpyxl') as w:
-        wynik.to_excel(w, index=False)
+    _zapisz_z_formatem(wynik, out_path)
     print(f"\n    ✓  Zestawienie zbiorcze: {len(wynik)} wierszy × {len(przygotowane)} przyrzadow "
           f"(krok {krok_s}s)  →  {out_path.name}")
 
