@@ -441,6 +441,26 @@ SZEROKOSC_MIN = 14            # kolumny wartosci — naglowek '[°C]' ma sie zmi
 # dlugie. Powyzej tej szerokosci nie rozpychamy kolumny — naglowek sie zawija.
 SZEROKOSC_MAX = 24
 
+# Tlo naglowka zalezy od WIELKOSCI, ktora opisuje — w zestawieniu zbiorczym stoi
+# obok siebie kilkanascie kolumn Temp/Wilg roznych przyrzadow i sam szary kolor
+# niczego nie rozdziela.
+KOLOR_NAGL_CZAS = 'D9D9D9'    # szary   — os czasu
+KOLOR_NAGL_TEMP = 'FCE4D6'    # brzoskwiniowy — temperatura
+KOLOR_NAGL_WILG = 'DDEBF7'    # blekitny — wilgotnosc
+KOLOR_NAGL_INNE = 'E2EFDA'    # jasnozielony — pozostale wielkosci
+
+
+def kolor_naglowka(tekst):
+    """Tlo naglowka dobrane po jego tresci (dwujezycznie, jak reszta parserow)."""
+    opis = str(tekst or '')
+    if TIME_KW.search(opis):
+        return KOLOR_NAGL_CZAS
+    if HUM_KW.search(opis) or re.search(r'\bwilg', opis, re.I):
+        return KOLOR_NAGL_WILG
+    if TEMP_KW.search(opis):
+        return KOLOR_NAGL_TEMP
+    return KOLOR_NAGL_INNE
+
 
 def sformatuj_arkusz_wynikow(ws, kolumna_czasu=1):
     """
@@ -461,14 +481,14 @@ def sformatuj_arkusz_wynikow(ws, kolumna_czasu=1):
     krawedz = Side(style='thin', color='B0B0B0')
     ramka = Border(left=krawedz, right=krawedz, top=krawedz, bottom=krawedz)
     srodek = Alignment(horizontal='center', vertical='center')
-    naglowek_tlo = PatternFill(fill_type='solid', fgColor='D9D9D9')
 
     for kol in range(1, n_kol + 1):
         komorka = ws.cell(row=1, column=kol)
         komorka.font = Font(bold=True)
         komorka.alignment = Alignment(horizontal='center', vertical='center',
                                       wrap_text=True)
-        komorka.fill = naglowek_tlo
+        komorka.fill = PatternFill(fill_type='solid',
+                                   fgColor=kolor_naglowka(komorka.value))
         komorka.border = ramka
 
         dlugosc = len(str(komorka.value or ''))

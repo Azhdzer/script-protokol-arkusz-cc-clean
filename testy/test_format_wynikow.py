@@ -100,6 +100,56 @@ class TestWygladArkusza(unittest.TestCase):
         self.assertAlmostEqual(self.ws["B2"].value, 26.179, places=3)
 
 
+class TestKolorowNaglowkow(unittest.TestCase):
+    """
+    Tlo naglowka mowi, jaka wielkosc stoi w kolumnie. W zestawieniu zbiorczym
+    Temp i Wilg kolejnych przyrzadow stoja na przemian — sam szary kolor niczego
+    tam nie rozdziela.
+    """
+
+    def kolor(self, naglowek):
+        return A.kolor_naglowka(naglowek)
+
+    def test_czas_szary(self):
+        for naglowek in ("Czas", "Timestamp (Local)", "Data"):
+            with self.subTest(naglowek=naglowek):
+                self.assertEqual(self.kolor(naglowek), A.KOLOR_NAGL_CZAS)
+
+    def test_temperatura_brzoskwiniowa(self):
+        for naglowek in ("Temperatura [°C]", "Temp KH30-03AA", "Temperature (°C)"):
+            with self.subTest(naglowek=naglowek):
+                self.assertEqual(self.kolor(naglowek), A.KOLOR_NAGL_TEMP)
+
+    def test_wilgotnosc_blekitna(self):
+        for naglowek in ("Wilgotność [%RH]", "Wilg KH30-03AA", "Humidity (%RH)"):
+            with self.subTest(naglowek=naglowek):
+                self.assertEqual(self.kolor(naglowek), A.KOLOR_NAGL_WILG)
+
+    def test_wilgotnosc_ma_pierwszenstwo_przed_temperatura(self):
+        """'Wilgotność [%RH]' nie moze wyjsc na temperature przez slowo '[°C]'."""
+        self.assertEqual(self.kolor("Wilgotność wzgledna przy 25 °C"),
+                         A.KOLOR_NAGL_WILG)
+
+    def test_nieznana_wielkosc_dostaje_kolor_zapasowy(self):
+        self.assertEqual(self.kolor("Ciśnienie [hPa]"), A.KOLOR_NAGL_INNE)
+
+    def test_wszystkie_kolory_sa_rozne(self):
+        kolory = {A.KOLOR_NAGL_CZAS, A.KOLOR_NAGL_TEMP,
+                  A.KOLOR_NAGL_WILG, A.KOLOR_NAGL_INNE}
+        self.assertEqual(len(kolory), 4)
+
+    def test_kolory_trafiaja_do_pliku(self):
+        folder = nowa_piaskownica("format_kolory")
+        sciezka = os.path.join(folder, "wynik.xlsx")
+        A._zapisz_z_formatem(przykladowa_ramka(3), sciezka)
+        wb = openpyxl.load_workbook(sciezka)
+        self.addCleanup(wb.close)
+        ws = wb.active
+        self.assertEqual(ws["A1"].fill.fgColor.rgb[-6:], A.KOLOR_NAGL_CZAS)
+        self.assertEqual(ws["B1"].fill.fgColor.rgb[-6:], A.KOLOR_NAGL_TEMP)
+        self.assertEqual(ws["C1"].fill.fgColor.rgb[-6:], A.KOLOR_NAGL_WILG)
+
+
 class TestSzerokosciKolumn(unittest.TestCase):
     """Naglowki zestawienia zbiorczego zawieraja nazwy plikow — bywaja dlugie."""
 
