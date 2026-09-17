@@ -282,12 +282,17 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 409 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 428 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
 `tempmate (PDF)` · `PuTTY/Vaisala (.log)` · `Rotronic HW4` · `ALMEMO` · `Comet/TFA` ·
 `xTHERM (COM)` · `HOBO` · `Aranet` · `ElogVis` · generyczny `CSV` / `TXT` / `Excel`.
+
+Generyczny parser radzi sobie też z plikami, w których nagłówek danych stoi **pod blokiem
+opisowym loggera** (np. `KH30`), oraz z kanałami nazwanymi ogólnie (`Ch1_Value | Ch1_Unit`),
+gdzie wielkość rozpoznawana jest po **jednostce** w sąsiedniej kolumnie. Gdy czas podany jest
+i w UTC, i lokalnie — do wyniku trafia **czas lokalny**.
 Wynik zawsze znormalizowany: **`Czas | Temperatura [°C] | Wilgotność [%RH]`**.
 
 ## 🔌 Kontrakt env‑var (GUI ↔ workery)
@@ -337,7 +342,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**409 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**428 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).

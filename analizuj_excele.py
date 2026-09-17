@@ -220,6 +220,116 @@ def build_times(df, t_cols):
         )
     return df[t_cols[0]].apply(parse_dt)
 
+# Kolumna czasu podana DWA razy: raz w UTC, raz w czasie lokalnym
+# ('Timestamp (UTC+0)' obok 'Timestamp (Local)'). Do protokolu idzie czas
+# LOKALNY — pomiar opisujemy zegarem laboratorium, a nie UTC.
+_CZAS_LOKALNY_KW = re.compile(r'local|lokaln|czas\s*lokalny', re.I)
+_CZAS_UTC_KW = re.compile(r'\butc\b|\bgmt\b', re.I)
+
+
+def preferuj_czas_lokalny(t_cols):
+    """
+    Porzadkuje kolumny czasu tak, by pierwsza byla ta w czasie LOKALNYM.
+
+    Gdy zadna nie jest opisana jako lokalna, kolejnosc zostaje bez zmian —
+    dla plikow z jedna kolumna czasu nic sie nie dzieje.
+    """
+    lokalne = [c for c in t_cols if _CZAS_LOKALNY_KW.search(str(c))]
+    if not lokalne:
+        return list(t_cols)
+    reszta = [c for c in t_cols if c not in lokalne]
+    return lokalne + reszta
+
+
+def znajdz_wiersz_naglowka(filepath, sep, enc, limit=40):
+    """
+    Numer wiersza z PRAWDZIWYM naglowkiem danych — dla plikow, ktore zaczynaja sie
+    od bloku opisowego. Przyklad (logger KH30):
+
+        Local Timezone is UTC +02:00:00;;;;;;;
+        Device Name;First Timestamp (UTC+0);...
+        KH30-03AA;15.09.2026 12:21:58;...
+        ...
+        ID;Imprecise time;...;Timestamp (Local);Temperature (°C);Humidity (%RH)
+        0;Inactive;...;15.09.2026 14:21;26.179;47.949
+
+    Szukamy wiersza, ktory ma NARAZ slowo czasu i slowo temperatury/wilgotnosci —
+    blok opisowy takiego kompletu nie ma. Zwraca None, gdy nic nie pasuje.
+    """
+    try:
+        with open(filepath, 'r', encoding=enc, errors='replace') as f:
+            for i, linia in enumerate(f):
+                if i >= limit:
+                    break
+                pola = [p.strip().strip('"') for p in linia.split(sep)]
+                if len(pola) < 2:
+                    continue
+                ma_czas = any(TIME_KW.search(p) for p in pola)
+                ma_wart = any(TEMP_KW.search(p) or HUM_KW.search(p) for p in pola)
+                if ma_czas and ma_wart:
+                    return i
+    except Exception:
+        pass
+    return None
+
+
+def read_csv_z_blokiem_opisowym(filepath):
+    """
+    Czyta CSV, w ktorym naglowek danych stoi NIZEJ niz pierwszy wiersz pliku.
+
+    Uzywane jako OSTATNIA proba w parse_csv_generic — pliki, ktore czytaja sie
+    normalnie, tu nie trafiaja. Zwraca DataFrame albo None.
+    """
+    for enc in ('utf-8-sig', 'utf-8', 'cp1250', 'latin-1'):
+        for sep in (';', ',', '\t', '|'):
+            wiersz = znajdz_wiersz_naglowka(filepath, sep, enc)
+            if wiersz is None:
+                continue
+            try:
+                df = pd.read_csv(filepath, sep=sep, encoding=enc, skiprows=wiersz,
+                                 on_bad_lines='skip')
+            except Exception:
+                continue
+            if len(df.columns) >= 2 and find_cols(df.columns, TIME_KW):
+                print(f"    → naglowek danych w wierszu {wiersz + 1} "
+                      f"(nad nim blok opisowy loggera)")
+                return df
+    return None
+
+
+def pierwsza_kolumna_z_liczbami(df, cols):
+    """
+    Pierwsza z dopasowanych kolumn, ktora naprawde zawiera liczby.
+
+    Slowo kluczowe potrafi zlapac kolumne statusu: logger KH30 ma obok
+    'Temperature (°C)' takze 'Temperature Alert' z wartosciami 'Inactive'.
+    Alfabetycznie/pozycyjnie pierwsza jest ta druga — i to ona trafiala do
+    wyniku, przez co plik konczyl sie komunikatem 'brak prawidlowych danych'.
+
+    Kolejnosc ma znaczenie: gdy pierwsza kolumna ma dane, zostaje wybrana —
+    zachowanie plikow czytanych dotad poprawnie sie nie zmienia.
+    """
+    if not cols:
+        return None
+    for c in cols:
+        if _licz_liczby(df, c) > 0:
+            return c
+    return cols[0]
+
+
+def kolumny_czasu_z_datami(df, t_cols):
+    """
+    Odsiewa kolumny czasu, w ktorych nie da sie odczytac ani jednej daty.
+
+    'Imprecise time' (wartosci 'Inactive'/'Active') pasuje do slowa 'time', a
+    stoi przed prawdziwym znacznikiem czasu. Gdy ZADNA kolumna nie daje dat,
+    zwracamy liste bez zmian — niech blad zglosi sie dalej, jak dotad.
+    """
+    z_datami = [c for c in t_cols
+                if df[c].head(20).map(lambda v: parse_dt(v) is not None).any()]
+    return z_datami or list(t_cols)
+
+
 def read_csv_robust(filepath):
     """Try multiple separator + encoding combinations, return best DataFrame."""
     best = None
@@ -672,9 +782,21 @@ def parse_csv_generic(filepath, output_dir):
     hum_cols  = find_cols(df.columns, HUM_KW)
 
     if not t_cols:
+        # Ostatnia proba: plik zaczyna sie od bloku opisowego loggera, a naglowek
+        # danych stoi nizej. Pliki czytane dotad poprawnie tu nie trafiaja.
+        df_nizej = read_csv_z_blokiem_opisowym(filepath)
+        if df_nizej is not None:
+            df = df_nizej
+            t_cols    = find_cols(df.columns, TIME_KW)
+            temp_cols = find_cols(df.columns, TEMP_KW)
+            hum_cols  = find_cols(df.columns, HUM_KW)
+
+    if not t_cols:
         raise ValueError(
             f"No time column detected. Available columns: {list(df.columns)}"
         )
+    # Gdy czas podany jest i w UTC, i lokalnie — bierzemy LOKALNY.
+    t_cols = preferuj_czas_lokalny(kolumny_czasu_z_datami(df, t_cols))
     times = build_times(df, t_cols)
 
     # Fallback for temperature/humidity: use numeric columns after the time columns
@@ -695,8 +817,13 @@ def parse_csv_generic(filepath, output_dir):
         print(f"    ⚠  Brak słów kluczowych temp/wilg — użyto kolumn pozycyjnych: "
               f"T={temp_cols}, RH={hum_cols or '—'}")
 
-    temps = df[temp_cols[0]].apply(clean_num)
-    hums  = df[hum_cols[0]].apply(clean_num).tolist() if hum_cols else None
+    # Sposrod kolumn dopasowanych slowem bierzemy pierwsza, ktora ma liczby —
+    # slowo 'Temperature' lapie tez kolumne statusu ('Temperature Alert').
+    temp_col = pierwsza_kolumna_z_liczbami(df, temp_cols)
+    hum_col  = pierwsza_kolumna_z_liczbami(df, hum_cols)
+
+    temps = df[temp_col].apply(clean_num)
+    hums  = df[hum_col].apply(clean_num).tolist() if hum_col else None
 
     save_result(times.tolist(), temps.tolist(), hums, filepath.name, output_dir)
 
