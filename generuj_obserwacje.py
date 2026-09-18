@@ -2235,7 +2235,7 @@ def wypelnij_podpisy_strona2(ws2, data_pomiaru=None):
           f"sprawdzil '{PODPIS_SPRAWDZIL}' ({dzis})")
 
 
-def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest):
+def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest, nr_zlecenia=""):
     """
     Wypelnia tabele przyrzadow na Stronie 2 protokolu na podstawie PZ.
 
@@ -2243,8 +2243,12 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest):
     (i-ty przyrzad -> wiersz 11+i). Dopasowanie przyrzadu z PZ po nr fabrycznym
     (serial z nazwy pliku wyniku). Rozdzielczosc: z Zestawienia (po producencie+typie),
     a gdy brak — z wahania cyfr po przecinku w danych pomiarowych.
-    Przyrzady bez dopasowania w PZ (np. mierniki reczne bez pliku logera) zostaja
-    do recznego uzupelnienia (log ostrzegawczy).
+    Przyrzad BEZ dopasowania w PZ — np. zlecenie wewnetrzne, do ktorego PZ w ogole
+    nie powstaje — dostaje to, co da sie ustalic z samych danych: numer fabryczny
+    (z nazwy pliku wyniku), rozdzielczosc odczytu (z wahania cyfr po przecinku)
+    oraz numer zlecenia. Wczesniej taki wiersz zostawal calkiem pusty, mimo ze
+    kolumny pomiarowe Strony 3 byly juz jego danymi wypelnione. Producent i typ
+    zostaja puste — tych z pomiaru wyczytac sie nie da.
     """
     if not uzyte:
         return
@@ -2262,7 +2266,23 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest):
                 if dev is not None:
                     break
         if dev is None:
-            print(f"    wiersz {w}: brak dopasowania w PZ (serial '{serial}') — uzupelnij recznie.")
+            # Brak PZ (zlecenie wewnetrzne) albo przyrzad spoza zamowienia —
+            # wpisujemy to, co wiadomo z pomiaru, reszte zostawiamy pusta.
+            t_res = pz_dane.rozdzielczosc_z_kolumny(temps)
+            rh_res = pz_dane.rozdzielczosc_z_kolumny(rhs)
+            if rh_res is None:
+                rh_res = t_res
+            if serial:
+                ws2.cell(row=w, column=5).value = serial          # E — nr fabryczny
+            if t_res is not None:
+                ws2.cell(row=w, column=11).value = t_res          # K
+            if rh_res is not None:
+                ws2.cell(row=w, column=12).value = rh_res         # L
+            if nr_zlecenia:
+                ws2.cell(row=w, column=15).value = nr_zlecenia    # O
+            print(f"    wiersz {w}: brak dopasowania w PZ (serial '{serial}') — "
+                  f"wpisano nr fabryczny i rozdzielczosc z danych "
+                  f"(K={t_res} L={rh_res}); producenta i typ uzupelnij recznie.")
             continue
 
         # Rozdzielczosc: Zestawienie -> fallback z danych
@@ -2888,7 +2908,8 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
 
     # Tabela przyrzadow (Strona 2) z PZ — dopasowanie po nr fabrycznym do kolumn Strony 3.
     if 'Strona 2' in proto_wb.sheetnames:
-        wypelnij_strone2_z_pz(proto_wb['Strona 2'], uzyte, pz_mapa, zest)
+        wypelnij_strone2_z_pz(proto_wb['Strona 2'], uzyte, pz_mapa, zest,
+                              nr_zlecenia=measurement_id)
         # Data pomiaru = dzien OSTATNIEGO punktu (wtedy pomiary zostaly zakonczone).
         _dt_ost = _s_to_dt(rows[rep_groups[-1][0][-1]][0]) if rep_groups else None
         wypelnij_podpisy_strona2(proto_wb['Strona 2'],
