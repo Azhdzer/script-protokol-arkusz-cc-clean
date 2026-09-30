@@ -522,15 +522,48 @@ def _pozycje_komory(text):
     return pozycje or None
 
 
+# Naglowek sekcji punktow bywa w liczbie MNOGIEJ ('Calibration ranges:',
+# 'Zakresy wzorcowania:') — gdy zlecenie obejmuje kilka pozycji. Bez 's' caly
+# zakres nie byl znajdowany i lista punktow wychodzila PUSTA, a wtedy zadnego
+# segmentu nie dalo sie uznac za punkt zamowiony.
 _RE_ZAKRES = re.compile(
-    r'(?:Zakres\s+wzorcowania|Calibration\s+range)\s*:(.*?)'
-    r'(?:Termin\s+wykonania|Dokument\s+us[łl]ugi|Koszt\s+us[łl]ugi|Uzupe[łl]nia|$)',
+    r'(?:Zakresy?\s+wzorcowania|Calibration\s+ranges?)\s*:(.*?)'
+    r'(?:Termin\s+wykonania|Dokument\s+us[łl]ugi|Koszt\s+us[łl]ugi|Uzupe[łl]nia'
+    r'|O[śs]wiadczenie\s+o\s+zgodno[śs]ci|Statement\s+of\s+conformity|$)',
     re.I | re.S)
 # '(25 °C, 30 %rh)'  — punkt temperatura + wilgotnosc
 _RE_PUNKT_TRH = re.compile(
     r'\(\s*(-?[\d.,]+)\s*°?\s*C\s*[;,]\s*(-?[\d.,]+)\s*%\s*rh\s*\)', re.I)
 # '(0; 10; 20; 30) °C'  — lista punktow samej temperatury
 _RE_PUNKT_T   = re.compile(r'\(\s*(-?[\d.,]+(?:\s*;\s*-?[\d.,]+)+)\s*\)\s*°?\s*C', re.I)
+# 'temperature: 20 °C; relative humidity: 15 %rh, 45 %rh, 95 %rh'
+# (PL: 'temperatura: 20 °C; wilgotnosc wzgledna: ...') — jedna temperatura i LISTA
+# wilgotnosci. Tak pisane sa PZ w ukladzie wypunktowanym, czesto po angielsku.
+_RE_PUNKT_T_LISTA_RH = re.compile(
+    r'(?:temperatura|temperature)\s*:\s*(-?[\d.,]+)\s*°?\s*C\s*[;,]\s*'
+    r'(?:wilgotno[śs][ćc](?:\s+wzgl[eę]dna)?|relative\s+humidity|humidity)\s*:\s*'
+    r'((?:\s*-?[\d.,]+\s*%\s*rh\s*[,;]?)+)', re.I)
+_RE_WARTOSC_RH = re.compile(r'(-?[\d.,]+)\s*%\s*rh', re.I)
+
+# Przypis pod lista punktow, np. 'Point (20 °C, 45 %rh) will be repeated in order
+# to determine hysteresis' albo 'powtorzony punkt 60 %rh w celu wyznaczenia
+# histerezy'. Opisuje punkt JUZ wymieniony na liscie — liczony drugi raz tworzylby
+# punkt, ktorego nikt nie zamowil.
+_RE_PRZYPIS_HISTEREZA = re.compile(
+    r'will\s+be\s+repeated|hysteresis|histerez|powt[oó]rz', re.I)
+
+
+def _bez_przypisow(frag):
+    """
+    Usuwa linie przypisow o powtorzeniu punktu (histereza).
+
+    Przypis opisuje punkt, ktory JUZ jest na liscie — gdy sam zawiera pelny zapis
+    '(20 °C, 45 %rh)', policzenie go po raz drugi dodaje punkt, ktorego nikt nie
+    zamowil. Linie z samymi punktami nigdy nie mowia o powtorzeniu.
+    """
+    linie = [ln for ln in frag.splitlines()
+             if not _RE_PRZYPIS_HISTEREZA.search(ln)]
+    return "\n".join(linie)
 
 
 def _punkty_z_fragmentu(frag):
@@ -546,10 +579,29 @@ def _punkty_z_fragmentu(frag):
     lista '(-20; 0; 40) °C' przepadala — a poniewaz punkty do protokolu wybiera
     sie wg PZ, te trzy po prostu znikaly z protokolu.
 
-    Zbieramy oba warianty i ustawiamy je w KOLEJNOSCI WYSTAPIENIA w tekscie,
+    Trzeci wariant to lista wilgotnosci przy jednej temperaturze — tak pisane sa
+    PZ w ukladzie wypunktowanym, czesto po angielsku:
+
+        - temperature: 20 °C; relative humidity: 15 %rh, 45 %rh, 95 %rh
+
+    Bez niego punkty wilgotnosciowe takiego zamowienia w ogole nie docieraly do
+    protokolu: skrypt nie wiedzial, ze (20 °C, 15 %rh) jest zamowione, wiec gdy
+    nastawa komory odbiegala od odczytu, segment byl pomijany jako przejscie.
+
+    Zbieramy wszystkie warianty i ustawiamy je w KOLEJNOSCI WYSTAPIENIA w tekscie,
     zeby punkty w protokole szly tak jak w zamowieniu.
     """
+    frag = _bez_przypisow(frag)
     znalezione = []   # (pozycja_w_tekscie, indeks_w_grupie, (T, RH))
+
+    for m in _RE_PUNKT_T_LISTA_RH.finditer(frag):
+        t = _do_float(m.group(1))
+        if t is None:
+            continue
+        for i, mrh in enumerate(_RE_WARTOSC_RH.finditer(m.group(2))):
+            rh = _do_float(mrh.group(1))
+            if rh is not None:
+                znalezione.append((m.start(), i, (t, rh)))
 
     for m in _RE_PUNKT_TRH.finditer(frag):
         t, rh = _do_float(m.group(1)), _do_float(m.group(2))

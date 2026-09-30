@@ -462,5 +462,96 @@ class TestKolejnoscNieOdwraca_Sie_Bez_Powodu(unittest.TestCase):
                          ("M1", "TMM160500502", "Q/LOG/19"))
 
 
+class TestPunktyListaWilgotnosci(unittest.TestCase):
+    """
+    Zgloszenie z PZ 218: skrypt pominal punkt 20 °C / 15 %rh (nastawa komory
+    19,9 / 13). Zawinily DWIE rzeczy naraz i obie sprowadzaly sie do tego, ze
+    lista punktow z PZ wychodzila PUSTA:
+
+      1. Naglowek sekcji w liczbie mnogiej — 'Calibration ranges:'. Wzorzec
+         wymagal 'Calibration range', wiec sekcja w ogole nie byla znajdowana.
+      2. Trzeci zapis punktow, ktorego parser nie znal:
+             - temperature: 20 °C; relative humidity: 15 %rh, 45 %rh, 95 %rh
+         czyli jedna temperatura i LISTA wilgotnosci.
+
+    Bez punktow z PZ segment nie mogl byc uznany za 'punkt zamowiony', wiec gdy
+    komora nie dociagnela nastawy (13 %rh wobec ~15,9 %rh realnych), byl cicho
+    odrzucany jako przejscie/suszenie — zamiast zostac punktem pomaranczowym.
+    """
+
+    SEKCJA_EN = (
+        "Calibration ranges:\n"
+        "1) Calibration in the range of temperature and relative humidity:\n"
+        "- temperature: (-20; 5; 20; 40; 60; 70) °C,\n"
+        "- temperature: 10 °C; relative humidity: 22 %rh, 45 %rh, 95 %rh,\n"
+        "- temperature: 20 °C; relative humidity: 15 %rh, 45 %rh, 95 %rh, 45 %rh 1)\n"
+        "1) Point (20 °C, 45 %rh) will be repeated in order to determine "
+        "the hysteresis value of the calibrated instrument.\n"
+        "2) Calibration in the range of temperature:\n"
+        "- temperature: (-30; -25; 5) °C.\n"
+        "Statement of conformity:\n"
+        "The certificates will include a statement of conformity with requirements.\n")
+
+    def punkty(self, tekst=None):
+        return pz_dane.punkty_wzorcowania(tekst if tekst is not None else self.SEKCJA_EN)
+
+    def test_sekcja_w_liczbie_mnogiej_jest_znajdowana(self):
+        self.assertTrue(self.punkty())
+
+    def test_punkt_ze_zgloszenia_jest_na_liscie(self):
+        self.assertIn((20.0, 15.0), self.punkty())
+
+    def test_cala_lista_wilgotnosci_jednej_temperatury(self):
+        z_10 = [p for p in self.punkty() if p[0] == 10.0]
+        self.assertEqual(z_10, [(10.0, 22.0), (10.0, 45.0), (10.0, 95.0)])
+
+    def test_kolejnosc_jak_w_zamowieniu(self):
+        """Najpierw lista samych temperatur, potem punkty z wilgotnoscia."""
+        p = self.punkty()
+        self.assertEqual(p[0], (-20.0, None))
+        self.assertEqual(p[6], (10.0, 22.0))
+
+    def test_powtorzony_punkt_histerezy_zostaje(self):
+        """'45 %rh' pada w liscie 20 °C dwa razy — oba wystapienia sa znaczace."""
+        self.assertEqual(sum(1 for p in self.punkty() if p == (20.0, 45.0)), 2)
+
+    def test_przypis_nie_dodaje_trzeciego_punktu(self):
+        """
+        Przypis '1) Point (20 °C, 45 %rh) will be repeated...' opisuje punkt JUZ
+        wymieniony. Policzony osobno dawalby punkt, ktorego nikt nie zamowil.
+        """
+        tekst = ("Calibration ranges:\n"
+                 "- temperature: 20 °C; relative humidity: 45 %rh.\n"
+                 "1) Point (20 °C, 45 %rh) will be repeated in order to determine "
+                 "the hysteresis.\n")
+        self.assertEqual(self.punkty(tekst), [(20.0, 45.0)])
+
+    def test_przypis_po_polsku_tez_nie_dodaje_punktu(self):
+        tekst = ("Zakres wzorcowania:\n"
+                 "(25 °C, 60 %rh)\n"
+                 "1) powtórzony punkt (25 °C, 60 %rh) w celu wyznaczenia histerezy.\n")
+        self.assertEqual(self.punkty(tekst), [(25.0, 60.0)])
+
+    def test_druga_pozycja_z_samymi_temperaturami(self):
+        self.assertIn((-30.0, None), self.punkty())
+
+    def test_sekcja_konczy_sie_na_oswiadczeniu_o_zgodnosci(self):
+        """Dalszy tekst PZ nie moze dorzucac przypadkowych liczb."""
+        self.assertNotIn((95.0, None), self.punkty())
+
+    def test_wariant_polski_tego_ukladu(self):
+        tekst = ("Zakresy wzorcowania:\n"
+                 "- temperatura: 20 °C; wilgotność względna: 15 %rh, 45 %rh,\n")
+        self.assertEqual(self.punkty(tekst), [(20.0, 15.0), (20.0, 45.0)])
+
+    def test_dotychczasowe_zapisy_bez_zmian(self):
+        """Regresja: nawiasowy zapis i lista temperatur dzialaja jak dotad."""
+        tekst = ("Zakres wzorcowania: (-20; 0; 40) °C, (25 °C, 30 %rh); "
+                 "(25 °C, 60 %rh); (25 °C, 85 %rh)\n")
+        self.assertEqual(self.punkty(tekst),
+                         [(-20.0, None), (0.0, None), (40.0, None),
+                          (25.0, 30.0), (25.0, 60.0), (25.0, 85.0)])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
