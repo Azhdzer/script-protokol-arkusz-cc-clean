@@ -2181,20 +2181,32 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
 #   '1970325 2026-07-31 12.19.00_wynik.xlsx'  ->  serial '1970325'
 _RE_TS_W_NAZWIE = re.compile(
     r'[\s_-]*\d{4}-\d{2}-\d{2}[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?\s*$')
+# ...albo PRZED nim, jak w eksporcie Testo:
+#   '2026-09-30-07-15-08 85517778_wynik.xlsx'  -> '85517778'
+# Bez tego kluczem do PZ byl caly przedrostek z data, przyrzad nie dawal sie
+# dopasowac i jego wiersz na Stronie 2 zostawal niewypelniony.
+_RE_TS_NA_POCZATKU = re.compile(
+    r'^\d{4}-\d{2}-\d{2}(?:[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?)?[\s_-]*')
 
 
 def _serial_z_wyniku(fname):
     """
     Nr fabryczny przyrzadu z nazwy pliku wynikow (klucz do dopasowania z PZ):
-      'TMM230200349_wynik.xlsx'                 -> 'TMM230200349'
-      '1970325 2026-07-31 12.19.00_wynik.xlsx'  -> '1970325'
-    Odcinamy sufiks '_wynik' oraz date/godzine, ktora niektore programy (LogSoft)
-    dokleja do nazwy pliku — bez tego klucz nie pasowal do PZ i tabela przyrzadow
-    na Stronie 2 zostawala pusta.
+      'TMM230200349_wynik.xlsx'                    -> 'TMM230200349'
+      '1970325 2026-07-31 12.19.00_wynik.xlsx'     -> '1970325'
+      '2026-09-30-07-15-08 85517778_wynik.xlsx'    -> '85517778'
+    Odcinamy sufiks '_wynik' oraz date/godzine, ktora niektore programy dokleja do
+    nazwy pliku — LogSoft na KONCU, eksport Testo na POCZATKU. Bez tego klucz nie
+    pasowal do PZ i wiersz przyrzadu na Stronie 2 zostawal niewypelniony.
     """
     base = os.path.splitext(fname)[0]
     base = re.sub(r'_wynik$', '', base, flags=re.I).strip()
     base = _RE_TS_W_NAZWIE.sub('', base).strip()
+    # Przedrostek odcinamy tylko wtedy, gdy cos po nim zostaje — inaczej z nazwy
+    # zlozonej z samej daty zrobilby sie pusty klucz.
+    bez_przedrostka = _RE_TS_NA_POCZATKU.sub('', base).strip()
+    if bez_przedrostka:
+        base = bez_przedrostka
     # Koncowka '_2', '_3'... to numer KOLEJNEGO pomiaru tego samego przyrzadu
     # (np. '37025105_2' = drugie wzorcowanie), a nie czesc numeru fabrycznego —
     # bez odciecia przyrzad nie zostalby znaleziony w PZ.

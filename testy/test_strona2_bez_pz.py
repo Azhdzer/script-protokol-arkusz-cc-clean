@@ -141,5 +141,45 @@ class TestPrzyrzadZPZBezZmian(unittest.TestCase):
         self.assertEqual(self.ws.cell(row=self.w, column=7).value, "-")
 
 
+class TestSerialZNazwyPliku(unittest.TestCase):
+    """
+    Nr fabryczny z nazwy pliku wynikow to KLUCZ dopasowania przyrzadu do PZ.
+    Gdy klucz jest zly, wiersz na Stronie 2 zostaje niewypelniony — mimo ze i PZ,
+    i dane sa w porzadku.
+
+    Programy loggerow dokleja do nazwy date i godzine w roznych miejscach:
+    LogSoft na KONCU, eksport Testo na POCZATKU. Przedrostek nie byl odcinany,
+    wiec kluczem stawal sie caly '2026-09-30-07-15-08 85517778'.
+    """
+
+    def serial(self, nazwa):
+        return G._serial_z_wyniku(nazwa)
+
+    def test_data_na_poczatku_jest_odcinana(self):
+        self.assertEqual(
+            self.serial("2026-09-30-07-15-08 85517778_wynik.xlsx"), "85517778")
+
+    def test_data_na_koncu_nadal_odcinana(self):
+        self.assertEqual(
+            self.serial("1970325 2026-07-31 12.19.00_wynik.xlsx"), "1970325")
+
+    def test_sama_nazwa_bez_daty_bez_zmian(self):
+        self.assertEqual(self.serial("TMM230200349_wynik.xlsx"), "TMM230200349")
+
+    def test_numer_kolejnego_wzorcowania_odcinany(self):
+        self.assertEqual(self.serial("37025105_2_wynik.xlsx"), "37025105")
+
+    def test_data_bez_godziny_na_poczatku(self):
+        self.assertEqual(self.serial("2026-09-30 85517778_wynik.xlsx"), "85517778")
+
+    def test_serial_z_literami_po_dacie(self):
+        self.assertEqual(
+            self.serial("2026-09-30-07-15-08 TMM2302_wynik.xlsx"), "TMM2302")
+
+    def test_sama_data_zostaje_jak_byla(self):
+        """Nie wolno zjesc calej nazwy — pusty klucz nie dopasuje sie do niczego."""
+        self.assertEqual(self.serial("2026-09-30_wynik.xlsx"), "2026-09-30")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
