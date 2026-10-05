@@ -211,10 +211,18 @@ def parse_txt(path: str):
     """
     lines = open_txt(path)
 
-    # Linia 8 (indeks 7): "Czujnik wzorcowy: Pt100-11"
+    # Linia 8 (indeks 7): "Czujnik wzorcowy: Pt100-11" albo — gdy stanowisko podaje
+    # takze wejscie multimetru — "Czujnik wzorcowy: Pt100-31; Wejscie pomiarowe Ch: 001".
+    # Nazwa czujnika trafia do J1 i do naglowkow kolumn przez podmiane wzorca
+    # 'Pt100-XX', wiec musi byc SAMYM numerem czujnika, bez ogona z kanalem.
     if len(lines) > 7:
         sensor_line = lines[7].strip()
-        sensor_name = sensor_line.split(':', 1)[1].strip() if ':' in sensor_line else sensor_line
+        m_pt = re.search(r'Pt100-\d+', sensor_line)
+        if m_pt:
+            sensor_name = m_pt.group(0)
+        else:
+            sensor_name = (sensor_line.split(':', 1)[1].strip()
+                           if ':' in sensor_line else sensor_line)
     else:
         sensor_name = ''
 
@@ -231,6 +239,26 @@ def parse_txt(path: str):
         rows.append(row)
 
     return sensor_name, rows
+
+
+_RE_KOLUMNA_KANALU = re.compile(r'^Ch\s*(\d{1,4})$', re.I)
+
+
+def kanaly_z_naglowka(lines):
+    """
+    Oznaczenia kanalow multimetru z wiersza naglowka kolumn, DOKLADNIE tak jak
+    zapisano je w pliku (z zerami wiodacymi) i w kolejnosci wystapienia:
+        'Ch101;...;Ch108' -> ['101', ..., '108']
+        'Ch001'           -> ['001']
+    Pisownia jest potrzebna, bo tak samo nazywaja sie kolumny 'tempCh001'
+    i 'roztempCh001' — po niej szukamy ich w pliku.
+    """
+    for line in lines:
+        if line.strip().lower().startswith('data czas'):
+            nazwy = [c.strip() for c in re.split(r'[;\t,]', line.strip())]
+            return [m.group(1) for m in
+                    (_RE_KOLUMNA_KANALU.match(n) for n in nazwy) if m]
+    return []
 
 
 def detect_file_type(lines) -> str:
@@ -559,6 +587,73 @@ def _znajdz_naglowek(lines):
     return None, None
 
 
+def przypisz_kanaly_pliku(kanaly_pliku):
+    """
+    Mapa kanal UKLADU (101..108) -> oznaczenie kanalu W PLIKU ('101', '001', ...).
+
+    Multimetr CC-04 zwykle zapisuje komplet Ch101..Ch108 i wtedy mapa jest
+    tozsamoscia — nic sie nie zmienia. Ale czujnik bywa wpiety w INNE wejscie:
+    w zleceniu 221 pomiar szedl na jednym czujniku podlaczonym do Ch001. Kolumn
+    Ch101.. w pliku wtedy nie ma, wiec do obserwacji nie trafialy ani wskazania
+    multimetru, ani temperatura czujnika — caly kanal przepadal.
+
+    Kanaly nienalezace do ukladu sadzamy po kolei na sloty GLOWNE (101, 103, 105,
+    107), a nadmiar na zapasowe. Dzieki temu reszta skryptu — analiza, protokol,
+    nazwy czujnikow — pracuje na niezmienionym ukladzie kolumn.
+    """
+    wg_numeru = {}
+    for surowy in kanaly_pliku:
+        try:
+            wg_numeru.setdefault(int(surowy), surowy)
+        except (TypeError, ValueError):
+            continue
+
+    standardowe = {ch: wg_numeru[ch] for ch in CC04_KANALY_WSZYSTKIE if ch in wg_numeru}
+    if standardowe:
+        return standardowe                        # uklad typowy — bez zmian
+
+    wolne = CC04_KANALY_GLOWNE + CC04_KANALY_ZAPASOWE
+    return {slot: surowy for slot, surowy in zip(wolne, kanaly_pliku)}
+
+
+_RE_NAZWA_Z_KANALEM = re.compile(r'^(tempCh|roztempCh|Ch)(\d{1,4})$', re.I)
+
+
+def _nazwa_kolumny_w_pliku(nazwa_ukladu, slot_do_pliku):
+    """
+    Zamienia nazwe kolumny UKLADU ('Ch101', 'tempCh101') na te, ktora naprawde
+    stoi w naglowku pliku ('Ch001', 'tempCh001'). Kolumny bez numeru kanalu
+    ('Tzadana', 'tdp', ...) zostaja bez zmian.
+    """
+    m = _RE_NAZWA_Z_KANALEM.match(nazwa_ukladu)
+    if not m:
+        return nazwa_ukladu
+    surowy = slot_do_pliku.get(int(m.group(2)))
+    return nazwa_ukladu if surowy is None else f"{m.group(1)}{surowy}"
+
+
+def mapa_slot_pt(lines):
+    """
+    Nazwa czujnika ('Pt100-31') dla kazdego SLOTU ukladu (101..108).
+
+    Dla pliku standardowego to dokladnie _mapa_kanal_pt. Gdy czujnik byl na innym
+    wejsciu (Ch001), nazwa trafia na slot, na ktory przypisano ten kanal — inaczej
+    naglowki obserwacji mowilyby 'Ch101' zamiast 'Pt100-31'.
+    """
+    po_kanale = _mapa_kanal_pt(lines)
+    wynik = dict(po_kanale)
+    for slot, surowy in przypisz_kanaly_pliku(kanaly_z_naglowka(lines)).items():
+        if slot in wynik:
+            continue
+        try:
+            nazwa = po_kanale.get(int(surowy))
+        except (TypeError, ValueError):
+            nazwa = None
+        if nazwa:
+            wynik[slot] = nazwa
+    return wynik
+
+
 def _mapa_kanal_pt(lines):
     """
     Mapa numer_kanalu -> 'Pt100-XX' z linii naglowka pliku CC-04, np.:
@@ -607,7 +702,11 @@ def parse_txt_cc04(path: str):
     # Numer Pt100 kazdego czujnika bierzemy PO NUMERZE KANALU (nie po kolejnosci linii,
     # bo dane sa z „co drugiego" kanalu). Nazwy do protokolu/obserwacji = kanaly GLOWNE
     # (101,103,105,107 -> Pt100-09,-13,-01,-18).
-    kanal_do_pt = _mapa_kanal_pt(lines)
+    # Czujnik bywa wpiety w inne wejscie niz zwykle (zlecenie 221: jeden czujnik
+    # na Ch001). Kanaly z pliku sadzamy wtedy na sloty ukladu — patrz
+    # przypisz_kanaly_pliku — zeby reszta skryptu widziala znajome kolumny.
+    slot_do_pliku = przypisz_kanaly_pliku(kanaly_z_naglowka(lines))
+    kanal_do_pt = mapa_slot_pt(lines)
     sensor_names = [kanal_do_pt.get(ch, '') for ch in CC04_KANALY_GLOWNE]
     while len(sensor_names) < len(CC04_KANALY_GLOWNE):
         sensor_names.append('')
@@ -617,6 +716,7 @@ def parse_txt_cc04(path: str):
     rows = []
 
     if colmap is not None:
+        nazwy_pliku = [_nazwa_kolumny_w_pliku(n, slot_do_pliku) for n in CC04_KOLUMNY]
         # Mapowanie po nazwach kolumn — pelny uklad pliku (wszystkie kanaly po kolei).
         for line in lines[hdr_idx + 1:]:
             line = line.strip()
@@ -624,7 +724,7 @@ def parse_txt_cc04(path: str):
                 continue
             parts = re.split(r'[;\t,]', line)
             row = []
-            for name in CC04_KOLUMNY:
+            for name in nazwy_pliku:
                 ci = colmap.get(name)
                 row.append(parts[ci] if (ci is not None and ci < len(parts)) else '')
             rows.append(row)
@@ -1243,6 +1343,25 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC',
 
     is_cc04    = (file_type == 'CC04')
     temp_only  = (c is not None and c == 0.0)
+    # Bez higrometru wzorcowego (rozrzut punktu rosy pusty w CALYM segmencie)
+    # wilgotnosci nie da sie wzorcowac, wiec nastawa RH komory nic tu nie znaczy.
+    # Zlecenie 221: pomiar bez higrometru, punkt -10 °C z nastawa RH 30 %, a komora
+    # ponizej zera wilgotnosci nie reguluje (~68 %). Porownanie nastawy z odczytem
+    # odrzucalo przez to idealnie stabilny punkt temperatury jako 'przejscie'.
+    #
+    # Wyjatek: strefa SUSZENIA/postoju (T ~ pokojowa, niska nastawa RH). Tak wyglada
+    # komora zaparkowana po pomiarze — w zleceniu 221 to 25 godzin 23 °C / 30 %.
+    # Tam zostaje dotychczasowe zachowanie: rozjazd nastawy RH z odczytem odrzuca
+    # segment, inaczej postoj trafilby do protokolu jako punkt.
+    w_strefie_suszenia = (
+        b is not None and c is not None and c > 0
+        and SUSZENIE_T_ZAKRES[0] <= b <= SUSZENIE_T_ZAKRES[1]
+        and c <= SUSZENIE_RH_MAX)
+    if (not temp_only and not w_strefie_suszenia
+            and all(data[i][3] is None for i in range(start_idx, end_idx))):
+        print(f"    [Tylko temperatura] brak danych higrometru wzorcowego w segmencie — "
+              f"nastawa RH {c}% nie jest wzorcowana, jej nie sprawdzam.")
+        temp_only = True
     n_cols     = _szerokosc_danych(ws, len(CC04_KOLUMNY) if is_cc04 else 12)
     n_l        = '4L' if is_cc04 else 'L'
     crit_label = n_l if temp_only else f"K+{n_l}"   # skrot techniczny (do konsoli)
@@ -3216,7 +3335,7 @@ def main():
         # PELNY uklad jak w pliku multimetru: WSZYSTKIE kanaly po kolei (A..AG = 33 kol).
         # Analiza i protokol biora tylko kanaly GLOWNE (po nazwie); reszta jest do wgladu.
         N_KOL = len(CC04_KOLUMNY)
-        kanal_pt = _mapa_kanal_pt(raw_lines)
+        kanal_pt = mapa_slot_pt(raw_lines)
 
         # Podpisy z szablonu (X92/X93) + ich STYL (ramka, format daty) czytamy PRZED
         # nadpisaniem danymi. W pelnym ukladzie kol. 24-25 to juz dane, wiec podpisy,
