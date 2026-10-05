@@ -201,6 +201,50 @@ class TestNazwyCzujnikowNaSlotach(unittest.TestCase):
         self.assertEqual((mapa.get(101), mapa.get(103)), ("Pt100-09", "Pt100-13"))
 
 
+class TestCzujnikiNaStronie1(unittest.TestCase):
+    """
+    Tabela kanalow skanera na Stronie 1 (wiersze 36-39): szablon ma tam na sztywno
+    cztery czujniki. Wiersze slotow, na ktorych w pomiarze nie bylo czujnika,
+    zostawaly z nimi — protokol wymienial czujniki, ktorych nie uzyto.
+    """
+
+    def wiersz(self, kanaly_z_odczytem):
+        """Jeden wiersz danych CC-04 z odczytami tylko na podanych slotach."""
+        r = [""] * len(G.CC04_KOLUMNY)
+        for slot in kanaly_z_odczytem:
+            r[G.CC04_KOLUMNY.index(f"Ch{slot}")] = "108.6110"
+        return r
+
+    def test_tylko_slot_z_odczytami(self):
+        self.assertEqual(G.sloty_z_danymi([self.wiersz([101])]), {101})
+
+    def test_wszystkie_cztery(self):
+        self.assertEqual(G.sloty_z_danymi([self.wiersz([101, 103, 105, 107])]),
+                         {101, 103, 105, 107})
+
+    def test_dwa_z_czterech(self):
+        """Typowy pomiar na 2 czujnikach (np. 105 i 107)."""
+        self.assertEqual(G.sloty_z_danymi([self.wiersz([105, 107])]), {105, 107})
+
+    def test_brak_w_jednym_wierszu_nie_wystarczy(self):
+        """Wystarczy jeden odczyt w calym pomiarze, zeby slot byl uzyty."""
+        rows = [self.wiersz([]), self.wiersz([103]), self.wiersz([])]
+        self.assertEqual(G.sloty_z_danymi(rows), {103})
+
+    def test_brak_zamiast_liczby_to_nie_odczyt(self):
+        r = self.wiersz([])
+        r[G.CC04_KOLUMNY.index("Ch101")] = "brak"
+        self.assertEqual(G.sloty_z_danymi([r]), set())
+
+    def test_kanal_z_zerami_zostaje_tekstem(self):
+        """'001' jako liczba stalby sie 1 — zera wiodace musza zostac."""
+        self.assertEqual(G.kanal_do_komorki("001"), "001")
+
+    def test_kanal_standardowy_jest_liczba(self):
+        """Szablon ma 101 jako liczbe — typ komorki sie nie zmienia."""
+        self.assertEqual(G.kanal_do_komorki("101"), 101)
+
+
 class TestPomiarBezHigrometru(unittest.TestCase):
     """
     Zlecenie 221 — pomiar BEZ higrometru wzorcowego (tdp, %rh, roztdp: same 'brak').

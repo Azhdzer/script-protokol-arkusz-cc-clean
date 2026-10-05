@@ -632,6 +632,36 @@ def _nazwa_kolumny_w_pliku(nazwa_ukladu, slot_do_pliku):
     return nazwa_ukladu if surowy is None else f"{m.group(1)}{surowy}"
 
 
+def sloty_z_danymi(rows):
+    """
+    Sloty GLOWNE (101, 103, 105, 107), na ktorych w pomiarze naprawde byl czujnik —
+    czyli w kolumnie 'Ch<slot>' jest choc jeden odczyt. Na tej podstawie protokol
+    wypisuje tylko uzyte czujniki, a reszte wierszy zastepuje kreska.
+    """
+    uzywane = set()
+    for slot in CC04_KANALY_GLOWNE:
+        nazwa = f'Ch{slot}'
+        if nazwa not in CC04_KOLUMNY:
+            continue
+        i = CC04_KOLUMNY.index(nazwa)
+        if any(i < len(r) and _s_to_float(r[i]) is not None for r in rows):
+            uzywane.add(slot)
+    return uzywane
+
+
+def kanal_do_komorki(surowy):
+    """
+    Numer kanalu do wpisania w protokol: '101' -> 101 (liczba, jak w szablonie),
+    '001' -> '001' (tekst — inaczej Excel zgubilby zera wiodace).
+    """
+    tekst = str(surowy).strip()
+    try:
+        liczba = int(tekst)
+    except ValueError:
+        return tekst
+    return liczba if str(liczba) == tekst else tekst
+
+
 def mapa_slot_pt(lines):
     """
     Nazwa czujnika ('Pt100-31') dla kazdego SLOTU ukladu (101..108).
@@ -2790,7 +2820,7 @@ def _round_hm(dt):
 
 
 def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=None,
-                     pz_mapa=None, zest=None, pz_lista=None):
+                     pz_mapa=None, zest=None, pz_lista=None, kanaly_slotow=None):
     """
     Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.
 
@@ -2986,11 +3016,23 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         else:
             cell.value = sname
 
+    # Sloty z odczytami w tym pomiarze (CC-04) — tylko one dostaja czujnik
+    # w naglowkach i w tabeli kanalow; pozostale — kreske zamiast czujnika z szablonu.
+    sloty_uzyte = sloty_z_danymi(rows) if obs_type == 'CC04' else set()
+
     if sensor_names:
         if obs_type == 'CC04':
-            # K9, L9, M9, N9 → czujniki 1-4
-            for col_off, sname in enumerate(sensor_names[:4]):
-                _subst(ws3.cell(row=9, column=11 + col_off), sname)
+            # K9, L9, M9, N9 → czujniki 1-4. Tekst 'Multimetr wzorcowy (z czujnikiem
+            # Pt100-XX)' MUSI zaczynac sie od 'Mult' — od tego zalezy formula w K18:N19
+            # (Rs / Ω). Dla nieuzytego slotu podmieniamy wiec tylko sam numer czujnika.
+            for col_off, slot in enumerate(CC04_KANALY_GLOWNE):
+                cell = ws3.cell(row=9, column=11 + col_off)
+                sname = sensor_names[col_off] if col_off < len(sensor_names) else ''
+                if slot in sloty_uzyte and sname:
+                    _subst(cell, sname)
+                elif slot not in sloty_uzyte and cell.value and \
+                        re.search(r'Pt100-\d+', str(cell.value)):
+                    cell.value = re.sub(r'Pt100-\d+', '-', str(cell.value))
         else:
             # CC: L9 → jeden czujnik
             _subst(ws3.cell(row=9, column=12), sensor_names[0])
@@ -3000,14 +3042,35 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         ws1 = proto_wb['Strona 1']
         ws1.cell(row=10, column=6).value = f"1-{N}"
 
-        if sensor_names:
-            if obs_type == 'CC04':
-                # G:H36-39 → czujniki 1-4  (komorki scalone G:H, piszemy do G=7)
-                for row_off, sname in enumerate(sensor_names[:4]):
-                    _subst(ws1.cell(row=36 + row_off, column=7), sname)
-            else:
-                # CC: H:I43 → jeden czujnik  (piszemy do H=8)
-                _subst(ws1.cell(row=43, column=8), sensor_names[0])
+        if obs_type == 'CC04':
+            # Tabela kanalow skanera, wiersze 36-39 = sloty 101/103/105/107:
+            #   C — kanal (jak w pliku: 101 albo '001'), G:H — czujnik, I:J — miejsce.
+            # Szablon ma tu na sztywno cztery czujniki. Wiersze slotow BEZ odczytow
+            # zostawaly z nimi, wiec protokol wymienial czujniki, ktorych w pomiarze
+            # nie bylo. Teraz zostaja tylko uzyte, reszta dostaje kreski.
+            for row_off, slot in enumerate(CC04_KANALY_GLOWNE):
+                r = 36 + row_off
+                if slot in sloty_uzyte:
+                    surowy = (kanaly_slotow or {}).get(slot, str(slot))
+                    ws1.cell(row=r, column=3).value = kanal_do_komorki(surowy)
+                    sname = sensor_names[row_off] if (sensor_names and
+                                                     row_off < len(sensor_names)) else ''
+                    if sname:
+                        _subst(ws1.cell(row=r, column=7), sname)
+                    else:
+                        ws1.cell(row=r, column=7).value = '-'
+                    # I — miejsce w komorze zostaje z szablonu: to miejsce tego slotu.
+                else:
+                    for kol in (3, 7, 9):
+                        ws1.cell(row=r, column=kol).value = '-'
+            print(f"  [Strona 1] Czujniki wzorcowe: "
+                  + ", ".join(f"{kanal_do_komorki((kanaly_slotow or {}).get(s, str(s)))}"
+                              f"={sensor_names[CC04_KANALY_GLOWNE.index(s)] or '?'}"
+                              for s in CC04_KANALY_GLOWNE if s in sloty_uzyte)
+                  + f"  (nieuzyte wiersze: {4 - len(sloty_uzyte)} -> '-')")
+        elif sensor_names:
+            # CC: H:I43 → jeden czujnik  (piszemy do H=8)
+            _subst(ws1.cell(row=43, column=8), sensor_names[0])
 
     # ── Dane srodowiskowe z wynikow (wyniki/*.xlsx → Q/S kolumny Strona 3) ──────
     print("\n  Szukam danych srodowiskowych w wynikach...")
@@ -3469,9 +3532,13 @@ def main():
     print(f"\nZapisano: {output_name}")
 
     if rep_groups:
+        # Kanal multimetru tak, jak zapisano go w pliku (np. '001') — do tabeli
+        # czujnikow na Stronie 1.
+        kanaly_slotow = (przypisz_kanaly_pliku(kanaly_z_naglowka(raw_lines))
+                         if file_type == 'CC04' else None)
         generuj_protokol(rep_groups, rows, measurement_id, file_type,
                          sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest,
-                         pz_lista=_pz_lista)
+                         pz_lista=_pz_lista, kanaly_slotow=kanaly_slotow)
         # Znaczniki punktow w zestawieniu przyrzadow (nawigacja po czasie)
         oznacz_zestawienie_punkty(rep_groups, rows)
         # Zdjecia punktow (gdy wlaczone w konfiguracji)
