@@ -2610,6 +2610,20 @@ def _to_jest_powtorka_kolizji(nazwa):
     return bool(nazwa) and bool(_WZORZEC_POWTORKI_NAZWY.search(nazwa))
 
 
+def _t_z_nazwy_zakladki(nazwa):
+    """
+    NOMINALNA temperatura z nazwy zakladki 'temp, rh': '70, -' -> 70.0,
+    '-10.3, -' -> -10.3, '25, 51 (2)' -> 25.0. None, gdy nie da sie sparsowac.
+    """
+    if not nazwa:
+        return None
+    baza = _WZORZEC_POWTORKI_NAZWY.sub('', str(nazwa)).strip()
+    try:
+        return float(baza.split(',')[0].strip().replace(',', '.'))
+    except ValueError:
+        return None
+
+
 def _rh_z_nazwy_zakladki(nazwa):
     """
     Parsuje NOMINALNA wilgotnosc z nazwy zakladki 'temp, rh' (np. '25, 51' -> 51.0,
@@ -3152,7 +3166,21 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             if rekord.get("D") is not None:
                 ws.range("E6").value = rekord["D"]
             if rekord.get("K") is not None:
-                ws.range("H57").value = rekord["K"]
+                # Rozdzielczosc bywa podana osobno dla kazdej temperatury
+                # ('dla 70°C t: 0,056 °C / dla 20°C t: 0,024 °C ...'). Zakladka
+                # dostaje wtedy wartosc dla SWOJEJ temperatury — tekst wpisany
+                # wprost do H57 psul obliczenia niepewnosci.
+                _t_zakl = _t_z_nazwy_zakladki(zd.get("nazwa"))
+                _rozdz_t, _opis_rozdz = pz_dane.rozdzielczosc_dla_temperatury(
+                    rekord["K"], _t_zakl)
+                if _rozdz_t is not None:
+                    ws.range("H57").value = _rozdz_t
+                    if _opis_rozdz:
+                        print(f"      [Rozdzielczosc t] '{ws_name}': {_rozdz_t} "
+                              f"({_opis_rozdz})")
+                else:
+                    _warn(f"'{ws_name}': rozdzielczosc t NIE wpisana — {_opis_rozdz}. "
+                          f"H57 zostaje z szablonu; uzupelnij recznie.")
             if rekord.get("L") is not None:
                 ws.range("H55").value = rekord["L"]
 

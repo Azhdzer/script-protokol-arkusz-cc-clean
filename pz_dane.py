@@ -984,6 +984,163 @@ def rozdzielczosc_zestawienie(zest, producent, typ):
 
 
 # =============================================================================
+# ROZDZIELCZOSC ZALEZNA OD TEMPERATURY
+# =============================================================================
+# Rzadko, ale bywa, ze przyrzad ma INNA rozdzielczosc w roznych temperaturach
+# (np. Onset UX100-001). Wtedy w kolumnie 'Rozdzielczosc odczytu t' stoi tekst:
+#
+#     dla 70°C t: 0,056 °C
+#     dla 20°C t: 0,024 °C
+#     dla -10°C t: 0,034 °C
+#
+# a kazda zakladka kopii arkusza obliczeniowego potrzebuje JEDNEJ liczby — tej
+# dla swojej temperatury. W Zestawieniu spotyka sie kilka zapisow:
+#
+#     'dla 70°C t: 0,056 °C'                     temperatura PRZED wartoscia
+#     '-20 °C: 0,047 °C'                         to samo, z dwukropkiem
+#     '(10 ÷ 25) °C\nt: 0,024 °C'                zakres temperatur
+#     'dla (4-5) °C t: 0,026 °C'                 zakres z myslnikiem
+#     't: 0,024 °C\ndla (15 ÷ 35) °C'            temperatura ZA wartoscia
+#     't: 0,33 °C - dla 20 °C'                   to samo, w jednej linii
+#
+# Linie wilgotnosci ('RH: 0,08 %') nie dotycza rozdzielczosci temperatury.
+
+_LICZBA = r'-?\d+(?:[.,]\d+)?'
+_RE_ROZDZ_ZDARZENIE = re.compile(
+    r'(?P<zakres>\(\s*(?P<od>' + _LICZBA + r')\s*[÷–-]\s*(?P<do>' + _LICZBA +
+    r')\s*\)\s*°?\s*C)'
+    r'|\bdla\s*(?P<dla>' + _LICZBA + r')\s*°?\s*C'
+    r'|(?P<przed_dwukropkiem>' + _LICZBA + r')\s*°\s*C\s*:'
+    r'|(?P<etykieta_t>\bt\s*:)'
+    r'|(?P<etykieta_rh>\b(?:RH|wilg\w*)\s*:)'
+    r'|(?P<wartosc>' + _LICZBA + r')\s*°\s*C',
+    re.I)
+
+# Tyle wolno odbiegac temperaturze zakladki od temperatury wpisu. Zakladki maja
+# nastawy komory (np. -10,3 / 70,3), a wpisy wartosci okragle (-10 / 70).
+TOLERANCJA_TEMPERATURY_ROZDZ = 5.0
+
+
+def rozdzielczosci_wg_temperatury(tekst):
+    """
+    Lista [(zakres, wartosc), ...] z opisu rozdzielczosci temperatury.
+
+    zakres = (od, do) w °C — dla pojedynczej temperatury od == do;
+             None, gdy wartosc nie ma przypisanej temperatury (ogolna).
+    Kolejnosc jak w tekscie. Pusta lista, gdy w tekscie nie ma ani jednej
+    wartosci w °C (np. sama liczba '0,1' albo '-').
+    """
+    zdarzenia = []         # ('zakres', (od, do)) | ('t', wartosc)
+    czeka = None           # 't' po 't:' / 'dla X °C:', 'rh' po 'RH:'
+    for m in _RE_ROZDZ_ZDARZENIE.finditer(str(tekst or '')):
+        if m.group('zakres'):
+            od, do = _do_float(m.group('od')), _do_float(m.group('do'))
+            if od is not None and do is not None:
+                zdarzenia.append(('zakres', (min(od, do), max(od, do))))
+            czeka = None
+        elif m.group('dla') is not None:
+            t = _do_float(m.group('dla'))
+            if t is not None:
+                zdarzenia.append(('zakres', (t, t)))
+            czeka = None
+        elif m.group('przed_dwukropkiem') is not None:
+            t = _do_float(m.group('przed_dwukropkiem'))
+            if t is not None:
+                zdarzenia.append(('zakres', (t, t)))
+            czeka = 't'
+        elif m.group('etykieta_t'):
+            czeka = 't'
+        elif m.group('etykieta_rh'):
+            czeka = 'rh'
+        elif m.group('wartosc') is not None:
+            if czeka == 't':
+                v = _do_float(m.group('wartosc'))
+                if v is not None:
+                    zdarzenia.append(('t', v))
+            czeka = None
+
+    # Temperatura moze stac PRZED wartoscia albo ZA nia. Rozstrzyga to, co jest
+    # dalej: gdy do kolejnej temperatury trafi sie jeszcze wartosc — temperatura
+    # dotyczy jej; gdy nie — dotyczy ostatniej wartosci, ktora jeszcze jej nie ma.
+    wpisy = []
+    czekajacy = None
+    for i, (rodzaj, x) in enumerate(zdarzenia):
+        if rodzaj == 't':
+            wpisy.append([czekajacy, x])
+            czekajacy = None
+            continue
+        dalej_wartosc = False
+        for r2, _x2 in zdarzenia[i + 1:]:
+            if r2 == 'zakres':
+                break
+            if r2 == 't':
+                dalej_wartosc = True
+                break
+        if dalej_wartosc:
+            czekajacy = x
+        else:
+            for wpis in reversed(wpisy):
+                if wpis[0] is None:
+                    wpis[0] = x
+                    break
+            czekajacy = None
+    return [(z, v) for z, v in wpisy]
+
+
+def _odleglosc_od_zakresu(zakres, temp):
+    od, do = zakres
+    if od <= temp <= do:
+        return 0.0
+    return min(abs(temp - od), abs(temp - do))
+
+
+def rozdzielczosc_dla_temperatury(wartosc, temp, tolerancja=TOLERANCJA_TEMPERATURY_ROZDZ):
+    """
+    Rozdzielczosc temperatury do wpisania w zakladce o temperaturze `temp`.
+
+    Zwraca (wartosc_do_wpisania, opis):
+      liczba w komorce                  -> (ta liczba, None)       — jak dotad
+      tekst z jedna, ogolna wartoscia   -> (liczba, None)
+      tekst z wartosciami wg temperatur -> (liczba dla temp, 'dla 70 °C')
+      brak wpisu dla tej temperatury    -> (None, powod)           — nic nie wpisujemy
+      tekst bez wartosci w °C ('-')     -> (tekst, None)           — jak dotad
+    """
+    if wartosc is None:
+        return None, None
+    if isinstance(wartosc, (int, float)):
+        return wartosc, None
+
+    wpisy = rozdzielczosci_wg_temperatury(wartosc)
+    if not wpisy:
+        return wartosc, None
+
+    z_temperatura = [(z, v) for z, v in wpisy if z is not None]
+    ogolne = [v for z, v in wpisy if z is None]
+    if not z_temperatura:
+        return ogolne[0], None
+
+    if temp is None:
+        return None, "nie znam temperatury zakladki"
+
+    zakres, v = min(z_temperatura, key=lambda zv: _odleglosc_od_zakresu(zv[0], temp))
+    if _odleglosc_od_zakresu(zakres, temp) <= tolerancja:
+        od, do = zakres
+        opis = f"dla {_fmt_t(od)} °C" if od == do else f"dla ({_fmt_t(od)} ÷ {_fmt_t(do)}) °C"
+        return v, opis
+    if ogolne:
+        return ogolne[0], "wartosc ogolna (brak wpisu dla tej temperatury)"
+    dostepne = ", ".join(
+        _fmt_t(z[0]) if z[0] == z[1] else f"{_fmt_t(z[0])}÷{_fmt_t(z[1])}"
+        for z, _v in z_temperatura)
+    return None, f"brak wpisu dla {_fmt_t(temp)} °C (sa: {dostepne} °C)"
+
+
+def _fmt_t(t):
+    """Temperatura do komunikatu: '70', '-10', '4,5'."""
+    return (f"{t:g}").replace('.', ',')
+
+
+# =============================================================================
 # ROZDZIELCZOSC Z DANYCH (fallback)
 # =============================================================================
 
