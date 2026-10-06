@@ -282,7 +282,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 541 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 571 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -342,7 +342,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**541 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**571 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -400,8 +400,7 @@ ten cache, a świadectwa Word czytają właśnie policzone wartości).
 **Gdzie to jest wpięte** — dwa miejsca, oba „na końcu":
 
 - `generuj_obserwacje.py` → `_zapisz_bezpiecznie()` — jedyny punkt zapisu kroku 2,
-  więc obejmuje arkusz obserwacji i protokół. `widok=False` tylko dla `Zestawienia`,
-  bo to plik użytkownika, nie nasz wynik.
+  więc obejmuje arkusz obserwacji, protokół i zestawienie pomiarów.
 - `generuj_arkusze.py` → koniec `_main_impl()` — protokół + wszystkie kopie, po Etapie 7.
   W logu: `[Widok] Pasek zakładek ustawiony w N z M plików`.
 
@@ -411,6 +410,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Pliki kroku 1 z nazwą zlecenia i podpisem:** po zaznaczeniu punktów krok 2 nadaje im
+  nazwę `221_LA_TH_2026_<nr fabryczny>_opracowanie danych.xlsx` (zestawienie:
+  `221_LA_TH_2026_zestawienie_pomiarow.xlsx`) i dopisuje z prawej strony tabeli podpis
+  *Opracował / Data*. Numer zlecenia przyrządu pochodzi z PZ (po nr fabrycznym albo
+  ewidencyjnym), a bez PZ — z numeru pomiaru. Gdy PZ leży w folderze już przy kroku 1,
+  plik od razu dostaje tę nazwę. Dotyczy tylko plików dopasowanych do punktów pomiaru.
 - **Wybrane okna widać też w plikach kroku 1:** wiersze, z których powstał punkt protokołu, są podświetlane w `wyniki/<serial>_wynik.xlsx` — zielono, a przy ostrzeżeniu pomarańczowo (jak w obserwacji), z numerem punktu w kolumnie obok. Dostaje je **każdy** dopasowany czasowo plik, także ten, który nie zmieścił się w kolumnach przyrządów protokołu.
 - **Pasek zakładek nie chowa się już po otwarciu pliku:** `tabRatio` i `firstSheet` ustawiane są na gotowym `.xlsx`, a nie na oknie Excela — patrz sekcja *Wygląd pliku wynikowego*.
 - **Wybór pojedynczego przyrządu przez wyszarzenie:** przyrząd, którego wszystkie

@@ -60,6 +60,57 @@ DEFAULT_INPUT  = Path(_C.sciezka("ANL_INPUT", "excel_do_analizy", _BAZA))
 DEFAULT_OUTPUT = Path(_C.sciezka("ANL_OUTPUT", "wyniki", _BAZA))
 SUPPORTED_EXT  = {'.csv', '.xls', '.xlsx', '.txt', '.pdf', '.log'}
 
+# Gdy w folderze PZ jest potwierdzenie zamowienia z tym przyrzadem (po nr
+# fabrycznym albo ewidencyjnym), plik wynikow od razu dostaje nazwe zlecenia:
+#     10705098.csv  ->  221_LA_TH_2026_10705098_opracowanie danych.xlsx
+# Bez PZ (zlecenie wewnetrzne) zostaje '<serial>_wynik.xlsx' — nazwe zlecenia
+# nada mu krok 2, ktory zna numer pomiaru z pliku TXT multimetru.
+PZ_FOLDER         = _C.sciezka("CC_PZ_FOLDER", "PZ", _BAZA)
+SZABLON_PROTOKOLU = _C.tekst("OBS_PROT_CC", "xxx_LA_TH_2026 - protokół CC.xlsx")
+_PZ_MAPA = None
+
+
+def _mapa_pz():
+    """Przyrzady z PZ (wczytywane raz, przy pierwszym zapisie wyniku)."""
+    global _PZ_MAPA
+    if _PZ_MAPA is None:
+        try:
+            import pz_dane
+            _PZ_MAPA, _lista = pz_dane.wczytaj_pz(PZ_FOLDER)
+        except Exception as e:                      # PZ jest dodatkiem — nie blokuje kroku 1
+            print(f"  [PZ] Nie udalo sie wczytac PZ: {type(e).__name__}: {e}")
+            _PZ_MAPA = {}
+    return _PZ_MAPA
+
+
+def sciezka_wyniku(output_dir, stem, suffix=''):
+    """
+    Docelowy plik wynikow przyrzadu. Z nazwa zlecenia, gdy przyrzad jest w PZ;
+    inaczej dotychczasowe '<stem><suffix>_wynik.xlsx'.
+
+    Gdy plik dostaje nazwe zlecenia, stary '<stem>_wynik.xlsx' tego samego zrodla
+    (z wczesniejszego przebiegu bez PZ) jest usuwany — inaczej ten sam przyrzad
+    lezalby w 'wyniki' dwa razy.
+    """
+    domyslna = Path(output_dir) / f"{stem}{suffix}_wynik.xlsx"
+    if suffix:                      # czesc pliku (np. osobny arkusz) — bez zmian
+        return domyslna
+    import pz_dane
+    serial = pz_dane.serial_z_nazwy_pliku(stem)
+    zlecenie = pz_dane.zlecenie_przyrzadu(_mapa_pz(), serial)
+    if not zlecenie:
+        return domyslna
+    nazwa = pz_dane.nazwa_pliku_opracowania(
+        pz_dane.prefiks_z_szablonu(SZABLON_PROTOKOLU, zlecenie), serial)
+    try:
+        if domyslna.exists():
+            domyslna.unlink()
+            print(f"    → usunieto stary '{domyslna.name}' (zastapiony nazwa zlecenia)")
+    except OSError:
+        pass
+    print(f"    → zlecenie {zlecenie} z PZ (nr {serial})")
+    return Path(output_dir) / nazwa
+
 # Zawezenie wsadu do wybranych nazw plikow (panel: lista z zaznaczaniem).
 # Pusta lista = bierz wszystko z folderu, czyli zachowanie sprzed panelu.
 WYBRANE_PLIKI  = _C.lista("ANL_PLIKI", [])
@@ -538,7 +589,7 @@ def save_result(times, temps, hums, source_name, output_dir, suffix=''):
         return df
 
     stem = Path(source_name).stem
-    out_path = Path(output_dir) / f"{stem}{suffix}_wynik.xlsx"
+    out_path = sciezka_wyniku(output_dir, stem, suffix)
     _zapisz_z_formatem(df, out_path)
     _ZEBRANE.append((f"{stem}{suffix}", df))
 
@@ -1278,7 +1329,7 @@ def _save_xtherm(times, t_wewn, t_zewn, hums, source_name, output_dir, suffix=''
         return df
 
     stem = Path(source_name).stem
-    out_path = Path(output_dir) / f"{stem}{suffix}_wynik.xlsx"
+    out_path = sciezka_wyniku(output_dir, stem, suffix)
     _zapisz_z_formatem(df, out_path)
     _ZEBRANE.append((f"{stem}{suffix}", df))
 
@@ -1615,7 +1666,8 @@ def main():
     zbuduj_zestawienie(_ZEBRANE, output_dir)
 
     # Summary
-    out_files = list(output_dir.glob('*_wynik.xlsx'))
+    out_files = (list(output_dir.glob('*_wynik.xlsx'))
+                 + list(output_dir.glob('*_opracowanie danych.xlsx')))
     print("\n" + "=" * 60)
     print(f"  Gotowe! Zapisano {len(out_files)} pliku(ów) wynikowego(ych).")
     print(f"  Sprawdź folder: {output_dir}/")

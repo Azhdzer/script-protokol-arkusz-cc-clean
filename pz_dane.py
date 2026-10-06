@@ -78,6 +78,73 @@ def normalizuj_serial(s):
     return re.sub(r'\s+', '', str(s)).strip().strip('.,;').upper()
 
 
+# =============================================================================
+# NAZWY PLIKOW WYNIKOW (wspolne dla kroku 1 i 2)
+# =============================================================================
+
+# Plik wynikow po opracowaniu: '221_LA_TH_2026_10705098_opracowanie danych.xlsx'.
+PRZYROSTEK_OPRACOWANIA = "_opracowanie danych"
+_RE_PLIK_OPRACOWANIA = re.compile(
+    r'^(?P<prefiks>\d+_LA_TH_\d{4})_(?P<serial>.+?)_opracowanie danych\.xlsx$', re.I)
+
+# Data/godzina doklejona do nazwy pliku przez program logujacy — na KONCU (LogSoft):
+#   '1970325 2026-07-31 12.19.00_wynik.xlsx'  ->  serial '1970325'
+_RE_TS_W_NAZWIE = re.compile(
+    r'[\s_-]*\d{4}-\d{2}-\d{2}[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?\s*$')
+# ...albo na POCZATKU (eksport Testo):
+#   '2026-09-30-07-15-08 85517778_wynik.xlsx'  -> '85517778'
+_RE_TS_NA_POCZATKU = re.compile(
+    r'^\d{4}-\d{2}-\d{2}(?:[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?)?[\s_-]*')
+
+
+def serial_z_nazwy_pliku(fname):
+    """
+    Nr fabryczny przyrzadu z nazwy pliku loggera albo pliku wynikow — klucz
+    dopasowania do PZ. Dziala na nazwie z rozszerzeniem i bez:
+      'TMM230200349_wynik.xlsx'                          -> 'TMM230200349'
+      '1970325 2026-07-31 12.19.00_wynik.xlsx'           -> '1970325'
+      '2026-09-30-07-15-08 85517778.csv'                 -> '85517778'
+      '221_LA_TH_2026_10705098_opracowanie danych.xlsx'  -> '10705098'
+      '37025105_2_wynik.xlsx'                            -> '37025105'
+    Data/godzine programy loggerow dokleja w roznych miejscach — LogSoft na
+    KONCU, eksport Testo na POCZATKU. Koncowka '_2', '_3' to numer KOLEJNEGO
+    pomiaru tego samego przyrzadu, a nie czesc numeru fabrycznego.
+    """
+    m_opr = _RE_PLIK_OPRACOWANIA.match(os.path.basename(str(fname)))
+    if m_opr:
+        return m_opr.group('serial')
+    base = os.path.splitext(os.path.basename(str(fname)))[0]
+    base = re.sub(r'_wynik$', '', base, flags=re.I).strip()
+    base = _RE_TS_W_NAZWIE.sub('', base).strip()
+    # Przedrostek odcinamy tylko wtedy, gdy cos po nim zostaje — inaczej z nazwy
+    # zlozonej z samej daty zrobilby sie pusty klucz.
+    bez_przedrostka = _RE_TS_NA_POCZATKU.sub('', base).strip()
+    if bez_przedrostka:
+        base = bez_przedrostka
+    bez_powtorki = re.sub(r'_\d{1,2}$', '', base)
+    return bez_powtorki or base
+
+
+def prefiks_z_szablonu(szablon, nr_zlecenia):
+    """'xxx_LA_TH_2026 - protokol CC.xlsx' + '221' -> '221_LA_TH_2026'."""
+    return str(szablon).replace('xxx', str(nr_zlecenia), 1).split(' - ')[0].strip()
+
+
+def nazwa_pliku_opracowania(prefiks, serial):
+    return f"{prefiks}_{serial}{PRZYROSTEK_OPRACOWANIA}.xlsx"
+
+
+def zlecenie_przyrzadu(pz_mapa, serial):
+    """
+    Numer zlecenia przyrzadu z PZ (szukany po nr fabrycznym albo ewidencyjnym —
+    mapa z wczytaj_pz ma oba klucze). None, gdy przyrzadu w PZ nie ma.
+    """
+    if not pz_mapa or not serial:
+        return None
+    p = pz_mapa.get(normalizuj_serial(serial))
+    return (getattr(p, 'nr_zlecenia', None) or None) if p is not None else None
+
+
 def _norm_txt(s):
     """Normalizacja nazw (producent/typ) do dopasowania rozmytego."""
     if s is None:

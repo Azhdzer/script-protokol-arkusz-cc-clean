@@ -1808,20 +1808,127 @@ _CACHE_WYNIKI = {}   # (sciezka, mtime) -> dane; pliki wynikow czytamy raz na ur
 # ale NIE jest przyrzadem — trzeba je wykluczyc, inaczej zajmuje pare kolumn w protokole.
 ZESTAWIENIE_WYNIKI_NAZWA = "zestawienie_pomiarow.xlsx"
 
+# ── Pliki kroku 1 po opracowaniu ────────────────────────────────────────────
+# Krok 1 zapisuje '<serial>_wynik.xlsx' — nie zna jeszcze zlecenia. Krok 2 zna je
+# z pliku TXT multimetru, wiec po zaznaczeniu punktow nadaje plikom nazwe zlecenia
+# i dopisuje podpis 'Opracowal / Data':
+#     10705098_wynik.xlsx       ->  221_LA_TH_2026_10705098_opracowanie danych.xlsx
+#     zestawienie_pomiarow.xlsx ->  221_LA_TH_2026_zestawienie_pomiarow.xlsx
+# Dostaja ja TYLKO pliki dopasowane do punktow tego pomiaru — pliki z innego
+# wzorcowania zostaja nietkniete.
+PRZYROSTEK_OPRACOWANIA = pz_dane.PRZYROSTEK_OPRACOWANIA
+_RE_PLIK_OPRACOWANIA = pz_dane._RE_PLIK_OPRACOWANIA
+_RE_PLIK_ZESTAWIENIA = re.compile(r'(?:^|_)zestawienie_pomiarow\.xlsx$', re.I)
+
+# Pliki wynikow zaznaczone w tym przebiegu (nazwy w WYNIKI_FOLDER) — tylko one
+# dostaja nazwe zlecenia i podpis.
+_PLIKI_ZAZNACZONE = []
+
+
+def prefiks_zlecenia(nr_zlecenia, obs_type):
+    """'221_LA_TH_2026' — dokladnie ten sam przedrostek, co w nazwie protokolu."""
+    szablon = PROTOKOL_CC04_TEMPLATE if obs_type == 'CC04' else PROTOKOL_CC_TEMPLATE
+    return pz_dane.prefiks_z_szablonu(szablon, nr_zlecenia)
+
+
+nazwa_pliku_opracowania = pz_dane.nazwa_pliku_opracowania
+
+
+def nazwa_pliku_zestawienia(prefiks):
+    return f"{prefiks}_{ZESTAWIENIE_WYNIKI_NAZWA}"
+
 
 def _pliki_wynikow():
     """
     Pliki wynikow POJEDYNCZYCH przyrzadow z WYNIKI_FOLDER (posortowane).
-    Pomija zbiorcze 'zestawienie_pomiarow.xlsx' i pliki tymczasowe Excela ('~$').
+    Pomija zestawienie zbiorcze (takze z przedrostkiem zlecenia) i pliki
+    tymczasowe Excela ('~$').
+
+    Gdy dla tego samego przyrzadu leza DWA pliki — '<serial>_wynik.xlsx' i
+    '..._<serial>_opracowanie danych.xlsx' — bierzemy NOWSZY. Bywa nim jeden albo
+    drugi: ponowny krok 1 bez PZ kladzie swiezy '_wynik' obok opracowanego, a krok 1
+    z PZ od razu zapisuje nazwe zlecenia obok starego '_wynik'. Inaczej ten sam
+    przyrzad trafilby do protokolu dwa razy.
     """
     if not os.path.isdir(WYNIKI_FOLDER):
         return []
-    return sorted(
+    wszystkie = [
         f for f in os.listdir(WYNIKI_FOLDER)
         if f.lower().endswith('.xlsx')
         and not f.startswith('~$')
-        and f.lower() != ZESTAWIENIE_WYNIKI_NAZWA.lower()
-    )
+        and not _RE_PLIK_ZESTAWIENIA.search(f)
+    ]
+
+    def _czas(f):
+        try:
+            return os.path.getmtime(os.path.join(WYNIKI_FOLDER, f))
+        except OSError:
+            return 0.0
+
+    najnowszy = {}
+    for f in wszystkie:
+        klucz = pz_dane.normalizuj_serial(_serial_z_wyniku(f))
+        para = [g for g in wszystkie
+                if pz_dane.normalizuj_serial(_serial_z_wyniku(g)) == klucz]
+        # Dwa ZWYKLE pliki tego samego numeru (np. dwa eksporty) to nie ten przypadek —
+        # zostawiamy je jak dotad; rozstrzygamy tylko 'surowy' vs 'opracowany'.
+        surowe = [g for g in para if not _RE_PLIK_OPRACOWANIA.match(g)]
+        opracowane = [g for g in para if _RE_PLIK_OPRACOWANIA.match(g)]
+        if surowe and opracowane:
+            najnowszy[klucz] = max(para, key=_czas)
+    return sorted(
+        f for f in wszystkie
+        if pz_dane.normalizuj_serial(_serial_z_wyniku(f)) not in najnowszy
+        or najnowszy[pz_dane.normalizuj_serial(_serial_z_wyniku(f))] == f)
+
+
+def _szerokosc_tabeli_wynikow(ws):
+    """
+    Liczba kolumn DANYCH (Czas, Temperatura, Wilgotnosc...) — kolejne niepuste
+    naglowki od kolumny A. Nie ws.max_column: po pierwszym opracowaniu w arkuszu
+    stoja jeszcze 'Nr punktu' i podpis, a przy ponownym przebiegu znacznik
+    punktow wedrowalby za kazdym razem o dwie kolumny w prawo.
+    """
+    n = 0
+    for kol in range(1, ws.max_column + 1):
+        if ws.cell(row=1, column=kol).value in (None, ''):
+            break
+        n = kol
+    return n or ws.max_column
+
+
+def podpisz_arkusz_wynikow(ws, kolumna, podpis, data):
+    """
+    Podpis 'Opracowal / Data' w dwoch wierszach na gorze, z prawej strony tabeli —
+    poza kolumnami danych i znacznikiem punktow, wiec niczego nie zaslania:
+
+        Opracowal:          Data:
+        Artsiom Azhdzer     05.10.2026
+    """
+    from openpyxl.styles import Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    krawedz = Side(style='thin', color='000000')
+    ramka = Border(left=krawedz, right=krawedz, top=krawedz, bottom=krawedz)
+    srodek = Alignment(horizontal='center', vertical='center')
+    for i, (naglowek, wartosc) in enumerate((("Opracował:", podpis), ("Data:", data))):
+        k = kolumna + i
+        g = ws.cell(row=1, column=k)
+        g.value = naglowek
+        g.font = Font(bold=True)
+        g.alignment = srodek
+        g.border = ramka
+        d = ws.cell(row=2, column=k)
+        d.value = wartosc
+        d.alignment = srodek
+        d.border = ramka
+        d.font = Font(bold=False)
+        if isinstance(wartosc, (datetime.date, datetime.datetime)):
+            d.number_format = 'dd.mm.yyyy'
+    ws.column_dimensions[get_column_letter(kolumna)].width = max(
+        ws.column_dimensions[get_column_letter(kolumna)].width or 0, len(str(podpis)) + 4)
+    ws.column_dimensions[get_column_letter(kolumna + 1)].width = max(
+        ws.column_dimensions[get_column_letter(kolumna + 1)].width or 0, 12)
 
 
 def _zaladuj_wyniki_xlsx_cache(path):
@@ -2104,7 +2211,7 @@ def _oznacz_wyniki_xlsx(path, wiersze_wg_punktu, powody=None):
     try:
         wb = openpyxl.load_workbook(path)
         ws = wb.active
-        n_cols = ws.max_column
+        n_cols = _szerokosc_tabeli_wynikow(ws)
         marker_col = n_cols + 2          # jedna kolumna odstepu, jak w zestawieniu
         ws.cell(row=1, column=marker_col).value = "Nr punktu"
 
@@ -2136,6 +2243,7 @@ def _oznacz_wyniki_xlsx(path, wiersze_wg_punktu, powody=None):
                 ostrzezenia += 1
 
         wb.save(path)
+        _PLIKI_ZAZNACZONE.append(os.path.basename(path))
         ogon = f", w tym {ostrzezenia} pomaranczowych" if ostrzezenia else ""
         print(f"    [WYNIKI] Oznaczono {ile_wierszy} wierszy w {len(wiersze_wg_punktu)} "
               f"punktach{ogon}: {os.path.basename(path)}")
@@ -2326,41 +2434,11 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
     return uzyte
 
 
-# Data/godzina doklejona do nazwy pliku przez program logujacy (np. LogSoft):
-#   '1970325 2026-07-31 12.19.00_wynik.xlsx'  ->  serial '1970325'
-_RE_TS_W_NAZWIE = re.compile(
-    r'[\s_-]*\d{4}-\d{2}-\d{2}[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?\s*$')
-# ...albo PRZED nim, jak w eksporcie Testo:
-#   '2026-09-30-07-15-08 85517778_wynik.xlsx'  -> '85517778'
-# Bez tego kluczem do PZ byl caly przedrostek z data, przyrzad nie dawal sie
-# dopasowac i jego wiersz na Stronie 2 zostawal niewypelniony.
-_RE_TS_NA_POCZATKU = re.compile(
-    r'^\d{4}-\d{2}-\d{2}(?:[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?)?[\s_-]*')
-
-
-def _serial_z_wyniku(fname):
-    """
-    Nr fabryczny przyrzadu z nazwy pliku wynikow (klucz do dopasowania z PZ):
-      'TMM230200349_wynik.xlsx'                    -> 'TMM230200349'
-      '1970325 2026-07-31 12.19.00_wynik.xlsx'     -> '1970325'
-      '2026-09-30-07-15-08 85517778_wynik.xlsx'    -> '85517778'
-    Odcinamy sufiks '_wynik' oraz date/godzine, ktora niektore programy dokleja do
-    nazwy pliku — LogSoft na KONCU, eksport Testo na POCZATKU. Bez tego klucz nie
-    pasowal do PZ i wiersz przyrzadu na Stronie 2 zostawal niewypelniony.
-    """
-    base = os.path.splitext(fname)[0]
-    base = re.sub(r'_wynik$', '', base, flags=re.I).strip()
-    base = _RE_TS_W_NAZWIE.sub('', base).strip()
-    # Przedrostek odcinamy tylko wtedy, gdy cos po nim zostaje — inaczej z nazwy
-    # zlozonej z samej daty zrobilby sie pusty klucz.
-    bez_przedrostka = _RE_TS_NA_POCZATKU.sub('', base).strip()
-    if bez_przedrostka:
-        base = bez_przedrostka
-    # Koncowka '_2', '_3'... to numer KOLEJNEGO pomiaru tego samego przyrzadu
-    # (np. '37025105_2' = drugie wzorcowanie), a nie czesc numeru fabrycznego —
-    # bez odciecia przyrzad nie zostalby znaleziony w PZ.
-    bez_powtorki = re.sub(r'_\d{1,2}$', '', base)
-    return bez_powtorki or base
+# Numer fabryczny z nazwy pliku wynikow — wspolny dla kroku 1 i 2, wiec
+# siedzi w pz_dane (tam opis wszystkich obslugiwanych nazw).
+_RE_TS_W_NAZWIE = pz_dane._RE_TS_W_NAZWIE
+_RE_TS_NA_POCZATKU = pz_dane._RE_TS_NA_POCZATKU
+_serial_z_wyniku = pz_dane.serial_z_nazwy_pliku
 
 
 # Kolumny Strony 2 (tabela przyrzadow, od wiersza 11):
@@ -2795,8 +2873,8 @@ def _zapisz_bezpiecznie(wb, path, opis="plik", widok=True):
 
     `widok=True` (domyslnie) porzadkuje po zapisie pasek zakladek — patrz
     cc_widok.py. To jedyne miejsce, w ktorym krok 2 zapisuje pliki, wiec zasada
-    obowiazuje wszystkie nasze wyniki bez wyjatku. `widok=False` zostawiamy dla
-    plikow, ktore NALEZA DO UZYTKOWNIKA (Zestawienie) — tam nie zmieniamy widoku.
+    obowiazuje wszystkie nasze wyniki bez wyjatku. `widok=False` jest na wypadek
+    zapisu pliku, ktory NALEZY DO UZYTKOWNIKA — tam widoku nie zmieniamy.
     """
     try:
         wb.save(path)
@@ -3115,7 +3193,83 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     print(f"Zapisano protokol: {out_name}")
 
 
-def oznacz_zestawienie_punkty(rep_groups, rows):
+def _podpisz_i_nazwij(sciezka, nowa_nazwa, podpis, data):
+    """
+    Dopisuje podpis do pliku i nadaje mu nazwe zlecenia. Zwraca nowa nazwe albo None.
+    Plik o docelowej nazwie z poprzedniego przebiegu jest ZASTEPOWANY — to te same
+    dane, tylko swiezo przeliczone.
+    """
+    try:
+        wb = openpyxl.load_workbook(sciezka)
+        ws = wb.active
+        kolumna_znacznika = _szerokosc_tabeli_wynikow(ws) + 2
+        podpisz_arkusz_wynikow(ws, kolumna_znacznika + 2, podpis, data)
+        wb.save(sciezka)
+        wb.close()
+        cel = os.path.join(os.path.dirname(sciezka), nowa_nazwa)
+        if os.path.abspath(cel) != os.path.abspath(sciezka):
+            os.replace(sciezka, cel)
+        return nowa_nazwa
+    except PermissionError:
+        print(f"    [WYNIKI] '{os.path.basename(sciezka)}' jest OTWARTY w Excelu — "
+              f"nie moge go podpisac ani przemianowac. Zamknij plik i uruchom krok 2 ponownie.")
+    except Exception as exc:
+        print(f"    [WYNIKI] Nie udalo sie opracowac '{os.path.basename(sciezka)}': "
+              f"{type(exc).__name__}: {exc}")
+    return None
+
+
+def opracuj_pliki_wynikow(prefiks, podpis=None, data=None, pz_mapa=None, obs_type='CC'):
+    """
+    Ostatni krok obrobki plikow z kroku 1: podpis 'Opracowal / Data' i nazwa zlecenia.
+
+    Tylko pliki dopasowane do punktow TEGO pomiaru (zaznaczone w tym przebiegu) oraz
+    zestawienie zbiorcze. Pozostale pliki w 'wyniki' zostaja tak, jak byly.
+
+    Numer zlecenia przyrzadu bierzemy z PZ (po nr fabrycznym albo ewidencyjnym),
+    a gdy go tam nie ma — numer pomiaru. Jeden wsad komory obejmuje czasem kilka
+    zlecen; krok 3 nazywa kopie i swiadectwa wg zlecenia PRZYRZADU, wiec plik
+    opracowania musi nosic ten sam numer. Zestawienie dotyczy calego wsadu —
+    dostaje numer pomiaru.
+    """
+    podpis = podpis or PODPIS
+    data = data or datetime.date.today()
+    nowe = []
+    for fname in sorted(set(_PLIKI_ZAZNACZONE)):
+        sciezka = os.path.join(WYNIKI_FOLDER, fname)
+        if not os.path.exists(sciezka):
+            continue
+        serial = _serial_z_wyniku(fname)
+        zlecenie = pz_dane.zlecenie_przyrzadu(pz_mapa, serial)
+        prefiks_pliku = prefiks_zlecenia(zlecenie, obs_type) if zlecenie else prefiks
+        nazwa = _podpisz_i_nazwij(sciezka, nazwa_pliku_opracowania(prefiks_pliku, serial),
+                                  podpis, data)
+        if nazwa:
+            nowe.append(nazwa)
+
+    zest = sciezka_zestawienia(prefiks)
+    if os.path.exists(zest):
+        nazwa = _podpisz_i_nazwij(zest, nazwa_pliku_zestawienia(prefiks), podpis, data)
+        if nazwa:
+            nowe.append(nazwa)
+
+    for n in nowe:
+        print(f"    [WYNIKI] Opracowano: {n}")
+    return nowe
+
+
+def sciezka_zestawienia(prefiks=None):
+    """
+    Zestawienie zbiorcze do zaznaczania: swieze z kroku 1 ('zestawienie_pomiarow.xlsx'),
+    a gdy go nie ma — juz opracowane dla tego zlecenia (ponowny przebieg kroku 2).
+    """
+    swieze = os.path.join(WYNIKI_FOLDER, ZESTAWIENIE_WYNIKI_NAZWA)
+    if os.path.exists(swieze) or not prefiks:
+        return swieze
+    return os.path.join(WYNIKI_FOLDER, nazwa_pliku_zestawienia(prefiks))
+
+
+def oznacz_zestawienie_punkty(rep_groups, rows, prefiks=None):
     """
     W pliku wyniki/zestawienie_pomiarow.xlsx (wszystkie przyrzady na wspolnej osi czasu)
     zaznacza okna WYBRANYCH punktow: koloruje wiersze mieszczace sie w oknie punktu i
@@ -3123,7 +3277,7 @@ def oznacz_zestawienie_punkty(rep_groups, rows):
     nawigacji w Excelu (Ctrl+strzalka w dol / wyszukanie numeru).
     Dopasowanie po kolumnie 'Czas' do okna [pierwszy..ostatni reprezentant] punktu.
     """
-    zest_path = os.path.join(WYNIKI_FOLDER, "zestawienie_pomiarow.xlsx")
+    zest_path = sciezka_zestawienia(prefiks)
     if not os.path.exists(zest_path):
         print(f"  [Zestawienie] Brak {os.path.basename(zest_path)} — pomijam znaczniki punktow.")
         return
@@ -3133,7 +3287,7 @@ def oznacz_zestawienie_punkty(rep_groups, rows):
         print(f"  [Zestawienie] Nie moge otworzyc pliku: {type(e).__name__}: {e}")
         return
     ws = wb.active
-    n_col = ws.max_column
+    n_col = _szerokosc_tabeli_wynikow(ws)
 
     # (czas, wiersz) z kolumny 1 ('Czas')
     czas_rows = []
@@ -3185,8 +3339,7 @@ def oznacz_zestawienie_punkty(rep_groups, rows):
         mcell.font = Font(name=fo.name, size=fo.size, bold=True)
         oznaczone += 1
 
-    # Zestawienie to plik uzytkownika — zapisujemy dane, ale widoku nie ruszamy.
-    _zapisz_bezpiecznie(wb, zest_path, "zestawienie", widok=False)
+    _zapisz_bezpiecznie(wb, zest_path, "zestawienie")
     print(f"  [Zestawienie] Oznaczono {oznaczone}/{len(rep_groups)} punktow "
           f"({os.path.basename(zest_path)}).")
 
@@ -3536,11 +3689,16 @@ def main():
         # czujnikow na Stronie 1.
         kanaly_slotow = (przypisz_kanaly_pliku(kanaly_z_naglowka(raw_lines))
                          if file_type == 'CC04' else None)
+        prefiks = prefiks_zlecenia(measurement_id, file_type)
+        del _PLIKI_ZAZNACZONE[:]
         generuj_protokol(rep_groups, rows, measurement_id, file_type,
                          sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest,
                          pz_lista=_pz_lista, kanaly_slotow=kanaly_slotow)
         # Znaczniki punktow w zestawieniu przyrzadow (nawigacja po czasie)
-        oznacz_zestawienie_punkty(rep_groups, rows)
+        oznacz_zestawienie_punkty(rep_groups, rows, prefiks=prefiks)
+        # Pliki kroku 1 po opracowaniu: podpis i nazwa zlecenia.
+        print("\n  Opracowanie plikow wynikow (podpis, nazwa zlecenia)...")
+        opracuj_pliki_wynikow(prefiks, pz_mapa=pz_mapa, obs_type=file_type)
         # Zdjecia punktow (gdy wlaczone w konfiguracji)
         if KOPIUJ_FOTO:
             kopiuj_foto_punktow(rep_groups, rows)
