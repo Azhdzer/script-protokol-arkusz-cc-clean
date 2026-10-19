@@ -7,7 +7,8 @@ po aplikacji. Przydatne przy zmianach w wygladzie.
 
 Uruchomienie:
     .venv\\Scripts\\python.exe testy\\_podglad.py            # krok 2 (Obserwacja)
-    .venv\\Scripts\\python.exe testy\\_podglad.py 4          # strona Zaawansowane
+    .venv\\Scripts\\python.exe testy\\_podglad.py 4          # krok 4 (Warunki srodowiskowe)
+    .venv\\Scripts\\python.exe testy\\_podglad.py 5          # strona Zaawansowane
 
 Wynik: testy/_piaskownica/podglad_<nr>.png
 """

@@ -1,7 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 PyInstaller spec — jeden plik .exe (ProtokolCC.exe) laczacy panel GUI oraz
-wszystkie trzy workery (analizuj_excele / generuj_obserwacje / generuj_arkusze).
+wszystkie cztery workery (analizuj_excele / generuj_obserwacje / generuj_arkusze /
+wypelnij_warunki).
 Tryb wybiera app_entry.py na podstawie zmiennej CC_WORKER.
 
 Budowanie:   .venv\\Scripts\\pyinstaller ProtokolCC.spec --noconfirm --clean
@@ -39,8 +40,8 @@ hiddenimports += [
     "win32api", "win32con", "win32gui", "win32process",
     "pypdf",
     # moduly aplikacji zaladowane leniwie w app_entry:
-    "app_gui", "cc_config", "cc_widgets", "pz_dane",
-    "analizuj_excele", "generuj_arkusze", "generuj_obserwacje",
+    "app_gui", "cc_config", "cc_widgets", "cc_widok", "pz_dane",
+    "analizuj_excele", "generuj_arkusze", "generuj_obserwacje", "wypelnij_warunki",
 ]
 
 excludes = ["tkinter", "unittest", "pydoc", "test", "pytest", "PyQt5", "PyQt6"]

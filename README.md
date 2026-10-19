@@ -282,7 +282,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 571 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 584 testy | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -342,7 +342,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**571 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**584 testy** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -410,6 +410,11 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Krok 4 · Warunki środowiskowe (osobna zakładka):** wpisuje t i RH pomieszczenia z pliku
+  `Pom. nr 9 (MX1101-02) - <rok>.xlsx` do Strony 3 wybranego protokołu (kolumny F/G) — dla
+  **każdego** punktu, także takiego, w którym żaden przyrząd nie miał odczytów. Krok 3 robił to
+  tylko dla bloków, które trafiły do jakiejś kopii arkusza. Nie uruchamia Excela; wypełnione
+  wcześniej komórki zostawia, chyba że włączysz *Nadpisuj*. Nie wchodzi do „Uruchom cały obieg”.
 - **Pliki kroku 1 z nazwą zlecenia i podpisem:** po zaznaczeniu punktów krok 2 nadaje im
   nazwę `221_LA_TH_2026_<nr fabryczny>_opracowanie danych.xlsx` (zestawienie:
   `221_LA_TH_2026_zestawienie_pomiarow.xlsx`) i dopisuje z prawej strony tabeli podpis

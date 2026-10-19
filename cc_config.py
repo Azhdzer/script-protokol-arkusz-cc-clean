@@ -41,6 +41,8 @@ KROKI = [
     ("analiza",       "1 · Analiza logow",   "Logi z przyrzadow  ->  wyniki/<serial>_wynik.xlsx"),
     ("obs",           "2 · Obserwacja",      "TXT multimetru  ->  arkusz obserwacji + protokol"),
     ("ark",           "3 · Arkusze i Word",  "Protokol  ->  kopie arkuszy Excel + swiadectwa Word"),
+    ("srod",          "4 · Warunki środowiskowe",
+     "Pom. nr 9  ->  Strona 3 protokolu: t i RH pomieszczenia dla kazdego punktu"),
 ]
 
 PODSTAWOWY  = "podstawowy"
@@ -343,12 +345,12 @@ _ARKUSZE = [
        grupa="Podpisy"),
     _U("GEN_PODPIS_2", "Podpisujacy z prawej (H230)", "tekst", "Marek Szpakowski", "ark",
        grupa="Podpisy"),
-    _U("GEN_NR_POM", "Numer pomieszczenia srodowiskowego", "calk", 9, "ark",
-       grupa="Warunki srodowiskowe", minimum=1, maksimum=999,
+    _U("GEN_NR_POM", "Numer pomieszczenia srodowiskowego", "calk", 9, "srod",
+       grupa="Czujnik pomieszczenia", minimum=1, maksimum=999,
        opis="Szuka pliku 'Pom. nr <N> (<model>) - <rok>.xlsx' — najpierw lokalnie, "
             "potem na \\\\PLUM4."),
-    _U("GEN_MODEL_CZUJ", "Model czujnika srodowiskowego", "tekst", "MX1101-02", "ark",
-       grupa="Warunki srodowiskowe"),
+    _U("GEN_MODEL_CZUJ", "Model czujnika srodowiskowego", "tekst", "MX1101-02", "srod",
+       grupa="Czujnik pomieszczenia"),
     _U("GEN_WORD_TEMP", "Szablon Word — tylko temperatura", "plik",
        "xxx_yyy_LA_TH_2026 - tylko temp.docx", "ark",
        grupa="Szablony Word", wzorzec=(".docx",),
@@ -376,8 +378,8 @@ _ARKUSZE = [
        opis="0 = czysc wszystko. Wartosc 1 chroni dzisiejsze odzyskiwanie recznej pracy."),
     _U("GEN_PROG_OSTRZ", "Ostrzegaj od tylu kopiowanych zakladek", "calk", 10, "ark",
        poziom=ZAAWANSOWANY, grupa="Stabilnosc Excela", minimum=1, maksimum=200),
-    _U("GEN_TOL_CZUJ", "Tolerancja czasu czujnika srodowiskowego", "liczba", 2.0, "ark",
-       poziom=ZAAWANSOWANY, grupa="Warunki srodowiskowe", przyrostek=" min",
+    _U("GEN_TOL_CZUJ", "Tolerancja czasu czujnika srodowiskowego", "liczba", 2.0, "srod",
+       poziom=ZAAWANSOWANY, grupa="Czujnik pomieszczenia", przyrostek=" min",
        minimum=0.1, maksimum=600.0, krok_wart=0.5,
        opis="Czujnik Pom. nr 9 zapisuje co 60 s bez przerw, wiec najblizszy rekord "
             "jest w granicach ~30 s. Gdy nic nie miesci sie w tolerancji, komorki "
@@ -436,7 +438,24 @@ _ARKUSZE = [
        opis="Oznaczenie komory wpisywane do zakladek roboczych kopii."),
 ]
 
-USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE
+# ── KROK 4 — wypelnij_warunki.py ─────────────────────────────────────────────
+# Numer pomieszczenia, model czujnika i tolerancja stoja w tym kroku, bo opisuja
+# warunki srodowiskowe — krok 3 tez z nich korzysta (dostaje je jak wszystkie
+# ustawienia, przez zmienne srodowiskowe).
+_WARUNKI = [
+    _U("SR_PROTOKOL", "Protokol", "plik", "", "srod",
+       grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"), podpowiedz="protok",
+       opis="Protokol CC / CC-04, w ktorym maja sie pojawic warunki srodowiskowe "
+            "(Strona 3, kolumny F/G). Wypelniane sa WSZYSTKIE punkty — takze te, "
+            "w ktorych zaden przyrzad nie mial odczytow."),
+    _U("SR_NADPISUJ", "Nadpisuj juz wypelnione komorki", "flaga", False, "srod",
+       poziom=ZAAWANSOWANY, grupa="Dane wejsciowe",
+       opis="Wylaczone: komorki z wpisana juz wartoscia zostaja bez zmian (np. "
+            "poprawione recznie). Wlacz, gdy plik czujnika zostal uzupelniony "
+            "i chcesz przeliczyc wszystko od nowa."),
+]
+
+USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE + _WARUNKI
 WG_ENV = {u.env: u for u in USTAWIENIA}
 
 

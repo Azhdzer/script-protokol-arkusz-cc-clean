@@ -160,6 +160,10 @@ KONTRAKT = {
         ("CC_PZ_FOLDER", "m.PZ_FOLDER_ARK", "PZ_inne",
          os.path.join(BAZA, "PZ_inne"), os.path.join(BAZA, "PZ")),
     ],
+    "wypelnij_warunki": [
+        ("SR_PROTOKOL", "m.PROTOKOL", "prot_X.xlsx", "prot_X.xlsx", ""),
+        ("SR_NADPISUJ", "m.NADPISUJ", "1", "True", "False"),
+    ],
 }
 
 # Ustawienia, ktorych nie da sie sprawdzic przez stala modulu — dzialaja dopiero
@@ -187,7 +191,7 @@ class TestPokrycie(unittest.TestCase):
         """Kazda nazwa zmiennej musi pojawic sie w kodzie ktoregos ze skryptow."""
         zrodla = ""
         for plik in ("analizuj_excele.py", "generuj_obserwacje.py",
-                     "generuj_arkusze.py", "app_gui.py"):
+                     "generuj_arkusze.py", "wypelnij_warunki.py", "app_gui.py"):
             with open(os.path.join(KORZEN, plik), encoding="utf-8") as f:
                 zrodla += f.read()
         for env in C.WG_ENV:

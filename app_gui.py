@@ -56,6 +56,9 @@ URUCHAMIALNE = {
     "analiza": ("1 · Analiza logow",  "analiza",    "analizuj_excele.py"),
     "obs":     ("2 · Obserwacja",     "obserwacje", "generuj_obserwacje.py"),
     "ark":     ("3 · Arkusze i Word", "arkusze",    "generuj_arkusze.py"),
+    # Osobny krok — NIE wchodzi do 'Uruchom caly obieg'; uruchamiany przyciskiem
+    # na swojej stronie, gdy trzeba dopisac warunki do gotowego protokolu.
+    "srod":    ("4 · Warunki środowiskowe", "warunki", "wypelnij_warunki.py"),
 }
 
 # Ustawienia kroku 2 pokazywane WEWNATRZ karty "Dane wejsciowe", tuz pod lista
@@ -267,6 +270,7 @@ class Okno(QMainWindow):
         self.stos.addWidget(self._strona_analiza())
         self.stos.addWidget(self._strona_obserwacja())
         self.stos.addWidget(self._strona_arkusze())
+        self.stos.addWidget(self._strona_warunki())
         self.stos.addWidget(self._strona_zaawansowane())
         return self.stos
 
@@ -527,6 +531,16 @@ class Okno(QMainWindow):
         lay.addStretch(1)
         return strona
 
+    # ── strona: warunki srodowiskowe ─────────────────────────────────────
+    def _strona_warunki(self):
+        strona, lay = self._strona_kroku("srod")
+        # Najpierw wybor protokolu, potem czujnik pomieszczenia.
+        pola = C.dla_kroku("srod", C.PODSTAWOWY)
+        pola.sort(key=lambda u: 0 if u.grupa == "Dane wejsciowe" else 1)
+        self._dodaj_pola(lay, pola)
+        lay.addStretch(1)
+        return strona
+
     # ── strona: zaawansowane ─────────────────────────────────────────────
     def _strona_zaawansowane(self):
         scroll, lay = self._przewijalna()
@@ -703,6 +717,16 @@ class Okno(QMainWindow):
                 if nazwa and not os.path.exists(os.path.join(self.folder, nazwa)):
                     p.append(f"Brak pliku linkowanego w folderze roboczym: {nazwa} "
                              f"(formuly kalibracyjne moga sie nie policzyc)")
+        if "srod" in kroki:
+            pole = self.pola.get("SR_PROTOKOL")
+            if pole and pole.brak_pliku():
+                p.append(f"Nie znaleziono protokolu (krok 4) → "
+                         f"'{pole.wartosc() or '(nie wybrano)'}'")
+            elif pole:
+                sciezka = os.path.join(self.folder, pole.wartosc())
+                if "Strona 3" not in nazwy_arkuszy(sciezka):
+                    p.append(f"'{pole.wartosc()}' — to nie wyglada na protokol "
+                             f"(brak zakladki 'Strona 3').")
         return p
 
     def _problemy_zawartosci(self):

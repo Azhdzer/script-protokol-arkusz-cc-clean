@@ -8,6 +8,7 @@ CC_WORKER, ktora ustawia panel GUI przed uruchomieniem podprocesu:
     CC_WORKER=analiza     -> analizuj_excele.main()
     CC_WORKER=obserwacje  -> generuj_obserwacje.main()
     CC_WORKER=arkusze     -> generuj_arkusze.main()
+    CC_WORKER=warunki     -> wypelnij_warunki.main()
     (brak zmiennej)       -> uruchom panel GUI (app_gui.main())
 
 Dzieki temu GUI moze uruchamiac ten SAM exe jako worker, bez potrzeby
@@ -37,11 +38,15 @@ def _run_worker(mode: str) -> int:
         import generuj_obserwacje as m
     elif mode == "analiza":
         import analizuj_excele as m
+    elif mode == "warunki":
+        import wypelnij_warunki as m
     else:
         print(f"[app_entry] Nieznany tryb workera: {mode!r}", file=sys.stderr)
         return 2
-    m.main()
-    return 0
+    kod = m.main()
+    # Pozostale workery nic nie zwracaja; 'warunki' zwraca kod bledu, zeby panel
+    # oznaczyl krok na czerwono, gdy np. protokol jest otwarty w Excelu.
+    return kod if isinstance(kod, int) else 0
 
 
 def main() -> int:
