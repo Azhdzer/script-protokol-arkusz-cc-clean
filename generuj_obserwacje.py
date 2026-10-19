@@ -1021,8 +1021,14 @@ def _prepare_data_cc04(rows):
     return result
 
 
+# Pomiar czesto zaczyna sie od komory juz stojacej na pierwszej nastawie —
+# operator wlacza zapis, gdy punkt jest ustabilizowany. Odczyty sa wtedy
+# w widelkach od pierwszych minut pliku.
+PIERWSZY_STABILNY_OD_STARTU = datetime.timedelta(minutes=5)
+
+
 def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
-                       prog_temp, prog_rh):
+                       prog_temp, prog_rh, pierwszy_w_pliku=False):
     """
     Zwraca start_idx okna analizy w segmencie stabilnym data[i:j] albo None.
 
@@ -1038,6 +1044,11 @@ def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
          koncu punktu zostal ZAWSZE ogon pomiarowy MIN_OKNO_ANALIZY (min. 5 minut do
          wyboru reprezentantow). To odtwarza dawne zachowanie (pomiar na koncu punktu).
       4. Punkty krotsze niz min_stable (przejsciowe/przerwane) sa pomijane (None).
+         WYJATEK — pierwszy segment pliku, w ktorym odczyty sa w widelkach od
+         samego poczatku zapisu: komora stala na tej nastawie juz przed wlaczeniem
+         zapisu, wiec stabilizacja minela, zanim plik sie zaczal. Zlecenie 201:
+         23 °C / 28 % (wzorzec 30,0 %) przez 97 min od startu pliku — krotsze niz
+         2 h, wiec ten pierwszy punkt w ogole nie stawal sie oknem.
     """
     seg_dt0    = data[i][0]
     seg_end_dt = data[j - 1][0]
@@ -1045,10 +1056,29 @@ def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
     seg_c      = data[i][2]                   # RHzadana (nastawa wilgotnosci)
     if seg_dt0 is None or seg_end_dt is None:
         return None
-    if seg_end_dt - seg_dt0 < min_stable:
-        return None                           # punkt zbyt krotki — pomijamy
 
     temp_only = (seg_c is None or seg_c == 0.0)
+
+    def _w_widelkach(ki):
+        t_odcz = data[ki][idx_t_odcz]
+        if seg_t is None or t_odcz is None or abs(seg_t - t_odcz) > prog_temp:
+            return False
+        if temp_only:
+            return True
+        rh = data[ki][idx_rh_odcz]
+        return rh is not None and not _rozne_procent(seg_c, rh, prog_rh)
+
+    za_krotki = seg_end_dt - seg_dt0 < min_stable
+    if za_krotki:
+        stabilny_od_startu = pierwszy_w_pliku and any(
+            _w_widelkach(ki) for ki in range(i, j)
+            if data[ki][0] is not None
+            and data[ki][0] - seg_dt0 <= PIERWSZY_STABILNY_OD_STARTU)
+        if not stabilny_od_startu or seg_end_dt - seg_dt0 < MIN_OKNO_ANALIZY:
+            return None                       # punkt zbyt krotki — pomijamy
+        print(f"  [Start pliku] Pierwszy segment T={seg_t} RH={seg_c} trwa tylko "
+              f"{(seg_end_dt - seg_dt0).total_seconds() / 60:.0f} min, ale komora byla "
+              f"w nastawie od poczatku zapisu — traktuje go jako punkt.")
 
     entry_dt = None
     for ki in range(i, j):
@@ -1102,6 +1132,7 @@ def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
     windows = []
     n = len(data)
     i = 0
+    pierwszy = True          # pierwszy segment z nastawami w pliku
     while i < n:
         seg_b, seg_c, seg_dt0 = data[i][1], data[i][2], data[i][0]
         if seg_b is None or seg_c is None or seg_dt0 is None:
@@ -1117,7 +1148,9 @@ def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
             j += 1
 
         start_idx = _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz,
-                                       min_stable, min_po, prog_temp, prog_rh)
+                                       min_stable, min_po, prog_temp, prog_rh,
+                                       pierwszy_w_pliku=pierwszy)
+        pierwszy = False
         if start_idx is not None:
             windows.append((start_idx, j))
 
@@ -1547,6 +1580,35 @@ def _mediana_odczytow(data, si, ei, idx):
     return statistics.median(wartosci) if wartosci else None
 
 
+def okna_suszenia(data, windows, tol_t=None):
+    """
+    Okna, ktore wygladaja na SUSZENIE, a nie na punkt pomiarowy.
+
+    Niska nastawa wilgotnosci (strefa suszenia, np. 23 °C / 28-30 %) bywa i punktem,
+    i suszeniem — rozroznia je KOLEJNOSC:
+      * punkt  — niska wilgotnosc ROZPOCZYNA serie przy tej temperaturze
+                 (23 °C: 30 -> 60 -> 85 -> 60 %); czesto pierwszy w pliku,
+      * suszenie — niska wilgotnosc PO serii wyzszych wilgotnosci przy tej samej
+                 temperaturze; komora wysusza sie przed przejsciem do 10 / 35 °C.
+    Zwraca zbior indeksow okien uznanych za suszenie.
+    """
+    tol_t = TOL_PUNKT_T if tol_t is None else tol_t
+    t_min, t_max = SUSZENIE_T_ZAKRES
+    suszenie = set()
+    for k, (si, _ei) in enumerate(windows):
+        b, c = data[si][1], data[si][2]
+        if b is None or c is None or c <= 0 or c > SUSZENIE_RH_MAX:
+            continue
+        if not (t_min <= b <= t_max):
+            continue
+        for wcz_si, _wcz_ei in windows[:k]:
+            b2, c2 = data[wcz_si][1], data[wcz_si][2]
+            if b2 is not None and c2 is not None and abs(b2 - b) <= tol_t and c2 > c + 10:
+                suszenie.add(k)
+                break
+    return suszenie
+
+
 def _wybierz_okna_wg_pz(data, windows, punkty_pz, idx_t_odcz=5, idx_rh_odcz=6):
     """
     Wybiera z wykrytych okien te, ktore odpowiadaja punktom ZAMOWIONYM w PZ.
@@ -1562,8 +1624,15 @@ def _wybierz_okna_wg_pz(data, windows, punkty_pz, idx_t_odcz=5, idx_rh_odcz=6):
     „spoza zamowienia".
 
     Gdy odczytow brak, wracamy do porownania po nastawie — jak dawniej.
+
+    Suszenie (patrz okna_suszenia) przegrywa z kazdym innym kandydatem: gdy ten
+    sam punkt pasuje i do pierwszego 23 °C / 28 %, i do suszenia 23 °C / 28 % po
+    serii 60 / 85 / 60 %, wybieramy pierwszy. Gdy pasuje TYLKO suszenie — bierzemy
+    je z ostrzezeniem (punkt jest zamowiony, wiec nie gubimy go po cichu).
     Zwraca liste okien w kolejnosci chronologicznej.
     """
+    suszenie = okna_suszenia(data, windows)
+    KARA_SUSZENIA = 1000.0
     uzyte = set()
     dopasowane = []
     for t_exp, rh_exp in punkty_pz:
@@ -1590,12 +1659,18 @@ def _wybierz_okna_wg_pz(data, windows, punkty_pz, idx_t_odcz=5, idx_rh_odcz=6):
             dyst = abs(t_por - t_exp)
             if rh_exp is not None and rh_por is not None:
                 dyst += abs(rh_por - rh_exp) / 10.0   # RH wazona slabiej (inna skala)
+            if idx in suszenie:
+                dyst += KARA_SUSZENIA                 # suszenie przegrywa z punktem
             if najlepszy_dyst is None or dyst < najlepszy_dyst - 1e-9:
                 wybrany, najlepszy_dyst = idx, dyst
         if wybrany is None:
             print(f"  [PZ] Punkt {etykieta}: BRAK pasujacego segmentu w obserwacji "
                   f"(sprawdz nastawy komory albo tolerancje TOL_PUNKT_*).")
             continue
+        if wybrany in suszenie:
+            print(f"  [PZ] UWAGA: punkt {etykieta} pasuje tylko do segmentu, ktory "
+                  f"wyglada na suszenie (niska wilgotnosc po serii wyzszych przy tej "
+                  f"samej temperaturze) — sprawdz w obserwacji.")
         uzyte.add(wybrany)
         si = windows[wybrany][0]
         print(f"  [PZ] Punkt {etykieta} -> segment {wybrany + 1} "
