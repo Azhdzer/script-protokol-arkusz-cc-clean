@@ -40,7 +40,7 @@ hiddenimports += [
     "win32api", "win32con", "win32gui", "win32process",
     "pypdf",
     # moduly aplikacji zaladowane leniwie w app_entry:
-    "app_gui", "cc_config", "cc_widgets", "cc_widok", "pz_dane",
+    "app_gui", "cc_config", "cc_widgets", "cc_widok", "cc_excel", "pz_dane",
     "analizuj_excele", "generuj_arkusze", "generuj_obserwacje", "wypelnij_warunki",
 ]
 

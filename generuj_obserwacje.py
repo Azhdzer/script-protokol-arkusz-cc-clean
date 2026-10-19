@@ -38,6 +38,7 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 import pz_dane   # wspolny modul: dane przyrzadow z PZ + Zestawienie
 import cc_config as C   # rejestr ustawien + odczyt zmiennych srodowiskowych z panelu
 import cc_widok   # widok paska zakladek w gotowych plikach .xlsx
+import cc_excel   # wlasne instancje Excela — zamykamy tylko je
 
 # =============================================================================
 # KONFIGURACJA
@@ -2712,7 +2713,9 @@ def _delete_rows_via_excel(filepath, sheet_name, row_from, row_count):
 
     xl = wb = None
     try:
-        xl = win32com.client.Dispatch('Excel.Application')
+        # WLASNY Excel. Dispatch podpinal sie pod Excela uzytkownika i na koniec
+        # zamykal jego okna (bez pytania o niezapisane zmiany).
+        xl = cc_excel.nowy_excel_com()
         xl.Visible        = False
         xl.DisplayAlerts  = False
         xl.ScreenUpdating = False
@@ -2736,12 +2739,7 @@ def _delete_rows_via_excel(filepath, sheet_name, row_from, row_count):
         print(f'  [Excel COM] Blad usuwania wierszy: {exc}')
         return False
     finally:
-        if wb is not None:
-            try: wb.Close(False)
-            except: pass
-        if xl is not None:
-            try: xl.Quit()
-            except: pass
+        cc_excel.zamknij_excel_com(xl, wb)
 
 
 def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_extra):
@@ -2759,13 +2757,10 @@ def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_ex
 
     xl = wb = None
     try:
-        # DEDYKOWANA, nowa instancja Excela (DispatchEx) — NIE doczepiamy sie do
-        # ewentualnego otwartego Excela uzytkownika (zajety/modalny -> wyjatek i tylko
-        # 6 punktow w protokole). Fallback do Dispatch, gdyby DispatchEx zawiodl.
-        try:
-            xl = win32com.client.DispatchEx('Excel.Application')
-        except Exception:
-            xl = win32com.client.Dispatch('Excel.Application')
+        # DEDYKOWANA, nowa instancja Excela — NIE doczepiamy sie do otwartego Excela
+        # uzytkownika (zajety/modalny -> wyjatek i tylko 6 punktow w protokole,
+        # a na koncu Quit() zamykalby jego okna). Bez zapasowego Dispatch.
+        xl = cc_excel.nowy_excel_com()
         xl.Visible         = False
         xl.DisplayAlerts   = False
         xl.ScreenUpdating  = False
@@ -2799,12 +2794,7 @@ def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_ex
         print(f'  [Excel COM] Blad wstawiania blokow: {type(exc).__name__}: {exc}')
         return False
     finally:
-        if wb is not None:
-            try: wb.Close(False)
-            except: pass
-        if xl is not None:
-            try: xl.Quit()
-            except: pass
+        cc_excel.zamknij_excel_com(xl, wb)
 
 
 def _rozszerz_kolumny_przyrzadow(filepath, sheet_name, start_col, potrzebne):
@@ -2831,10 +2821,9 @@ def _rozszerz_kolumny_przyrzadow(filepath, sheet_name, start_col, potrzebne):
 
     xl = wb = None
     try:
-        try:
-            xl = win32com.client.DispatchEx('Excel.Application')
-        except Exception:
-            xl = win32com.client.Dispatch('Excel.Application')
+        # Tylko WLASNY Excel — bez zapasowego Dispatch, ktory podpinalby sie pod
+        # Excela uzytkownika (i zamykal go na koncu).
+        xl = cc_excel.nowy_excel_com()
         xl.Visible = False
         xl.DisplayAlerts = False
         xl.ScreenUpdating = False
@@ -2901,12 +2890,7 @@ def _rozszerz_kolumny_przyrzadow(filepath, sheet_name, start_col, potrzebne):
         print(f'  [Excel COM] Blad dokladania kolumn przyrzadow: {type(exc).__name__}: {exc}')
         return 0
     finally:
-        if wb is not None:
-            try: wb.Close(False)
-            except: pass
-        if xl is not None:
-            try: xl.Quit()
-            except: pass
+        cc_excel.zamknij_excel_com(xl, wb)
 
 
 def _ustaw_komorke(ws, row, col, value):

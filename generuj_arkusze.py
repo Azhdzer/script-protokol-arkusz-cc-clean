@@ -37,6 +37,7 @@ import xlwings as xw
 import pz_dane   # wspolny modul: dane przyrzadow z PZ (fallback, gdy Strona 2 pusta)
 import cc_config as C   # rejestr ustawien + odczyt zmiennych srodowiskowych z panelu
 import cc_widok   # widok paska zakladek w gotowych plikach .xlsx
+import cc_excel   # wlasne instancje Excela — zamykamy tylko je
 
 # ---------------------------------------------------------------------------
 # Wizualne helpers logowania
@@ -71,12 +72,9 @@ def _zamknij_sesje_excel(app, linked_wbs):
             lwb.close()
         except Exception:
             pass
-    if app is not None:
-        try:
-            app.quit()
-        except Exception as _eq:
-            _warn(f"app.quit() nie powiodlo sie (Excel prawdopodobnie juz padl): "
-                  f"{type(_eq).__name__}: {_eq}")
+    # Quit i — gdy NASZ proces Excela sie zawiesil — zakonczenie go po PID.
+    # Excel otwarty przez uzytkownika nie jest ruszany (cc_excel).
+    cc_excel.zamknij_excel_xlwings(app)
 
 
 def _nowa_sesja_excel(folder):
@@ -749,7 +747,7 @@ def _oblicz_zakresy_srodowiskowe_z_istniejacych_kopii(folder, nazwy, dane_zaklad
                     pass
             zakresy_per_kopia.append(zakresy)
     finally:
-        app.quit()
+        cc_excel.zamknij_excel_xlwings(app)
     return zakresy_per_kopia
 
 
@@ -1075,7 +1073,7 @@ def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, ark_wyniki)
             except Exception:
                 pass
     finally:
-        app.quit()
+        cc_excel.zamknij_excel_xlwings(app)
 
     return dane_kalibracji, klasa_wilg_per_kopia
 
@@ -1522,7 +1520,7 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
         wb.close()
         return dane_s2, dane_zakladek, dane_ef, f24_per_kopia
     finally:
-        app.quit()
+        cc_excel.zamknij_excel_xlwings(app)
 
 
 # =============================================================================
