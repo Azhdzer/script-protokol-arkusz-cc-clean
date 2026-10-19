@@ -154,5 +154,102 @@ class TestNaPrawdziwymExcelu(unittest.TestCase):
                 self.assertTrue(cc_excel.proces_zyje(p), "zamknieto Excela sprzed testu")
 
 
+class TestSprzatanieBezOkna(unittest.TestCase):
+    """Rozpoznanie zawieszonego Excela — bez Excela, na wlasnym procesie."""
+
+    def test_wiek_wlasnego_procesu(self):
+        wiek = cc_excel.wiek_procesu_s(os.getpid())
+        self.assertIsNotNone(wiek)
+        self.assertGreaterEqual(wiek, 0.0)
+        self.assertLess(wiek, 24 * 3600)
+
+    def test_wiek_nieistniejacego_procesu(self):
+        self.assertIsNone(cc_excel.wiek_procesu_s(0))
+
+    def test_bledy_nie_blokuja_kroku(self):
+        stara = cc_excel.excele_bez_okna
+        cc_excel.excele_bez_okna = lambda *_a, **_k: 1 / 0
+        try:
+            import io
+            from contextlib import redirect_stdout
+            with redirect_stdout(io.StringIO()) as buf:
+                self.assertEqual(cc_excel.sprzataj_zawieszone_excele(), [])
+            self.assertIn("pominiete", buf.getvalue())
+        finally:
+            cc_excel.excele_bez_okna = stara
+
+    def test_krok_3_sprzata_przed_praca(self):
+        with open(os.path.join(KORZEN, "generuj_arkusze.py"), encoding="utf-8") as f:
+            zr = f.read()
+        main = zr[zr.index("\ndef main():"):]
+        self.assertLess(main.index("sprzataj_zawieszone_excele"), main.index("_main_impl()"))
+
+
+@unittest.skipIf(SZYBKIE, "CC_TESTY_SZYBKIE=1 — testy z Excelem pominiete")
+class TestSprzatanieNaPrawdziwymExcelu(unittest.TestCase):
+
+    def setUp(self):
+        self.przed = procesy_excela()
+
+    def tearDown(self):
+        for pid in procesy_excela() - self.przed:
+            cc_excel.ubij_excela(pid)
+
+    def tylko_nasz(self, pid):
+        """sprzataj_* ograniczone do naszej instancji — test nie rusza obcych procesow."""
+        stara = cc_excel.excele_bez_okna
+        cc_excel.excele_bez_okna = lambda m=0: [p for p in stara(m) if p == pid]
+        self.addCleanup(setattr, cc_excel, "excele_bez_okna", stara)
+
+    def test_ukryty_excel_rozpoznany_i_zamkniety(self):
+        xl = cc_excel.nowy_excel_com()          # Visible=False — jak zawieszony
+        pid = cc_excel.pid_excela_com(xl)
+        self.assertFalse(cc_excel.ma_widoczne_okno(pid))
+        self.assertIn(pid, cc_excel.excele_bez_okna(min_wiek_s=0))
+        self.tylko_nasz(pid)
+        import io
+        from contextlib import redirect_stdout
+        with redirect_stdout(io.StringIO()) as buf:
+            self.assertEqual(cc_excel.sprzataj_zawieszone_excele(min_wiek_s=0), [pid])
+        self.assertIn(f"PID {pid}", buf.getvalue())
+        del xl
+        self.assertTrue(cc_excel._czekaj_na_koniec(pid, 5))
+
+    def test_mlody_excel_bez_okna_nie_ruszany(self):
+        """Excel, ktory uzytkownik wlasnie uruchamia, nie ma jeszcze okna."""
+        xl = cc_excel.nowy_excel_com()
+        try:
+            pid = cc_excel.pid_excela_com(xl)
+            self.assertNotIn(pid, cc_excel.excele_bez_okna())
+        finally:
+            cc_excel.zamknij_excel_com(xl)
+
+    def test_excel_z_oknem_nietykalny(self):
+        """Tak wyglada Excel uzytkownika — widoczne okno, nawet przy wieku 0 progu."""
+        xl = cc_excel.nowy_excel_com()
+        try:
+            xl.Visible = True
+            xl.Workbooks.Add()
+            pid = cc_excel.pid_excela_com(xl)
+            koniec = time.time() + 5
+            while time.time() < koniec and not cc_excel.ma_widoczne_okno(pid):
+                time.sleep(0.2)
+            self.assertTrue(cc_excel.ma_widoczne_okno(pid))
+            self.assertNotIn(pid, cc_excel.excele_bez_okna(min_wiek_s=0))
+            self.assertTrue(cc_excel.proces_zyje(pid))
+        finally:
+            try:
+                xl.ActiveWorkbook.Close(False)
+            except Exception:
+                pass
+            cc_excel.zamknij_excel_com(xl)
+
+    def test_excele_sprzed_testu_z_oknem_zostaja(self):
+        widoczne = {p for p in self.przed if cc_excel.ma_widoczne_okno(p)}
+        for p in widoczne:
+            with self.subTest(pid=p):
+                self.assertNotIn(p, cc_excel.excele_bez_okna(min_wiek_s=0))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

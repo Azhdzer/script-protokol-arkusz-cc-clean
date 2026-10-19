@@ -140,6 +140,7 @@ KONTRAKT = {
          r"\\plum4\LabPomiarowe\Wzory.xls"),
         # --- stabilnosc Excela / wyglad ---
         ("GEN_AUTOREC",     "m.CZYSC_AUTORECOVER", "0", "False", "True"),
+        ("GEN_SPRZATAJ_EXCEL", "m.SPRZATAJ_ZAWIESZONE_EXCELE", "0", "False", "True"),
         ("GEN_AUTOREC_DNI", "m.CZYSC_AUTORECOVER_STARSZE_NIZ_DNI", "5", "5", "1"),
         ("GEN_PROG_OSTRZ",  "m.PROG_OSTRZEZENIA_KOPII", "25", "25", "10"),
         ("GEN_TAB_RATIO",   "m.TAB_RATIO", "0.5", "0.5", "0.85"),

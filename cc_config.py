@@ -372,6 +372,12 @@ _ARKUSZE = [
     _U("GEN_AUTOREC", "Sprzataj pliki autoodzyskiwania Excela", "flaga", True, "ark",
        poziom=ZAAWANSOWANY, grupa="Stabilnosc Excela",
        opis="Stare pliki .xar potrafia urosnac do setek MB i wywalac Excela przy starcie."),
+    _U("GEN_SPRZATAJ_EXCEL", "Zamykaj zawieszone Excele bez okna", "flaga", True, "ark",
+       poziom=ZAAWANSOWANY, grupa="Stabilnosc Excela",
+       opis="Przed startem konczy procesy EXCEL.EXE bez zadnego widocznego okna, "
+            "dzialajace dluzej niz minute — pozostalosci po przerwanych przebiegach, "
+            "ktore blokuja pliki. Excel z otwartym oknem (takze zminimalizowany) "
+            "nie jest ruszany."),
     _U("GEN_AUTOREC_DNI", "Usuwaj autoodzyskiwanie starsze niz", "calk", 1, "ark",
        poziom=ZAAWANSOWANY, grupa="Stabilnosc Excela", przyrostek=" dni",
        minimum=0, maksimum=365,

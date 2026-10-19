@@ -123,6 +123,101 @@ def dopilnuj_zamkniecia(pid, czekaj_s=CZEKAJ_NA_ZAMKNIECIE_S, opis="Excel"):
     return False
 
 
+# ── zawieszone Excele z poprzednich przebiegow ───────────────────────────────
+# Excel, ktory padl lub zawisl w POPRZEDNIM przebiegu, zostaje w tle bez okna:
+# blokuje pliki (protokol, kopie) i potrafi zawiesic kolejny start. Nowy
+# przebieg nie zna jego PID, wiec rozpoznajemy go po wygladzie:
+#   * proces EXCEL.EXE BEZ ZADNEGO widocznego okna — Excel uzytkownika ma okno
+#     zawsze, takze zminimalizowany,
+#   * dziala dluzej niz MIN_WIEK_ZAWIESZONEGO_S — Excel, ktory uzytkownik wlasnie
+#     uruchamia, przez pierwsze sekundy tez nie ma jeszcze okna.
+
+MIN_WIEK_ZAWIESZONEGO_S = 60.0
+
+
+def ma_widoczne_okno(pid):
+    """Czy proces ma choc jedno widoczne okno najwyzszego poziomu."""
+    import win32gui
+    import win32process
+    znalezione = []
+
+    def _sprawdz(hwnd, _):
+        try:
+            if win32gui.IsWindowVisible(hwnd):
+                _t, wlasciciel = win32process.GetWindowThreadProcessId(hwnd)
+                if wlasciciel == pid:
+                    znalezione.append(hwnd)
+                    return False            # wystarczy jedno
+        except Exception:
+            pass
+        return True
+
+    try:
+        win32gui.EnumWindows(_sprawdz, None)
+    except Exception:
+        pass                                 # EnumWindows przerwane przez return False
+    return bool(znalezione)
+
+
+def wiek_procesu_s(pid):
+    """Ile sekund dziala proces (None, gdy nie da sie odczytac)."""
+    if not pid or os.name != "nt":
+        return None
+    k = _kernel32()
+    k.GetProcessTimes.argtypes = (wintypes.HANDLE,) + (ctypes.POINTER(wintypes.FILETIME),) * 4
+    h = k.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, int(pid))
+    if not h:
+        return None
+    try:
+        start, koniec, jadro, uzytk = (wintypes.FILETIME() for _ in range(4))
+        if not k.GetProcessTimes(h, ctypes.byref(start), ctypes.byref(koniec),
+                                 ctypes.byref(jadro), ctypes.byref(uzytk)):
+            return None
+        # FILETIME: setki nanosekund od 1601-01-01
+        t100 = (start.dwHighDateTime << 32) | start.dwLowDateTime
+        start_unix = t100 / 1e7 - 11644473600.0
+        return max(0.0, time.time() - start_unix)
+    finally:
+        k.CloseHandle(h)
+
+
+def excele_bez_okna(min_wiek_s=MIN_WIEK_ZAWIESZONEGO_S):
+    """PID-y procesow EXCEL.EXE bez widocznego okna, dzialajacych dluzej niz min_wiek_s."""
+    import win32process
+    wynik = []
+    for pid in win32process.EnumProcesses():
+        if (nazwa_procesu(pid) or "").lower() != "excel.exe":
+            continue
+        if ma_widoczne_okno(pid):
+            continue                         # Excel uzytkownika — nietykalny
+        wiek = wiek_procesu_s(pid)
+        if wiek is None or wiek < min_wiek_s:
+            continue                         # dopiero startuje — okno moze sie pojawic
+        wynik.append(pid)
+    return wynik
+
+
+def sprzataj_zawieszone_excele(min_wiek_s=MIN_WIEK_ZAWIESZONEGO_S):
+    """
+    Konczy Excele bez okna, ktore zostaly po poprzednich przebiegach.
+    Zwraca liste zakonczonych PID. Bledy sa wylapywane — sprzatanie nie moze
+    zablokowac kroku.
+    """
+    zakonczone = []
+    try:
+        for pid in excele_bez_okna(min_wiek_s):
+            wiek = wiek_procesu_s(pid) or 0.0
+            if ubij_excela(pid):
+                zakonczone.append(pid)
+                print(f"  [Excel] Zamknieto zawieszony Excel bez okna (PID {pid}, "
+                      f"dzialal {wiek / 60:.0f} min) — pozostalosc po poprzednim przebiegu.")
+    except Exception as e:
+        print(f"  [Excel] Sprzatanie zawieszonych Exceli pominiete: {type(e).__name__}: {e}")
+    if not zakonczone:
+        print("  [Excel] Brak zawieszonych Exceli w tle.")
+    return zakonczone
+
+
 # ── win32com ─────────────────────────────────────────────────────────────────
 
 def nowy_excel_com():

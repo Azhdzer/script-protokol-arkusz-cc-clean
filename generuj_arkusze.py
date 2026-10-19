@@ -344,6 +344,7 @@ POMIJAJ_PRZYRZADY_BEZ_DANYCH = C.flaga("GEN_POMIJAJ_PUSTE", True)
 GENERUJ_EXCEL = C.flaga("GEN_EXCEL", GENERUJ_EXCEL)
 GENERUJ_WORD  = C.flaga("GEN_WORD", GENERUJ_WORD)
 CZYSC_AUTORECOVER = C.flaga("GEN_AUTOREC", CZYSC_AUTORECOVER)
+SPRZATAJ_ZAWIESZONE_EXCELE = C.flaga("GEN_SPRZATAJ_EXCEL", True)
 
 # =============================================================================
 # WARUNKI ŚRODOWISKOWE — czujnik + Wzory.xls
@@ -3885,6 +3886,11 @@ def main():
             _wyczysc_autorecover_folder()
         except Exception as e:
             print(f"  [AutoRecover] Sprzatanie pominieto: {type(e).__name__}: {e}")
+
+    # Excele bez okna, ktore zostaly po przerwanym/zawieszonym przebiegu, blokuja
+    # protokol i kopie. Excel uzytkownika ma okno — nie jest ruszany (cc_excel).
+    if SPRZATAJ_ZAWIESZONE_EXCELE:
+        cc_excel.sprzataj_zawieszone_excele()
 
     try:
         _main_impl()
