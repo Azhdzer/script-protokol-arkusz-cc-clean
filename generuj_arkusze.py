@@ -1528,6 +1528,18 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
 # GENEROWANIE NAZWY KOPII
 # =============================================================================
 
+def _liczba_lub_none(v):
+    """Liczba z komorki (0.1 / '0,1'); tekst ('-', pusto) -> None."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return v
+    try:
+        return float(str(v).strip().replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
 def _numer_do_nazwy(rekord):
     """
     Numer przyrzadu uzywany w NAZWIE kopii: nr fabryczny (Strona 2 kol. E), a gdy go brak
@@ -3180,8 +3192,11 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 else:
                     _warn(f"'{ws_name}': rozdzielczosc t NIE wpisana — {_opis_rozdz}. "
                           f"H57 zostaje z szablonu; uzupelnij recznie.")
-            if rekord.get("L") is not None:
-                ws.range("H55").value = rekord["L"]
+            # '-' w kolumnie L = przyrzad bez wilgotnosci. Tekst w H55 psulby
+            # formuly niepewnosci RH — H55 zostaje wtedy z szablonu.
+            _rozdz_rh = _liczba_lub_none(rekord.get("L"))
+            if _rozdz_rh is not None:
+                ws.range("H55").value = _rozdz_rh
 
             # Dla protokolow CC-04 wpisz stale parametry przyrzadu.
             if parametry_cc04 is not None:

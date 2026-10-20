@@ -43,11 +43,11 @@ class PZPrzyrzad:
     """Jeden przyrzad z PZ (po rozwinieciu 'N szt.' — dokladnie jeden nr fabryczny)."""
     __slots__ = ("nr_zlecenia", "wytworca", "typ", "nr_fabr", "nr_ewid",
                  "czuj_wytworca", "czuj_typ", "czuj_nr_fabr", "uzytkownik",
-                 "zleceniodawca", "pozycja", "komora")
+                 "zleceniodawca", "pozycja", "komora", "uwagi")
 
     def __init__(self, nr_zlecenia="", wytworca="", typ="", nr_fabr="", nr_ewid="",
                  czuj_wytworca="", czuj_typ="", czuj_nr_fabr="", uzytkownik="",
-                 zleceniodawca="", pozycja=None, komora=False):
+                 zleceniodawca="", pozycja=None, komora=False, uwagi=""):
         self.nr_zlecenia = nr_zlecenia
         self.wytworca = wytworca
         self.typ = typ
@@ -60,6 +60,7 @@ class PZPrzyrzad:
         self.zleceniodawca = zleceniodawca  # blok adresowy z pola 'ZLECENIODAWCA:' 
         self.pozycja = pozycja         # numer pozycji w 'Obiekty wzorcowania' (1,2,3...)
         self.komora = komora           # True = wzorcowany w KOMORZE KLIMATYCZNEJ (ILAJ 5.4/11)
+        self.uwagi = uwagi             # dopisek za producentem ('– wzorcowanie czujnika ...')
 
     def __repr__(self):
         return (f"PZPrzyrzad(zlec={self.nr_zlecenia}, wytw={self.wytworca!r}, "
@@ -225,10 +226,45 @@ def _parsuj_pole(part):
             _oczysc(mw.group(1)) if mw else "")
 
 
+# Etykieta kolejnego pola za numerem ewidencyjnym. Ostatni podpunkt listy bywa
+# bez przecinka: '• nr fabr.: 40119897, nr ewid.: Q/LOG/56 wytworca: Testo – ...'
+# (zlecenie 229) — bez tej granicy numer zbieral caly ogon z producentem.
+_RE_KONIEC_EWID = re.compile(r'\s+(?:wytw[oó]rca|manufacturer|typ|type)\s*:', re.I)
+
+
 def _numer_ewidencyjny(part):
     """Numer ewidencyjny z fragmentu opisu (znane zapisy, potem dowolna etykieta)."""
     m = _RE_WEWN.search(part) or _RE_WEWN_OGOLNY.search(part)
-    return _oczysc(m.group(1)) if m else ""
+    return _oczysc(_RE_KONIEC_EWID.split(m.group(1))[0]) if m else ""
+
+
+# Dopisek za producentem, oddzielony myslnikiem ze spacjami:
+#   'wytworca: Testo – wzorcowanie czujnika wewnetrznego.'
+# Producent to 'Testo', a reszta mowi, KTORY czujnik wzorcujemy — w protokole
+# trafia do kolumny 'Uwagi'. Myslnik bez spacji ('LAB-EL') nalezy do nazwy.
+_RE_DOPISEK_WYTWORCY = re.compile(r'\s+([–—-]\s+.+)$')
+
+
+def rozdziel_wytworce(wytworca):
+    """'Testo – wzorcowanie czujnika' -> ('Testo', '– wzorcowanie czujnika')."""
+    w = wytworca or ""
+    m = _RE_DOPISEK_WYTWORCY.search(w)
+    if not m:
+        return w, ""
+    return _oczysc(w[:m.start()]), _oczysc(m.group(1))
+
+
+def typ_bez_producenta(typ, wytworca):
+    """
+    'testo 175T2' przy producencie 'Testo' -> '175T2'. W protokole producent
+    stoi w osobnej kolumnie, wiec w kolumnie 'Typ' sie go nie powtarza.
+    """
+    t, w = (typ or "").strip(), (wytworca or "").strip()
+    if w and t.lower().startswith(w.lower() + " "):
+        reszta = t[len(w):].strip()
+        if reszta:
+            return reszta
+    return t
 
 
 # Znaki wypunktowania w PZ (pypdf zwraca rozne warianty, m.in. z fontu Symbol).
@@ -931,6 +967,9 @@ def parsuj_tekst(text):
             p.komora = True
             przyrzady.append(p)
     for p in przyrzady:
+        p.wytworca, uw = rozdziel_wytworce(p.wytworca)
+        p.czuj_wytworca, uw_cz = rozdziel_wytworce(p.czuj_wytworca)
+        p.uwagi = uw or uw_cz
         # Uzytkownik JEGO pozycji; gdy lista nie jest numerowana — wspolny dla wszystkich.
         p.uzytkownik = (uzyt_wg_poz.get(p.pozycja)
                         or uzyt_wg_poz.get(None)

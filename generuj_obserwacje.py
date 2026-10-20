@@ -2523,6 +2523,10 @@ _serial_z_wyniku = pz_dane.serial_z_nazwy_pliku
 #  K=11 rozdz. t  L=12 rozdz. RH  O=15 nr zlecenia
 STRONA2_PIERWSZY_WIERSZ = 11
 
+# Strona 1: przyrzady uzywane tylko przy wilgotnosci — higrometr wzorcowy (D12)
+# i rotametr (F64). Przy pomiarze samej temperatury dostaja '-'.
+STRONA1_TYLKO_RH = ((12, 4), (64, 6))
+
 # Blok podpisow po PRAWEJ stronie Strony 2 (T = data, V = podpis; komorki scalone):
 #   wiersz 4  — '4. Pomiary wykonal(a)'      (wiersze 5-8 to miejsce na kolejne osoby)
 #   wiersz 10 — '5. Protokol sprawdzil(a)'
@@ -2548,6 +2552,55 @@ def wypelnij_podpisy_strona2(ws2, data_pomiaru=None):
     _ustaw_komorke(ws2, STRONA2_W_SPRAWDZIL, STRONA2_KOL_PODPIS, PODPIS_SPRAWDZIL)
     print(f"    podpisy: wykonal '{PODPIS}' ({data_wyk}), "
           f"sprawdzil '{PODPIS_SPRAWDZIL}' ({dzis})")
+
+
+def _ostrzez_o_brakujacych_plikach(pz_lista, uzyte):
+    """
+    Przyrzad z PZ wzorcowany w komorze, dla ktorego nie ma pliku wynikow, nie
+    trafia ani na Strone 2, ani na Strone 3 — mowimy o tym wprost, bo w protokole
+    po prostu brakuje wiersza (zlecenie 229: 12 przyrzadow w PZ, 11 plikow).
+    """
+    mamy = set()
+    for wpis in uzyte:
+        serial = str(wpis[0] or "")
+        mamy.add(pz_dane.normalizuj_serial(serial))
+        if serial.split():
+            mamy.add(pz_dane.normalizuj_serial(serial.split()[0]))
+    brak, widziane = [], set()
+    for p in pz_lista:
+        if not getattr(p, 'komora', False) or not p.nr_fabr:
+            continue
+        klucz = pz_dane.normalizuj_serial(p.nr_fabr)
+        if klucz in mamy or klucz in widziane:
+            continue
+        widziane.add(klucz)
+        brak.append(p)
+    for p in brak:
+        print(f"  [UWAGA] Przyrzad z PZ (komora) bez pliku pomiarowego: nr fabr. {p.nr_fabr}"
+              f"{', nr ewid. ' + p.nr_ewid if p.nr_ewid else ''} — nie ma go w protokole. "
+              f"Dodaj jego plik do analizy i uruchom kroki 1-2 ponownie.")
+    return brak
+
+
+def _rozdz_rh(z_zestawienia, rhs):
+    """
+    Rozdzielczosc RH do kolumny L: z Zestawienia, potem z odczytow wilgotnosci.
+    Przyrzad bez jednego i drugiego (termometr, np. testo 175T2) dostaje '-'.
+    Wczesniej wpisywana byla tu rozdzielczosc TEMPERATURY, co w protokole
+    wygladalo jak prawdziwa rozdzielczosc RH.
+    """
+    if z_zestawienia is not None:
+        return z_zestawienia
+    rh = pz_dane.rozdzielczosc_z_kolumny(rhs) if rhs else None
+    return rh if rh is not None else '-'
+
+
+def _skalowanie_nie_dotyczy(ws2, w):
+    """M, N 'Skalowanie przetwornika (jesli dotyczy)': pusta komorka -> '-'."""
+    for kol in (13, 14):
+        c = ws2.cell(row=w, column=kol)
+        if c.value in (None, ""):
+            c.value = '-'
 
 
 def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest, nr_zlecenia=""):
@@ -2584,15 +2637,13 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest, nr_zlecenia=""):
             # Brak PZ (zlecenie wewnetrzne) albo przyrzad spoza zamowienia —
             # wpisujemy to, co wiadomo z pomiaru, reszte zostawiamy pusta.
             t_res = pz_dane.rozdzielczosc_z_kolumny(temps)
-            rh_res = pz_dane.rozdzielczosc_z_kolumny(rhs)
-            if rh_res is None:
-                rh_res = t_res
+            rh_res = _rozdz_rh(None, rhs)
             if serial:
                 ws2.cell(row=w, column=5).value = serial          # E — nr fabryczny
             if t_res is not None:
                 ws2.cell(row=w, column=11).value = t_res          # K
-            if rh_res is not None:
-                ws2.cell(row=w, column=12).value = rh_res         # L
+            ws2.cell(row=w, column=12).value = rh_res             # L
+            _skalowanie_nie_dotyczy(ws2, w)
             if nr_zlecenia:
                 ws2.cell(row=w, column=15).value = nr_zlecenia    # O
             print(f"    wiersz {w}: brak dopasowania w PZ (serial '{serial}') — "
@@ -2605,10 +2656,7 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest, nr_zlecenia=""):
         zrodlo = "Zestawienie"
         if t_res is None:
             t_res = pz_dane.rozdzielczosc_z_kolumny(temps); zrodlo = "dane"
-        if rh_res is None:
-            rh_res = pz_dane.rozdzielczosc_z_kolumny(rhs)
-            if rh_res is None:       # przyrzad tylko-temperatura — brak danych RH
-                rh_res = t_res
+        rh_res = _rozdz_rh(rh_res, rhs)
 
         def _set(col, val):
             ws2.cell(row=w, column=col).value = val if (val not in (None, "")) else "-"
@@ -2624,7 +2672,7 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest, nr_zlecenia=""):
 
         _set(2, dev.wytworca)            # B
         _set(3, czuj_w)                  # C
-        _set(4, dev.typ)                 # D
+        _set(4, pz_dane.typ_bez_producenta(dev.typ, dev.wytworca))   # D
         _set(5, dev.nr_fabr)             # E
         _set(6, dev.nr_ewid)             # F
         _set(7, "")                      # G (adres) — brak w PZ
@@ -2633,7 +2681,10 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest, nr_zlecenia=""):
         _set(10, "")                     # J (nr ewid czujnika) — brak w PZ
         ws2.cell(row=w, column=11).value = t_res    # K
         ws2.cell(row=w, column=12).value = rh_res   # L
+        _skalowanie_nie_dotyczy(ws2, w)             # M, N
         ws2.cell(row=w, column=15).value = dev.nr_zlecenia   # O
+        if getattr(dev, 'uwagi', ""):
+            ws2.cell(row=w, column=16).value = dev.uwagi     # P — '– wzorcowanie czujnika ...'
         print(f"    wiersz {w}: {dev.wytworca} / {dev.typ} / {dev.nr_fabr} "
               f"(zlec {dev.nr_zlecenia}, K={t_res} L={rh_res} [{zrodlo}])")
 
@@ -3057,6 +3108,7 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
 
     # ── Zapis danych dla każdego punktu ───────────────────────────────────────
     FILL_GREY = PatternFill(fill_type='solid', fgColor='BFBFBF')
+    punkty_z_rh = 0          # bloki z wilgotnoscia — gdy 0, higrometr i rotametr nieuzyte
 
     for punkt_idx, (rep_indices, powod, *_reszta) in enumerate(rep_groups):
         r0 = BLOCK_START_ROW + punkt_idx * BLOCK_SIZE
@@ -3100,6 +3152,7 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
             c_cell.fill  = FILL_GREY
         else:
             c_cell.value = rh_val
+            punkty_z_rh += 1
 
         # Jesli RH=0 (tryb tylko temperatura): kolumna O na szaro + "-" w kolumnach bocznych
         if rh_zero:
@@ -3178,6 +3231,13 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     if 'Strona 1' in proto_wb.sheetnames:
         ws1 = proto_wb['Strona 1']
         ws1.cell(row=10, column=6).value = f"1-{N}"
+        # Pomiar wylacznie temperatury: higrometr wzorcowy (D12) i rotametr (F64)
+        # nie braly udzialu — w szablonie stoja tam symbole, ktore trzeba skreslic.
+        if N and not punkty_z_rh:
+            for wiersz, kol in STRONA1_TYLKO_RH:
+                _ustaw_komorke(ws1, wiersz, kol, '-')
+            print("  [Strona 1] Pomiar tylko temperatury — higrometr wzorcowy (D12) "
+                  "i rotametr (F64): '-'")
 
         if obs_type == 'CC04':
             # Tabela kanalow skanera, wiersze 36-39 = sloty 101/103/105/107:
@@ -3230,6 +3290,8 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
             uzyte = z_pz
             print(f"  [PZ] Brak plikow wynikow — tabele przyrzadow buduje z PZ "
                   f"({len(uzyte)} przyrzad(ow) z komory klimatycznej).")
+    elif pz_lista:
+        _ostrzez_o_brakujacych_plikach(pz_lista, uzyte)
 
     # Odczyty przyrzadu w punktach, ktorych NIE zamowiono wlasnie dla niego, sa zbedne —
     # protokol zawiera SUME punktow wszystkich zlecen, a kazdy przyrzad ma swoj zakres

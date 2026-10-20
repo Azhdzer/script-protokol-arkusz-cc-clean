@@ -81,10 +81,10 @@ class TestPrzyrzadSpozaPZ(unittest.TestCase):
         self.assertIsNone(self.komorka(ws, self.w, "typ"))
 
     def test_przyrzad_tylko_temperatura(self):
-        """Bez danych RH rozdzielczosc wilgotnosci bierze sie z temperatury."""
+        """Bez danych RH kolumna L dostaje '-' (zlecenie 229: wpisywalo tam 0,1 z temperatury)."""
         ws = self.wypelnij([("10894159", temperatury(0.1), [])])
         self.assertEqual(self.komorka(ws, self.w, "rozdz_t"), 0.1)
-        self.assertEqual(self.komorka(ws, self.w, "rozdz_rh"), 0.1)
+        self.assertEqual(self.komorka(ws, self.w, "rozdz_rh"), "-")
 
     def test_kazdy_przyrzad_w_swoim_wierszu(self):
         ws = self.wypelnij([("10894159", temperatury(), wilgotnosci()),
