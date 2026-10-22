@@ -262,6 +262,55 @@ def kanaly_z_naglowka(lines):
     return []
 
 
+# Przetwornik wzorcowany przez wyjscie analogowe, mierzone multimetrem:
+#   'Przetwornik U; Wejscie pomiarowe Ch: 105'   (U — napiecie, I — prad)
+# To PRZYRZAD WZORCOWANY, a nie czujnik wzorcowy. Zlecenie 219: PTU303 rejestruje
+# swoje odczyty (plik logera) i jednoczesnie ma wyjscia 0-5 V — Ch105 temperatura,
+# Ch115 wilgotnosc. Kanal 105 zajmowal miejsce czujnika wzorcowego Pt100, a 115
+# (spoza ukladu 101-108) przepadal.
+_RE_PRZETWORNIK = re.compile(r'Przetwornik\s*([UI])?\b[^\n]*?Ch\s*:\s*(\d{1,4})', re.I)
+
+
+def kanaly_przetwornikow(lines):
+    """
+    Kanaly przetwornikow z naglowka pliku, w kolejnosci linii:
+        [('105', 'U'), ('115', 'U')]
+    Oznaczenie kanalu — dokladnie jak w naglowku kolumn ('Ch105'), zeby po nim
+    znalezc kolumne. Plik bez linii 'Przetwornik' -> [].
+    """
+    w_pliku = {}
+    for surowy in kanaly_z_naglowka(lines):
+        try:
+            w_pliku.setdefault(int(surowy), surowy)
+        except ValueError:
+            continue
+    wynik, widziane = [], set()
+    for line in lines:
+        if line.strip().lower().startswith('data czas'):
+            break
+        m = _RE_PRZETWORNIK.search(line)
+        if not m:
+            continue
+        nr = int(m.group(2))
+        if nr in widziane:
+            continue
+        widziane.add(nr)
+        wynik.append((w_pliku.get(nr, m.group(2)), (m.group(1) or 'U').upper()))
+    return wynik
+
+
+def _numery(kanaly):
+    """{105, 115} z [('105', 'U'), ...] albo z ['105', ...]."""
+    wynik = set()
+    for k in kanaly:
+        surowy = k[0] if isinstance(k, tuple) else k
+        try:
+            wynik.add(int(surowy))
+        except (TypeError, ValueError):
+            continue
+    return wynik
+
+
 def detect_file_type(lines) -> str:
     """Zwraca 'CC04' jesli linia 5 zawiera 'CC-04', inaczej 'CC'."""
     if len(lines) > 4 and 'CC-04' in lines[4]:
@@ -588,7 +637,7 @@ def _znajdz_naglowek(lines):
     return None, None
 
 
-def przypisz_kanaly_pliku(kanaly_pliku):
+def przypisz_kanaly_pliku(kanaly_pliku, wyklucz=()):
     """
     Mapa kanal UKLADU (101..108) -> oznaczenie kanalu W PLIKU ('101', '001', ...).
 
@@ -601,7 +650,12 @@ def przypisz_kanaly_pliku(kanaly_pliku):
     Kanaly nienalezace do ukladu sadzamy po kolei na sloty GLOWNE (101, 103, 105,
     107), a nadmiar na zapasowe. Dzieki temu reszta skryptu — analiza, protokol,
     nazwy czujnikow — pracuje na niezmienionym ukladzie kolumn.
+
+    `wyklucz` — kanaly PRZETWORNIKOW (kanaly_przetwornikow): to przyrzady
+    wzorcowane, nie czujniki wzorcowe, wiec nie zajmuja zadnego slotu.
     """
+    pomin = _numery(wyklucz)
+    kanaly_pliku = [k for k in kanaly_pliku if not (_numery([k]) & pomin)]
     wg_numeru = {}
     for surowy in kanaly_pliku:
         try:
@@ -620,17 +674,23 @@ def przypisz_kanaly_pliku(kanaly_pliku):
 _RE_NAZWA_Z_KANALEM = re.compile(r'^(tempCh|roztempCh|Ch)(\d{1,4})$', re.I)
 
 
-def _nazwa_kolumny_w_pliku(nazwa_ukladu, slot_do_pliku):
+def _nazwa_kolumny_w_pliku(nazwa_ukladu, slot_do_pliku, przetworniki=()):
     """
     Zamienia nazwe kolumny UKLADU ('Ch101', 'tempCh101') na te, ktora naprawde
     stoi w naglowku pliku ('Ch001', 'tempCh001'). Kolumny bez numeru kanalu
     ('Tzadana', 'tdp', ...) zostaja bez zmian.
+
+    Slot, ktory w pliku jest kanalem PRZETWORNIKA (`przetworniki` — numery),
+    zostaje pusty (None): przetwornik nie jest czujnikiem wzorcowym.
     """
     m = _RE_NAZWA_Z_KANALEM.match(nazwa_ukladu)
     if not m:
         return nazwa_ukladu
-    surowy = slot_do_pliku.get(int(m.group(2)))
-    return nazwa_ukladu if surowy is None else f"{m.group(1)}{surowy}"
+    slot = int(m.group(2))
+    surowy = slot_do_pliku.get(slot)
+    if surowy is None:
+        return None if slot in przetworniki else nazwa_ukladu
+    return f"{m.group(1)}{surowy}"
 
 
 def sloty_z_danymi(rows):
@@ -663,7 +723,7 @@ def kanal_do_komorki(surowy):
     return liczba if str(liczba) == tekst else tekst
 
 
-def mapa_slot_pt(lines):
+def mapa_slot_pt(lines, wyklucz=()):
     """
     Nazwa czujnika ('Pt100-31') dla kazdego SLOTU ukladu (101..108).
 
@@ -673,7 +733,7 @@ def mapa_slot_pt(lines):
     """
     po_kanale = _mapa_kanal_pt(lines)
     wynik = dict(po_kanale)
-    for slot, surowy in przypisz_kanaly_pliku(kanaly_z_naglowka(lines)).items():
+    for slot, surowy in przypisz_kanaly_pliku(kanaly_z_naglowka(lines), wyklucz).items():
         if slot in wynik:
             continue
         try:
@@ -716,6 +776,23 @@ def _naglowki_cc04(kanal_pt):
     )
 
 
+def _naglowki_przetwornikow(przetworniki):
+    """Naglowki kolumn przetwornikow w obserwacji: 'Wskazania multimetru Przetwornik U Ch105 [V]'."""
+    return [f'Wskazania multimetru Przetwornik {typ} Ch{k} [{"mA" if typ == "I" else "V"}]'
+            for k, typ in przetworniki]
+
+
+def _kolejnosc_z_przetwornikami(kolumny):
+    """
+    Kolumny przetwornikow (indeksy za ukladem CC04_KOLUMNY) stawiamy w arkuszu
+    zaraz za wskazaniami multimetru — obok kanalow, z ktorymi byly mierzone.
+    Dane w `rows` zostaja w swoim ukladzie; zmienia sie tylko kolejnosc w arkuszu.
+    """
+    n = len(CC04_KOLUMNY)
+    za_kanalami = CC04_KOLUMNY.index('tdp') - 0.5
+    return sorted(kolumny, key=lambda i: i if i < n else za_kanalami + (i - n) / 1000)
+
+
 def parse_txt_cc04(path: str):
     """
     Format CC-04:
@@ -736,8 +813,9 @@ def parse_txt_cc04(path: str):
     # Czujnik bywa wpiety w inne wejscie niz zwykle (zlecenie 221: jeden czujnik
     # na Ch001). Kanaly z pliku sadzamy wtedy na sloty ukladu — patrz
     # przypisz_kanaly_pliku — zeby reszta skryptu widziala znajome kolumny.
-    slot_do_pliku = przypisz_kanaly_pliku(kanaly_z_naglowka(lines))
-    kanal_do_pt = mapa_slot_pt(lines)
+    przetworniki = kanaly_przetwornikow(lines)
+    slot_do_pliku = przypisz_kanaly_pliku(kanaly_z_naglowka(lines), przetworniki)
+    kanal_do_pt = mapa_slot_pt(lines, przetworniki)
     sensor_names = [kanal_do_pt.get(ch, '') for ch in CC04_KANALY_GLOWNE]
     while len(sensor_names) < len(CC04_KANALY_GLOWNE):
         sensor_names.append('')
@@ -747,7 +825,11 @@ def parse_txt_cc04(path: str):
     rows = []
 
     if colmap is not None:
-        nazwy_pliku = [_nazwa_kolumny_w_pliku(n, slot_do_pliku) for n in CC04_KOLUMNY]
+        nazwy_pliku = [_nazwa_kolumny_w_pliku(n, slot_do_pliku, _numery(przetworniki))
+                       for n in CC04_KOLUMNY]
+        # Przetworniki — za ukladem CC04_KOLUMNY, po jednej kolumnie (wskazanie
+        # multimetru: V albo mA). tempChNNN / roztempChNNN sa dla nich zawsze 'brak'.
+        nazwy_pliku += [f'Ch{surowy}' for surowy, _typ in przetworniki]
         # Mapowanie po nazwach kolumn — pelny uklad pliku (wszystkie kanaly po kolei).
         for line in lines[hdr_idx + 1:]:
             line = line.strip()
@@ -2621,7 +2703,8 @@ def wypelnij_strone2_z_pz(ws2, uzyte, pz_mapa, zest, nr_zlecenia=""):
     if not uzyte:
         return
     print("\n  Wypelnianie tabeli przyrzadow (Strona 2) z PZ...")
-    for i, (serial, temps, rhs) in enumerate(uzyte):
+    for i, wpis in enumerate(uzyte):
+        serial, temps, rhs = wpis[:3]
         w = STRONA2_PIERWSZY_WIERSZ + i
         dev = None
         if pz_mapa:
@@ -3007,8 +3090,124 @@ def _round_hm(dt):
     return dt.strftime('%H:%M')
 
 
+def _wsp_korelacji(xs, ys):
+    """Wspolczynnik korelacji Pearsona (None, gdy za malo danych lub brak zmiennosci)."""
+    if len(xs) < 3:
+        return None
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    sxx = sum((x - mx) ** 2 for x in xs)
+    syy = sum((y - my) ** 2 for y in ys)
+    if sxx <= 0 or syy <= 0:
+        return None
+    return sxy / (sxx * syy) ** 0.5
+
+
+def rola_przetwornika(rows, idx):
+    """
+    't' albo 'rh' — co mierzy wyjscie przetwornika w kolumnie `idx`. Naglowek pliku
+    mowi tylko 'Przetwornik U', wiec rozstrzyga przebieg: napiecie idzie za
+    temperatura komory (Todczytana) albo za jej wilgotnoscia (RHodczytana).
+    Zlecenie 219: Ch105 (0-5 V = -40..60 °C) -> 't', Ch115 (0-5 V = 0..100 %) -> 'rh'.
+    """
+    xs_t, xs_rh, ys_t, ys_rh = [], [], [], []
+    for r in rows:
+        v = _s_to_float(r[idx]) if idx < len(r) else None
+        if v is None:
+            continue
+        t = _s_to_float(r[3]) if len(r) > 3 else None
+        rh = _s_to_float(r[4]) if len(r) > 4 else None
+        if t is not None:
+            xs_t.append(t)
+            ys_t.append(v)
+        if rh is not None:
+            xs_rh.append(rh)
+            ys_rh.append(v)
+    k_t = _wsp_korelacji(xs_t, ys_t)
+    k_rh = _wsp_korelacji(xs_rh, ys_rh)
+    if k_rh is not None and (k_t is None or abs(k_rh) > abs(k_t)):
+        return 'rh'
+    return 't'
+
+
+def urzadzenia_przetwornikow(przetworniki, rows):
+    """
+    Przyrzady wzorcowane przez wyjscia analogowe. Kanaly dzielimy na temperature
+    i wilgotnosc (rola_przetwornika) i laczymy w pary w kolejnosci z naglowka:
+    pierwszy kanal t + pierwszy kanal RH = jeden przyrzad (jedna para kolumn
+    w protokole), itd. Zwraca liste {'t': (kanal, idx) | None, 'rh': (...) | None}.
+    Indeks w `rows` — za ukladem CC04_KOLUMNY, w kolejnosci przetwornikow.
+    """
+    n = len(CC04_KOLUMNY)
+    t_k, rh_k = [], []
+    for j, (kanal, _typ) in enumerate(przetworniki or []):
+        idx = n + j
+        (rh_k if rola_przetwornika(rows, idx) == 'rh' else t_k).append((kanal, idx))
+    return [{'t': t_k[i] if i < len(t_k) else None,
+             'rh': rh_k[i] if i < len(rh_k) else None}
+            for i in range(max(len(t_k), len(rh_k)))]
+
+
+def opis_kanalow_przetwornika(urz):
+    """Tekst do 'Uwag' na Stronie 2 — jak wpisywany recznie: 'ch temp 105\nch humid 115'."""
+    czesci = []
+    if urz.get('t'):
+        czesci.append(f"ch temp {urz['t'][0]}")
+    if urz.get('rh'):
+        czesci.append(f"ch humid {urz['rh'][0]}")
+    return "\n".join(czesci)
+
+
+def _wpisz_przetwornik(ws3, rep_groups, rows, urz, col, block_start, block_size):
+    """Wskazania multimetru z wyjsc przetwornika -> para kolumn przyrzadu (t, RH)."""
+    for punkt_idx, (rep_indices, _powod, *_r) in enumerate(rep_groups):
+        r0 = block_start + punkt_idx * block_size
+        for off, data_i in enumerate(rep_indices[:block_size]):
+            r = rows[data_i]
+            for rola, kol in (('t', col), ('rh', col + 1)):
+                if not urz.get(rola):
+                    continue
+                idx = urz[rola][1]
+                raw = r[idx] if idx < len(r) else ''
+                c = ws3.cell(row=r0 + off, column=kol)
+                c.value = (to_value(raw)
+                           if raw and str(raw).strip().lower() != 'brak' else None)
+                c.number_format = '0.0000'
+
+
+def _serial_przetwornika(pz_lista):
+    """Nr fabryczny przetwornika: jedyny przyrzad z PZ wzorcowany w komorze, inaczej ''."""
+    seriale = {p.nr_fabr for p in (pz_lista or [])
+               if getattr(p, 'komora', False) and p.nr_fabr}
+    return seriale.pop() if len(seriale) == 1 else ''
+
+
+def _wypelnij_przetworniki_strona2(ws2, uzyte):
+    """
+    Wiersz przetwornika na Stronie 2: dane przyrzadu jak zwykle (z PZ), ale
+    rozdzielczosc odczytu nie dotyczy ('-'), a skalowanie przetwornika zostaje
+    PUSTE do uzupelnienia — zakresu wyjscia (np. 0-5 V = -40..60 °C) w PZ nie ma.
+    W 'Uwagach' kanaly multimetru: 'ch temp 105' / 'ch humid 115'.
+    """
+    for i, wpis in enumerate(uzyte or []):
+        urz = wpis[3].get('przetwornik') if len(wpis) > 3 and wpis[3] else None
+        if not urz:
+            continue
+        w = STRONA2_PIERWSZY_WIERSZ + i
+        ws2.cell(row=w, column=11).value = '-'                    # K
+        ws2.cell(row=w, column=12).value = '-'                    # L
+        for kol in (13, 14):                                      # M, N
+            if ws2.cell(row=w, column=kol).value == '-':
+                ws2.cell(row=w, column=kol).value = None
+        opis = opis_kanalow_przetwornika(urz)
+        ws2.cell(row=w, column=16).value = opis                   # P
+        print(f"    wiersz {w}: przetwornik ({opis.replace(chr(10), ', ')}) — "
+              f"UZUPELNIJ skalowanie w M/N (np. 0-5V (-40 / +60)'C).")
+
+
 def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=None,
-                     pz_mapa=None, zest=None, pz_lista=None, kanaly_slotow=None):
+                     pz_mapa=None, zest=None, pz_lista=None, kanaly_slotow=None,
+                     przetworniki=None):
     """
     Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.
 
@@ -3077,7 +3276,12 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     # ── Dolozenie PAR KOLUMN przyrzadow, gdy przyrzadow jest wiecej niz w szablonie ──
     # (szablon ma 10 par Q/R…AI/AJ; przy 12 przyrzadach dokladamy AK/AL i AM/AN)
     _start_col = WYNIKI_START_COL_CC04 if obs_type == 'CC04' else WYNIKI_START_COL_CC
+    # Przetworniki mierzone multimetrem — kazdy przyrzad dostaje wlasna pare kolumn
+    # ZA przyrzadami z plikow wynikow.
+    urz_przetw = urzadzenia_przetwornikow(przetworniki, rows) if obs_type == 'CC04' else []
     _potrzebne = _policz_potrzebne_przyrzady(rep_groups, rows)
+    if urz_przetw:
+        _potrzebne = (_potrzebne or 0) + len(urz_przetw)
     if _potrzebne:
         _rozszerz_kolumny_przyrzadow(out_path, 'Strona 3', _start_col, _potrzebne)
 
@@ -3272,11 +3476,13 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     # ── Dane srodowiskowe z wynikow (wyniki/*.xlsx → Q/S kolumny Strona 3) ──────
     print("\n  Szukam danych srodowiskowych w wynikach...")
     uzyte = _wypelnij_wyniki_srodowiskowe(ws3, rep_groups, rows, obs_type)
+    uzyte_z_plikow = bool(uzyte)
 
     # Przyrzady BEZ pliku logera (np. reczny termohigrometr odczytywany multimetrem)
     # nie maja jak trafic do 'uzyte' — wtedy tabele przyrzadow budujemy WPROST z PZ:
     # bierzemy pozycje wzorcowane w komorze klimatycznej, w kolejnosci z PZ.
-    if not uzyte and pz_lista:
+    # Przy przetwornikach przyrzad ma juz dane (wyjscia analogowe) — patrz nizej.
+    if not uzyte and pz_lista and not urz_przetw:
         widziane, z_pz = set(), []
         for p in pz_lista:
             if not getattr(p, 'komora', False) or not p.nr_fabr:
@@ -3290,7 +3496,20 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
             uzyte = z_pz
             print(f"  [PZ] Brak plikow wynikow — tabele przyrzadow buduje z PZ "
                   f"({len(uzyte)} przyrzad(ow) z komory klimatycznej).")
-    elif pz_lista:
+    if urz_przetw:
+        uzyte = list(uzyte or [])
+        serial_pr = _serial_przetwornika(pz_lista)
+        for urz in urz_przetw:
+            col = _start_col + len(uzyte) * 2
+            _wpisz_przetwornik(ws3, rep_groups, rows, urz, col, BLOCK_START_ROW, BLOCK_SIZE)
+            uzyte.append((serial_pr, [], [], {'przetwornik': urz}))
+            print(f"  [Przetwornik] {opis_kanalow_przetwornika(urz).replace(chr(10), ', ')}"
+                  f" -> kolumny {get_column_letter(col)}/{get_column_letter(col + 1)}"
+                  f" (przyrzad {len(uzyte)}, nr fabr. {serial_pr or '?'})")
+        if not serial_pr:
+            print("  [UWAGA] Nie wiem, do ktorego przyrzadu z PZ naleza przetworniki — "
+                  "uzupelnij jego wiersz na Stronie 2 recznie.")
+    if pz_lista and (uzyte_z_plikow or urz_przetw):
         _ostrzez_o_brakujacych_plikach(pz_lista, uzyte)
 
     # Odczyty przyrzadu w punktach, ktorych NIE zamowiono wlasnie dla niego, sa zbedne —
@@ -3303,6 +3522,7 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     if 'Strona 2' in proto_wb.sheetnames:
         wypelnij_strone2_z_pz(proto_wb['Strona 2'], uzyte, pz_mapa, zest,
                               nr_zlecenia=measurement_id)
+        _wypelnij_przetworniki_strona2(proto_wb['Strona 2'], uzyte)
         # Data pomiaru = dzien OSTATNIEGO punktu (wtedy pomiary zostaly zakonczone).
         _dt_ost = _s_to_dt(rows[rep_groups[-1][0][-1]][0]) if rep_groups else None
         wypelnij_podpisy_strona2(proto_wb['Strona 2'],
@@ -3671,8 +3891,12 @@ def main():
 
         # PELNY uklad jak w pliku multimetru: WSZYSTKIE kanaly po kolei (A..AG = 33 kol).
         # Analiza i protokol biora tylko kanaly GLOWNE (po nazwie); reszta jest do wgladu.
-        N_KOL = len(CC04_KOLUMNY)
-        kanal_pt = mapa_slot_pt(raw_lines)
+        przetworniki = kanaly_przetwornikow(raw_lines)
+        N_KOL = len(CC04_KOLUMNY) + len(przetworniki)
+        kanal_pt = mapa_slot_pt(raw_lines, przetworniki)
+        if przetworniki:
+            print("  Przetworniki (przyrzad wzorcowany, wyjscie analogowe): "
+                  + ", ".join(f"Ch{k} ({t})" for k, t in przetworniki))
 
         # Podpisy z szablonu (X92/X93) + ich STYL (ramka, format daty) czytamy PRZED
         # nadpisaniem danymi. W pelnym ukladzie kol. 24-25 to juz dane, wiec podpisy,
@@ -3685,15 +3909,17 @@ def main():
 
         # Kolumny nieuzytych kanalow (pomiar np. na 2 czujnikach zamiast 4) nie
         # trafiaja do arkusza — inaczej zostawaly puste, z samym naglowkiem.
-        naglowki = _naglowki_cc04(kanal_pt)
+        naglowki = _naglowki_cc04(kanal_pt) + _naglowki_przetwornikow(przetworniki)
         # Formaty liczbowe czytamy PRZED zapisem — potem kolumny sa nadpisane.
         # Naglowki arkusza SZABLONU — potrzebne, by przeliczyc odwolania
         # wykresow po pominieciu nieuzytych kanalow.
         naglowki_szablonu_ark = [ws.cell(row=1, column=i).value
                                  for i in range(1, ws.max_column + 1)]
-        formaty_szablonu = _formaty_kolumn_szablonu(ws, N_KOL)
+        formaty_szablonu = (_formaty_kolumn_szablonu(ws, len(CC04_KOLUMNY))
+                            + ['0.0000'] * len(przetworniki))
         kolumny = _kolumny_z_danymi(rows, N_KOL) if POMIJAJ_PUSTE_KOLUMNY \
             else list(range(N_KOL))
+        kolumny = _kolejnosc_z_przetwornikami(kolumny)
         mapa_kolumn = _raport_pominietych_kolumn(kolumny, naglowki, N_KOL)
 
         # Dane pomiarowe — tylko kolumny, w ktorych cokolwiek jest
@@ -3808,13 +4034,16 @@ def main():
     if rep_groups:
         # Kanal multimetru tak, jak zapisano go w pliku (np. '001') — do tabeli
         # czujnikow na Stronie 1.
-        kanaly_slotow = (przypisz_kanaly_pliku(kanaly_z_naglowka(raw_lines))
+        kanaly_slotow = (przypisz_kanaly_pliku(kanaly_z_naglowka(raw_lines),
+                                               kanaly_przetwornikow(raw_lines))
                          if file_type == 'CC04' else None)
         prefiks = prefiks_zlecenia(measurement_id, file_type)
         del _PLIKI_ZAZNACZONE[:]
         generuj_protokol(rep_groups, rows, measurement_id, file_type,
                          sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest,
-                         pz_lista=_pz_lista, kanaly_slotow=kanaly_slotow)
+                         pz_lista=_pz_lista, kanaly_slotow=kanaly_slotow,
+                         przetworniki=(kanaly_przetwornikow(raw_lines)
+                                       if file_type == 'CC04' else None))
         # Znaczniki punktow w zestawieniu przyrzadow (nawigacja po czasie)
         oznacz_zestawienie_punkty(rep_groups, rows, prefiks=prefiks)
         # Pliki kroku 1 po opracowaniu: podpis i nazwa zlecenia.
