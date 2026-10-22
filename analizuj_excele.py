@@ -1431,10 +1431,19 @@ def parse_putty(filepath, output_dir):
         2026-07-02 11:20:26 T=   23.4 RH=    60.3 P=  998.1
     Linie-echa polecen, znaki kontrolne oraz wpisy z domyslna data przyrzadu
     (rok < 2015, np. 2000-01-01) sa pomijane.
+
+    Drugi uklad — wartosci BEZ etykiet, rozpoznawane po jednostkach (cisnienie
+    pomijamy):
+        2026-10-19 11:22:07    1012.9 mbar   22.4 'C   54 %RH
+    Czytany tylko wtedy, gdy w linii nie ma 'T=' / 'RH=' — uklad z etykietami
+    dziala jak dotad.
     """
     dt_re = re.compile(r'(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})')
     t_re  = re.compile(r'\bT\s*=\s*(-?\d+(?:[.,]\d+)?)', re.I)
     rh_re = re.compile(r'\bRH\s*=\s*(-?\d+(?:[.,]\d+)?)', re.I)
+    # Wartosc z jednostka: 22.4 'C / 22.4 °C / 22.4 ºC  oraz  54 %RH
+    t_jedn_re  = re.compile(r"(-?\d+(?:[.,]\d+)?)\s*['°º]\s*C\b")
+    rh_jedn_re = re.compile(r'(-?\d+(?:[.,]\d+)?)\s*%\s*RH\b', re.I)
 
     try:
         with open(filepath, encoding='utf-8', errors='replace') as f:
@@ -1448,6 +1457,10 @@ def parse_putty(filepath, output_dir):
         mdt = dt_re.search(line)
         mt  = t_re.search(line)
         mrh = rh_re.search(line)
+        if mdt and not (mt and mrh):
+            # bez etykiet — wartosci po jednostkach
+            mt  = t_jedn_re.search(line[mdt.end():])
+            mrh = rh_jedn_re.search(line[mdt.end():])
         if not (mdt and mt and mrh):
             continue
         ts = parse_dt(f"{mdt.group(1)} {mdt.group(2)}")
@@ -1462,7 +1475,7 @@ def parse_putty(filepath, output_dir):
         hums.append(rh)
 
     if not times:
-        print("    ⚠  Nie znaleziono linii pomiarowych (T=/RH=) w logu PuTTY")
+        print("    ⚠  Nie znaleziono linii pomiarowych (T=/RH= ani wartosci z jednostkami 'C i %RH) w logu PuTTY")
         return
 
     save_result(times, temps, hums, filepath.name, output_dir)

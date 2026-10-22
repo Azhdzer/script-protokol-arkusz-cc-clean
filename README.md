@@ -282,7 +282,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 634 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 639 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -342,7 +342,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**634 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**639 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -414,6 +414,8 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
   przy dużym pliku instancja skryptu jest kończona po swoim PID — inne okna Excela zostają.
+- **Log PuTTY z wartościami opisanymi jednostkami** (`1012.9 mbar   22.4 'C   54 %RH`, bez `T=`/`RH=`)
+  jest rozpoznawany po jednostkach; ciśnienie pomijane. Układ z etykietami działa jak dotąd.
 - **Termometry z PZ (zlecenie 229):** dopisek za producentem (`Testo – wzorcowanie czujnika
   wewnętrznego`) trafia do kolumny *Uwagi*, w *Wytwórca* zostaje `Testo`; *Typ* bez powtórzonego
   producenta (`175T2`); ostatni podpunkt listy bez przecinka nie dokleja już `wytwórca: …` do nr
