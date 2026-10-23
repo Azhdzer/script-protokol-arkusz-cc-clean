@@ -226,21 +226,24 @@ class TestKrok2(unittest.TestCase):
 
 
 class TestSzablonPrzetwornika(unittest.TestCase):
-    """'Wyniki' przetwornika jak recznie przygotowane w zleceniu 230 (wiersz 253)."""
+    """'Wyniki' przetwornika: tabele z blokow zakladki 253 (t+RH), 260 (t), 267 (RH)."""
 
-    def test_formuly_wiersza(self):
+    def test_formuly_wierszy(self):
         import cc_szablon_przetwornika as SZ
-        f = SZ.formuly_wiersza("23,60 (2)")
-        self.assertEqual(f["B"], "='23,60 (2)'!D253")
-        self.assertEqual(f["E"], "='23,60 (2)'!G253")     # IRHm
-        self.assertEqual(f["K"], "='23,60 (2)'!O253")     # URH
-        self.assertEqual(f["J"], "='23,60 (2)'!M253")     # Ut
+        f = SZ.formuly_wiersza("23,60 (2)", SZ.tabela("th"))
+        self.assertEqual((f["B"], f["E"], f["M"]),
+                         ("='23,60 (2)'!D253", "='23,60 (2)'!G253", "='23,60 (2)'!O253"))
+        f = SZ.formuly_wiersza("10,60", SZ.tabela("t"))
+        self.assertEqual((f["O"], f["T"]), ("='10,60'!D260", "='10,60'!I260"))
+        f = SZ.formuly_wiersza("10,60", SZ.tabela("rh"))
+        self.assertEqual((f["V"], f["AB"]), ("='10,60'!D267", "='10,60'!J267"))
 
-    def test_naglowki_zalezne_od_L10(self):
-        import cc_szablon_przetwornika as SZ
-        n = SZ.naglowki("23,30")
-        self.assertIn("'23,30'!$L$10", n["E3"])            # nie L1 jak w recznej wersji
-        self.assertEqual(n["H1"], "Poprawka")
+    def test_tabele_wg_wyjsc(self):
+        self.assertEqual(A.tabele_przetwornika({"K15": 105, "K16": 115}), {"th", "t"})
+        self.assertEqual(A.tabele_przetwornika({"K15": "-", "K16": "001"}), {"rh"})
+        self.assertEqual(A.tabele_przetwornika({"K15": 105, "K16": "-"}), {"t"})
+        self.assertEqual(A.klucz_histerezy({"rh"}), "G267")
+        self.assertEqual(A.klucz_histerezy({"th", "t"}), "I253")
 
     def test_wlasny_szablon_z_tabeli(self):
         tab = pz_dane.przetworniki_z_tabeli(

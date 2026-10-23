@@ -433,6 +433,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 - **Świadectwo przetwornika (tylko RH)** — szablon `xxx_yyy_LA_TH_2026 - przetwornik RH.docx`
   (`GEN_WORD_PRZETW_RH`): kolumna Im/Um, zakres wyjścia, zasilanie Uz z Uwag; wyniki z wiersza 253
   zakładek. Nota o histerezie bierze punkt z PZ (nazwa zakładki), nie zaokrąglony odczyt.
+- **Wyniki przetwornika = bloki zakładki** („Wyniki do umieszczenia na świadectwie”): szablon przetwornika ma
+  w *Wynikach* tabele z wierszy 253 (t + RH), 260 (t) i 267 (RH), wygląd skopiowany z bloków zakładki.
+  Krok 3 zostawia tabele pasujące do przetwornika — t + RH: 253 i 260 (jak 239 + 246 termohigrometru),
+  t: 260, RH: 267 (pojedyncza tabela przesuwana do kolumny B) — nagłówki przepisuje z zakładki (prąd /
+  napięcie), histereza z RHm (I253 / G267). Świadectwo bierze wartości z tego samego wiersza zakładki
+  z liczbą miejsc wg formatu komórki — zaokrąglenie ustawione w zakładce trafia do świadectwa.
 - **Szablon arkusza przetwornika** (`… - 1 - Przetwornik (CC).xlsx`, budowany z szablonu standardowego
   przez `python cc_szablon_przetwornika.py`): *Wyniki* zbierają wiersz 253 zakładek (Itm/IRHm, tm/RHm,
   Δ, U), nagłówki zależą od L10, histereza z RHm (I253). Krok 3 bierze go dla kopii-przetwornika

@@ -244,5 +244,27 @@ class TestTabelaRHJakPLAJ(unittest.TestCase):
         self.assertEqual(A._fmt_miejsca(-0.05, 1), "-0.1")
 
 
+class TestWierszeZakladki(unittest.TestCase):
+    """Swiadectwo bierze wartosci z wiersza wg rodzaju przetwornika, z liczba miejsc z formatu."""
+
+    def test_tekst_jak_w_komorce(self):
+        self.assertEqual(A.tekst_jak_w_komorce(8.365, "0.000"), "8.365")
+        self.assertEqual(A.tekst_jak_w_komorce(0.16, "0.000"), "0.160")
+        self.assertEqual(A.tekst_jak_w_komorce(0.0375, "General"), "0.0375")
+        self.assertEqual(A.tekst_jak_w_komorce("-", "General"), "-")
+
+    def test_wiersz_267_rh(self):
+        w = {"D": "23.59", "E": "28.9", "F": "8.365", "G": "27.3", "H": "1.6", "I": "0.160", "J": "1.0"}
+        p = A.kalibracja_przetwornika(w, "23, 30", wiersz=267)
+        self.assertEqual((p["prad_RH"], p["zmierzona_RH"], p["niepewnosc_prad_RH"], p["niepewnosc_RH"]),
+                         ("8.365", "27.3", "0.160", "1.0"))
+
+    def test_wiersz_260_t(self):
+        w = {"D": "22.97", "E": "14.4950", "F": "22.80", "G": "0.17", "H": "0.0375", "I": "0.12"}
+        p = A.kalibracja_przetwornika(w, "23, -", ma_rh=False, wiersz=260)
+        self.assertEqual((p["prad"], p["zmierzona"], p["niepewnosc_prad"]), ("14.4950", "22.80", "0.0375"))
+        self.assertFalse(any(k.endswith("_RH") for k in p))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

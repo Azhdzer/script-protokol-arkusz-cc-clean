@@ -1734,7 +1734,38 @@ def _fmt_miejsca(v, miejsca):
     return v
 
 
-def kalibracja_przetwornika(wartosci, nazwa, ma_rh=True):
+# Wiersze wynikow zakladki (blok 'Wyniki do umieszczenia na swiadectwie') -> pola punktu.
+POLA_WIERSZY_PRZETWORNIKA = {
+    253: dict(D="wartosc_odn", E="wartosc_odn_RH", F="prad", G="prad_RH", H="zmierzona",
+              I="zmierzona_RH", J="poprawka", K="poprawka_RH", L="niepewnosc_prad",
+              M="niepewnosc", N="niepewnosc_prad_RH", O="niepewnosc_RH"),
+    260: dict(D="wartosc_odn", E="prad", F="zmierzona", G="poprawka", H="niepewnosc_prad",
+              I="niepewnosc"),
+    267: dict(D="wartosc_odn", E="wartosc_odn_RH", F="prad_RH", G="zmierzona_RH",
+              H="poprawka_RH", I="niepewnosc_prad_RH", J="niepewnosc_RH"),
+}
+# Miejsca po przecinku, gdy wartosc przychodzi jako liczba bez formatu komorki.
+_MIEJSCA_DOMYSLNE = dict(wartosc_odn=2, wartosc_odn_RH=1, prad=3, prad_RH=2, zmierzona=2,
+                         zmierzona_RH=1, poprawka=2, poprawka_RH=1, niepewnosc=2,
+                         niepewnosc_RH=1, niepewnosc_prad=3, niepewnosc_prad_RH=2)
+
+
+def tekst_jak_w_komorce(wartosc, format_liczby):
+    """
+    Wartosc komorki tak, jak pokazuje ja Excel: liczba miejsc z formatu ('0.000' -> 3);
+    'General' — liczba bez zbednych zer. Tekst ('-', bledy) bez zmian.
+    """
+    if isinstance(wartosc, bool) or wartosc is None:
+        return wartosc
+    if isinstance(wartosc, (int, float)):
+        m = re.match(r"^0(?:[.,](0+))?$", str(format_liczby or "").strip())
+        if m:
+            return _fmt_miejsca(wartosc, len(m.group(1) or ""))
+        return f"{float(wartosc):.10g}"
+    return wartosc
+
+
+def kalibracja_przetwornika(wartosci, nazwa, ma_rh=True, wiersz=253):
     """
     Wiersz 253 zakladki przetwornika (D..O) -> punkt do swiadectwa.
     wartosci: {'D': t, 'E': RH, 'F': Itm, 'G': IRHm, 'H': tm, 'I': RHm,
@@ -1743,6 +1774,16 @@ def kalibracja_przetwornika(wartosci, nazwa, ma_rh=True):
     wyjscia t 3, RH 2. Zakladka bez wilgotnosci (`ma_rh=False`) nie ma pol '*_RH'
     — trafia tylko do tabeli temperatury (szablon 'TH + temp').
     """
+    if wiersz != 253 or any(isinstance(v, str) for v in (wartosci or {}).values()):
+        # Wartosci odczytane z komorek (juz jako tekst wg formatu) albo inny wiersz.
+        punkt = {"nazwa": nazwa, "przetwornik": True}
+        for kol, pole in POLA_WIERSZY_PRZETWORNIKA[wiersz].items():
+            v = (wartosci or {}).get(kol)
+            punkt[pole] = (_fmt_miejsca(v, _MIEJSCA_DOMYSLNE[pole])
+                           if isinstance(v, (int, float)) and not isinstance(v, bool) else v)
+        if not ma_rh:
+            punkt = {k: v for k, v in punkt.items() if not k.endswith("_RH")}
+        return punkt
     w = wartosci
     punkt = {
         "nazwa":          nazwa,
@@ -2897,48 +2938,54 @@ def dostosuj_zakladki_i_wypelnij(sciezka_pliku, dane_zakladek, dane_ef_kopia, ar
 _COLS_BI = ["B", "C", "D", "E", "F", "G", "H", "I"]
 _COLS_OR = ["O", "P", "Q", "R"]
 
-# 'Wyniki' w szablonie PRZETWORNIKA (cc_szablon_przetwornika): jedna tabela B:K
-# z wiersza 253 zakladek; tabeli 'tylko temperatura' (O:R) nie ma.
-_COLS_BI_PRZETW = ["B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]
-_KOMORKI_BI_PRZETW = ["D253", "E253", "F253", "G253", "H253", "I253",
-                      "J253", "K253", "M253", "O253"]
+# 'Wyniki' w szablonie PRZETWORNIKA (cc_szablon_przetwornika): tabele z blokow
+# 'Wyniki do umieszczenia na swiadectwie' zakladek — 253 (t + RH, B:M),
+# 260 (t, O:T), 267 (RH, V:AB). Krok 3 zostawia te, ktore pasuja do przetwornika.
 
 
 def _uklad_wynikow(ws_w):
     """
-    Uklad tabeli 'Wyniki' rozpoznany po formule B4:
-      termohigrometr — B:I z wiersza 239 + O:R z wiersza 246, histereza z E219,
-      przetwornik    — B:K z wiersza 253, histereza z RHm (I253).
-    """
-    try:
-        f = str(ws_w.range("B4").formula or "")
-    except Exception:
-        f = ""
-    if re.search(r"!\$?D\$?253\b", f):
-        return {"bi": _COLS_BI_PRZETW, "or": [], "komorki_bi": _KOMORKI_BI_PRZETW,
-                "komorki_or": [], "histereza": "I253", "przetwornik": True}
-    return {"bi": _COLS_BI, "or": _COLS_OR,
-            "komorki_bi": ["D239", "E239", "F239", "G239", "H239", "I239", "J239", "K239"],
-            "komorki_or": ["D246", "E246", "F246", "G246"],
-            "histereza": "E219", "przetwornik": False}
-
-
-def _kresk_dla_brakujacego_wyjscia(ws_w, przetw, ostatni_wiersz):
-    """
-    Przetwornik bez wyjscia temperatury (albo wilgotnosci): kolumny 'Wynikow'
-    tej wielkosci dostaja '-' — jak w recznie przygotowanych wynikach (230).
+    Tabele arkusza 'Wyniki': lista {'nazwa', 'kolumny', 'komorki', 'rodzaj'}
+    ('rh' — tylko punkty z wilgotnoscia; 't' — reprezentant na temperature).
+      termohigrometr — bi: B:I z wiersza 239, or: O:R z 246, histereza z E219,
+      przetwornik    — tabele z cc_szablon_przetwornika.TABELE (253/260/267).
     """
     import cc_szablon_przetwornika as SZ
-    kolumny = []
-    if przetw.get("K15") == "-":
-        kolumny += list(SZ.KOLUMNY_T)
-    if przetw.get("K16") == "-":
-        kolumny += list(SZ.KOLUMNY_RH)
-    for r in range(4, ostatni_wiersz + 1):
-        if ws_w.range(f"B{r}").formula in (None, ""):
-            continue
-        for k in kolumny:
-            ws_w.range(f"{k}{r}").value = "-"
+
+    def f(adres):
+        try:
+            return str(ws_w.range(adres).formula or "")
+        except Exception:
+            return ""
+    if any(re.search(rf"!\$?D\$?{t['wiersz']}\b", f(f"{t['wyniki'][0]}4")) for t in SZ.TABELE):
+        return {"przetwornik": True, "histereza": SZ.HISTEREZA["th"],
+                "tabele": [{"nazwa": t["nazwa"], "kolumny": t["wyniki"], "rodzaj": t["rodzaj"],
+                            "komorki": [f"{k}{t['wiersz']}" for k in t["zrodlo"]]}
+                           for t in SZ.TABELE]}
+    return {"przetwornik": False, "histereza": "E219", "tabele": [
+        {"nazwa": "bi", "kolumny": _COLS_BI, "rodzaj": "rh",
+         "komorki": ["D239", "E239", "F239", "G239", "H239", "I239", "J239", "K239"]},
+        {"nazwa": "or", "kolumny": _COLS_OR, "rodzaj": "t",
+         "komorki": ["D246", "E246", "F246", "G246"]}]}
+
+
+def tabele_przetwornika(przetw):
+    """Tabele 'Wynikow' dla przetwornika: t + RH -> {'th','t'}, RH -> {'rh'}, t -> {'t'}."""
+    ma_t = przetw.get("K15") not in (None, "", "-")
+    ma_rh = przetw.get("K16") not in (None, "", "-")
+    if ma_t and ma_rh:
+        return {"th", "t"}
+    return {"rh"} if ma_rh else {"t"}
+
+
+def klucz_histerezy(aktywne):
+    """Komorka zakladki dla histerezy: RHm (I253 / G267), przetwornik t — tm (F260)."""
+    import cc_szablon_przetwornika as SZ
+    if not aktywne:
+        return None
+    for n in ("th", "rh", "t"):
+        if n in aktywne:
+            return SZ.HISTEREZA[n]
 
 
 def _czytaj_wiersz_formul(ws_w, r, kolumny):
@@ -2951,6 +2998,16 @@ def _zapisz_wiersz_formul(ws_w, r, kolumny, formuly):
             ws_w.range(f"{c}{r}").formula = f
         else:
             ws_w.range(f"{c}{r}").clear_contents()
+
+
+def _usun_tabele(ws_w, kolumny, do_wiersza):
+    """Tabela 'Wynikow' niepotrzebna dla tego przyrzadu — usuwana razem z ramkami."""
+    rng = ws_w.range(f"{kolumny[0]}1:{kolumny[-1]}{do_wiersza}")
+    try:
+        rng.api.UnMerge()
+    except Exception:
+        pass
+    rng.api.Clear()
 
 
 def _wyczysc_wiersz(ws_w, r, kolumny):
@@ -3067,6 +3124,9 @@ def _wybierz_reprezentantow_temp(wpisy, tol_temp=1.0):
     return wynik
 
 
+_RE_KOMORKA_HISTEREZY = re.compile(r"!\$?(?:E\$?219|I\$?253|G\$?267|F\$?260)\b")
+
+
 def _znajdz_komorke_histerezy(ws_w, extra_rows=0):
     """
     Znajduje komorke z formula histerezy w arkuszu Wyniki (kolumna J, jedyna z 'E219').
@@ -3078,7 +3138,7 @@ def _znajdz_komorke_histerezy(ws_w, extra_rows=0):
     r0 = 23 + int(extra_rows or 0)
     try:
         f = ws_w.range(f"J{r0}").formula
-        if isinstance(f, str) and ("E219" in f or "I253" in f):
+        if isinstance(f, str) and _RE_KOMORKA_HISTEREZY.search(f):
             return ws_w.range(f"J{r0}"), f
     except Exception:
         pass
@@ -3088,12 +3148,12 @@ def _znajdz_komorke_histerezy(ws_w, extra_rows=0):
         return None, None
     for idx, val in enumerate(kol, start=1):
         f = val[0] if isinstance(val, (list, tuple)) else val
-        if isinstance(f, str) and f.startswith("=") and ("E219" in f or "I253" in f):
+        if isinstance(f, str) and f.startswith("=") and _RE_KOMORKA_HISTEREZY.search(f):
             return ws_w.range(f"J{idx}"), f
     return None, None
 
 
-def _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows=0):
+def _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows=0, klucz=None):
     """
     Ustawia komorke histerezy w arkuszu Wyniki (kolumna J; w szablonie J23,
     po dodaniu wierszy tabeli przesunieta o `extra_rows`).
@@ -3120,7 +3180,7 @@ def _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows=0):
         return
 
     base = _WZORZEC_POWTORKI_NAZWY.sub('', rep).strip()
-    k = _uklad_wynikow(ws_w)["histereza"]      # E219 termohigrometr / I253 przetwornik
+    k = klucz or _uklad_wynikow(ws_w)["histereza"]   # E219 termohigrometr / I253, G267, F260
     nowa = f"=ABS(VALUE('{base}'!{k})-VALUE('{rep}'!{k}))"
     try:
         cell.formula = nowa
@@ -3129,7 +3189,7 @@ def _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows=0):
         print(f"  [Wyniki] Nie udalo sie zapisac formuly histerezy: {e}")
 
 
-def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
+def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
     """
     Porzadkuje dwie tabele wynikowe w arkuszu Wyniki: B1:I9 (temp+wilgotnosc)
     i O1:R9 (tylko temp). Usuwa/czysci wiersze z #REF!, sortuje rosnaco po
@@ -3151,74 +3211,62 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
     LAST_ROW_DEFAULT = 9
     last_row = LAST_ROW_DEFAULT
     uklad = _uklad_wynikow(ws_w)
-    _COLS_BI, _COLS_OR = uklad["bi"], uklad["or"]
+    # Przetwornik: zostaja tylko tabele dla jego wyjsc (aktywne), reszta znika.
+    tabele = [t for t in uklad["tabele"] if aktywne is None or t["nazwa"] in aktywne]
+    for t in uklad["tabele"]:
+        if t not in tabele:
+            _usun_tabele(ws_w, t["kolumny"], LAST_ROW_DEFAULT)
+    if not tabele:
+        return 0
+
+    def _arkusz_wiersza(f):
+        for t in tabele:
+            lst = f.get(t["nazwa"]) or []
+            if lst and lst[0]:
+                a = _arkusz_z_formuly(lst[0])
+                if a:
+                    return a
+        return None
 
     wiersze = []
     for r in range(FIRST_ROW, last_row + 1):
-        f_bi = _czytaj_wiersz_formul(ws_w, r, _COLS_BI)
-        f_or = _czytaj_wiersz_formul(ws_w, r, _COLS_OR)
-        blad = any(isinstance(x, str) and "#REF" in x.upper() for x in f_bi + f_or)
-        wiersze.append({
-            "formula_bi": f_bi, "formula_or": f_or,
-            "val_b": ws_w.range(f"B{r}").value,
-            "val_c": ws_w.range(f"C{r}").value,
-            "blad": blad,
-        })
+        f = {t["nazwa"]: _czytaj_wiersz_formul(ws_w, r, t["kolumny"]) for t in tabele}
+        blad = any(isinstance(x, str) and "#REF" in x.upper() for lst in f.values() for x in lst)
+        wiersze.append({"f": f, "r": r, "blad": blad})
 
     valid = [w for w in wiersze if not w["blad"]]
-    referenced = set()
-    for w in valid:
-        s = _arkusz_z_formuly(w["formula_bi"][0])
-        if s:
-            referenced.add(s)
-
+    referenced = {a for a in (_arkusz_wiersza(w["f"]) for w in valid) if a}
     missing = [s for s in working_final if s not in referenced] if working_final else []
 
-    if missing and valid:
-        wzor = valid[0]
-        nowe = []
-        for nazwa in missing:
-            r_nowy = last_row + 1
-            ws_w.api.Rows(r_nowy).Insert()
-            last_row = r_nowy
-            nowy_bi = [_podmien_arkusz_w_formule(x, nazwa) for x in wzor["formula_bi"]]
-            nowy_or = [_podmien_arkusz_w_formule(x, nazwa) for x in wzor["formula_or"]]
-            r = last_row
-            _zapisz_wiersz_formul(ws_w, r, _COLS_BI, nowy_bi)
-            _zapisz_wiersz_formul(ws_w, r, _COLS_OR, nowy_or)
-            nowe.append({"formula_bi": nowy_bi, "formula_or": nowy_or, "val_b": None, "val_c": None, "blad": False})
-        app.calculate()
-        for i, w in enumerate(nowe):
-            r = LAST_ROW_DEFAULT + 1 + i
-            w["val_b"] = ws_w.range(f"B{r}").value
-            w["val_c"] = ws_w.range(f"C{r}").value
-        wiersze.extend(nowe)
-        valid = [w for w in wiersze if not w["blad"]]
-    elif missing and not valid:
-        # Brak wzorca do sklonowania — buduj formuly od zera wg stalego schematu.
-        # BI: ='SHEET'!D239..K239 (8 kol.), OR: ='SHEET'!D246..G246 (4 kol.)
-        BI_KOMORKI = uklad["komorki_bi"]
-        OR_KOMORKI = uklad["komorki_or"]
-        nowe = []
-        for nazwa in missing:
-            r_nowy = last_row + 1
-            ws_w.api.Rows(r_nowy).Insert()
-            last_row = r_nowy
-            nazwa_esc = nazwa.replace("'", "''")
-            nowy_bi = [f"='{nazwa_esc}'!{k}" for k in BI_KOMORKI]
-            nowy_or = [f"='{nazwa_esc}'!{k}" for k in OR_KOMORKI]
-            _zapisz_wiersz_formul(ws_w, r_nowy, _COLS_BI, nowy_bi)
-            _zapisz_wiersz_formul(ws_w, r_nowy, _COLS_OR, nowy_or)
-            nowe.append({"formula_bi": nowy_bi, "formula_or": nowy_or,
-                         "val_b": None, "val_c": None, "blad": False})
+    nowe = []
+    for nazwa in missing:
+        r_nowy = last_row + 1
+        ws_w.api.Rows(r_nowy).Insert()
+        last_row = r_nowy
+        nazwa_esc = nazwa.replace("'", "''")
+        f = {}
+        for t in tabele:
+            if valid:
+                f[t["nazwa"]] = [_podmien_arkusz_w_formule(x, nazwa) for x in valid[0]["f"][t["nazwa"]]]
+            else:
+                # Brak wzorca do sklonowania — formuly wg stalego schematu ukladu.
+                f[t["nazwa"]] = [f"='{nazwa_esc}'!{k}" for k in t["komorki"]]
+            _zapisz_wiersz_formul(ws_w, r_nowy, t["kolumny"], f[t["nazwa"]])
+        nowe.append({"f": f, "r": r_nowy, "blad": False})
+        if not valid:
             print(f"    [Wyniki] Dodano wiersz z formulami dla arkusza '{nazwa}' (fallback).")
+    if nowe:
         app.calculate()
-        for i, w in enumerate(nowe):
-            r = LAST_ROW_DEFAULT + 1 + i
-            w["val_b"] = ws_w.range(f"B{r}").value
-            w["val_c"] = ws_w.range(f"C{r}").value
-        wiersze.extend(nowe)
-        valid = [w for w in wiersze if not w["blad"]]
+    wiersze.extend(nowe)
+    valid = [w for w in wiersze if not w["blad"]]
+
+    # Temperatura (do sortowania) — pierwsza kolumna pierwszej tabeli; RH — druga
+    # kolumna pierwszej tabeli 'rh' (jak B/C w ukladzie termohigrometru).
+    t_rh = next((t for t in tabele if t["rodzaj"] == "rh"), None)
+    for w in valid:
+        w["formula_bi"] = w["f"][tabele[0]["nazwa"]]
+        w["val_b"] = ws_w.range(f"{tabele[0]['kolumny'][0]}{w['r']}").value
+        w["val_c"] = (ws_w.range(f"{t_rh['kolumny'][1]}{w['r']}").value if t_rh else None)
 
     n_rows = last_row - FIRST_ROW + 1
 
@@ -3240,7 +3288,7 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
     wb = ws_w.book
     sheet_names = {s.name for s in wb.sheets}
     for w in valid:
-        arkusz = _arkusz_z_formuly(w["formula_bi"][0])
+        arkusz = _arkusz_wiersza(w["f"])
         w["arkusz"] = arkusz
         if arkusz and arkusz in sheet_names:
             _adres_rh, rhm_vals = _zakres_rh_zakladki(wb.sheets[arkusz])
@@ -3274,30 +3322,21 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
         is_dup = 1 if w.get("powtorka") else 0
         return (rounded, is_dup, rh_val, temp)
 
-    # Przetwornik: tabela B:K obejmuje wszystkie zakladki (brakujace wyjscie dostaje '-').
-    valid_bi_sorted = sorted((w for w in valid if w["ma_rh"] or uklad["przetwornik"]),
-                             key=_klucz_bi)
+    # Tabele 'rh' — tylko zakladki z wilgotnoscia; tabele 't' — reprezentant na temperature.
+    valid_rh_sorted = sorted((w for w in valid if w["ma_rh"]), key=_klucz_bi)
 
     wpisy_or = [
         (_temp_zaokr(w), _rh_z_nazwy_zakladki(w.get("arkusz")), w["powtorka"], w)
         for w in valid if _temp_zaokr(w) is not None
     ]
-    reprezentanci_or = _wybierz_reprezentantow_temp(wpisy_or)
-    reprezentanci_or_sorted = sorted(reprezentanci_or, key=_temp_zaokr)
+    reprezentanci_or_sorted = sorted(_wybierz_reprezentantow_temp(wpisy_or), key=_temp_zaokr)
 
-    for i, w in enumerate(valid_bi_sorted):
-        r = FIRST_ROW + i
-        _zapisz_wiersz_formul(ws_w, r, _COLS_BI, w["formula_bi"])
-    for i in range(len(valid_bi_sorted), n_rows):
-        r = FIRST_ROW + i
-        _wyczysc_wiersz(ws_w, r, _COLS_BI)
-
-    for i, w in enumerate(reprezentanci_or_sorted):
-        r = FIRST_ROW + i
-        _zapisz_wiersz_formul(ws_w, r, _COLS_OR, w["formula_or"])
-    for i in range(len(reprezentanci_or_sorted), n_rows):
-        r = FIRST_ROW + i
-        _wyczysc_wiersz(ws_w, r, _COLS_OR)
+    for t in tabele:
+        lista = valid_rh_sorted if t["rodzaj"] == "rh" else reprezentanci_or_sorted
+        for i, w in enumerate(lista):
+            _zapisz_wiersz_formul(ws_w, FIRST_ROW + i, t["kolumny"], w["f"][t["nazwa"]])
+        for i in range(len(lista), n_rows):
+            _wyczysc_wiersz(ws_w, FIRST_ROW + i, t["kolumny"])
 
     return last_row - LAST_ROW_DEFAULT
 
@@ -3642,11 +3681,31 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
         if ark_wyniki in {s.name for s in wb.sheets}:
             _log_etap(f"arkusz '{ark_wyniki}': porzadkuje tabele wynikow...", _t0)
             ws_w = wb.sheets[ark_wyniki]
-            extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final)
-            _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows)
-            if rekord.get("PRZETWORNIK") and _uklad_wynikow(ws_w)["przetwornik"]:
-                _kresk_dla_brakujacego_wyjscia(ws_w, rekord["PRZETWORNIK"], 9 + extra_rows)
-            elif rekord.get("PRZETWORNIK"):
+            _przetw_w = rekord.get("PRZETWORNIK")
+            _aktywne = (tabele_przetwornika(_przetw_w)
+                        if _przetw_w and _uklad_wynikow(ws_w)["przetwornik"] else None)
+            extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=_aktywne)
+            _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows,
+                                          klucz=klucz_histerezy(_aktywne))
+            if _aktywne and working_final:
+                # Naglowki tabel z zakladki (L10 ustawione) — 'pradu/napiecia', I/U, mA/V.
+                import cc_szablon_przetwornika as SZ
+                _z0 = wb.sheets[working_final[0]]
+                _z0.api.Calculate()
+                SZ.przepisz_naglowki(ws_w.api, _z0.api, [SZ.tabela(n) for n in sorted(_aktywne)])
+                if len(_aktywne) == 1:
+                    # Jedna tabela (przetwornik t albo RH) — od kolumny B, jak w zwyklym szablonie.
+                    _t = SZ.tabela(next(iter(_aktywne)))
+                    if _t["wyniki"][0] != "B":
+                        _szer = [ws_w.range(f"{k}1").column_width for k in _t["wyniki"]]
+                        _cel = SZ._kolumny("B", SZ._litera(1 + len(_t["wyniki"])))
+                        ws_w.range(f"{_t['wyniki'][0]}1:{_t['wyniki'][-1]}{9 + extra_rows}").api.Cut(
+                            ws_w.range("B1").api)
+                        for _k, _w in zip(_cel, _szer):
+                            ws_w.range(f"{_k}1").column_width = _w
+                print(f"  [Wyniki] Przetwornik — tabele: "
+                      f"{', '.join(sorted(_aktywne))} (pozostale usuniete).")
+            elif _przetw_w:
                 _warn(f"Kopia '{nowa_nazwa}': przetwornik, ale szablon ma 'Wyniki' "
                       f"termohigrometru (wiersz 239) — wskaz szablon przetwornika.")
             if f24_val is not None:
@@ -3830,12 +3889,26 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
 
             # Przetwornik: wyniki w bloku 'PRZETWORNIK ...' (wiersz 253), nie 239/246.
             if str(ws_cal.range("K10").value or "").strip() == "Przetwornik":
-                w253 = {k: ws_cal.range(f"{k}253").value
-                        for k in ("D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O")}
-                punkt = kalibracja_przetwornika(w253, ws_name,
-                                                ma_rh=wilgotnosc_per_zakladka[ws_name])
-                print(f"    [Kalibracja {ws_name}] przetwornik: t={punkt['wartosc_odn']} "
-                      f"I={punkt['prad']} tm={punkt['zmierzona']} "
+                # Wiersz wg wyjsc przetwornika: t + RH -> 253 (punkt bez RH -> 260),
+                # tylko t -> 260, tylko RH -> 267. Wartosci jak w komorkach (format).
+                _ma_t = str(ws_cal.range("K15").value or "-").strip() != "-"
+                _ma_rh = str(ws_cal.range("K16").value or "-").strip() != "-"
+                _rh_tu = wilgotnosc_per_zakladka[ws_name]
+                if _ma_rh and not _ma_t:
+                    _wiersz = 267
+                elif _ma_t and _ma_rh and _rh_tu:
+                    _wiersz = 253
+                else:
+                    _wiersz = 260
+                _wart = {}
+                for _k in POLA_WIERSZY_PRZETWORNIKA[_wiersz]:
+                    _c = ws_cal.range(f"{_k}{_wiersz}")
+                    _wart[_k] = tekst_jak_w_komorce(_c.value, _c.number_format)
+                punkt = kalibracja_przetwornika(_wart, ws_name, ma_rh=_rh_tu and _ma_rh,
+                                                wiersz=_wiersz)
+                print(f"    [Kalibracja {ws_name}] przetwornik (wiersz {_wiersz}): "
+                      f"t={punkt['wartosc_odn']} "
+                      f"I={punkt.get('prad')} tm={punkt.get('zmierzona')} "
                       f"RH={punkt.get('wartosc_odn_RH')} I_RH={punkt.get('prad_RH')} "
                       f"RHm={punkt.get('zmierzona_RH')} U={punkt.get('niepewnosc_RH')}")
                 kalibracja.append(punkt)

@@ -2,23 +2,31 @@
 """
 cc_szablon_przetwornika.py — szablon arkusza obliczeniowego dla PRZETWORNIKA.
 
-Standardowy szablon (… - 1 - RH (CC).xlsx) liczy przetwornik juz w zakladkach
-roboczych (blok 'PRZETWORNIK TEMPERATURY I WILGOTNOSCI WZGLEDNEJ', wiersz 253),
-ale arkusz 'Wyniki' zbiera wyniki TERMOHIGROMETRU (wiersz 239). Dla przetwornika
-'Wyniki' musialy byc przebudowywane recznie (zlecenie 230):
+Kazda zakladka robocza konczy sie blokiem 'Wyniki do umieszczenia na swiadectwie
+wzorcowania' — osobna tabela dla kazdego rodzaju przyrzadu:
 
-    B  t      ='<zakladka>'!D253        G  RHm   ='<zakladka>'!I253
-    C  RH     ='<zakladka>'!E253        H  Δt    ='<zakladka>'!J253
-    D  Itm    ='<zakladka>'!F253        I  ΔRH   ='<zakladka>'!K253
-    E  IRHm   ='<zakladka>'!G253        J  Ut    ='<zakladka>'!M253
-    F  tm     ='<zakladka>'!H253        K  URH   ='<zakladka>'!O253
+    239  TERMOHIGROMETR                                   (D..K)
+    246  TERMOMETR ELEKTRONICZNY                          (D..G)
+    253  PRZETWORNIK TEMPERATURY I WILGOTNOSCI WZGLEDNEJ  (D..O)
+    260  PRZETWORNIK TEMPERATURY                          (D..I)
+    267  PRZETWORNIK WILGOTNOSCI WZGLEDNEJ                (D..J)
 
-Naglowki D/E i jednostki zaleza od L10 zakladki (Prąd / Napięcie), histereza
-liczy sie z RHm (I253) punktu i jego powtorki '(2)'.
+'Wyniki' standardowego szablonu zbieraja dwie z nich: termohigrometr (239, B:I)
+i 'tylko temperatura' (246, O:R). Szablon przetwornika robi to samo dla
+przetwornikow — trzy tabele obok siebie, wyglad (ramki, scalenia, szerokosci,
+formaty liczb) skopiowany z blokow zakladki:
 
-Ten modul robi z szablonu standardowego szablon przetwornika — przez Excela
-(wlasna instancja), wiec linki zewnetrzne, formaty i walidacje zostaja.
-Uruchom ponownie, gdy przyjdzie nowa wersja szablonu standardowego:
+    B:M   ← 253  przetwornik t + RH
+    O:T   ← 260  przetwornik t           (dla t + RH: punkty tylko temperaturowe)
+    V:AB  ← 267  przetwornik RH
+
+Krok 3 zostawia tabele pasujace do przetwornika (t + RH: 253 i 260; t: 260;
+RH: 267), a pozostale czysci. Naglowki przepisuje z zakladki, w ktorej L10 jest
+juz ustawione — wiec 'pradu/napiecia', I/U i mA/V sa wlasciwe.
+
+Modul robi szablon przetwornika z szablonu standardowego — przez Excela (wlasna
+instancja), wiec linki zewnetrzne, formaty i walidacje zostaja. Uruchom ponownie
+po nowej wersji szablonu standardowego:
 
     python cc_szablon_przetwornika.py [szablon_zrodlowy.xlsx] [szablon_docelowy.xlsx]
 """
@@ -30,23 +38,43 @@ import sys
 
 import cc_excel
 
-WIERSZ_WYNIKOW = 253
-# kolumna Wynikow -> kolumna wiersza 253 zakladki
-KOLUMNY_WYNIKOW = (("B", "D"), ("C", "E"), ("D", "F"), ("E", "G"), ("F", "H"),
-                   ("G", "I"), ("H", "J"), ("I", "K"), ("J", "M"), ("K", "O"))
-# kolumny Wynikow dotyczace temperatury / wilgotnosci (bez wartosci odniesienia B/C)
-KOLUMNY_T = ("D", "F", "H", "J")
-KOLUMNY_RH = ("E", "G", "I", "K")
-KOMORKA_HISTEREZY_ZAKLADKI = f"I{WIERSZ_WYNIKOW}"
-# Formaty jak w recznie przygotowanych 'Wynikach' (zlecenie 230): prad/napiecie
-# z 4 / 3 miejscami, wilgotnosc z 1, temperatura z 2.
-FORMATY_LICZB = {"B": "0.00", "C": "0.0", "D": "0.0000", "E": "0.000", "F": "0.00",
-                 "G": "0.0", "H": "0.00", "I": "0.0", "J": "0.00", "K": "0.0"}
-
 DOMYSLNE_ZRODLO = ("xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 "
                    "z 17.06.2026 - 1 - RH (CC).xlsx")
 DOMYSLNY_CEL = ("xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 "
                 "z 17.06.2026 - 1 - Przetwornik (CC).xlsx")
+
+
+def _litera(nr):
+    s = ""
+    while nr:
+        nr, r = divmod(nr - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def _numer(litera):
+    n = 0
+    for ch in litera:
+        n = n * 26 + ord(ch) - 64
+    return n
+
+
+def _kolumny(od, do):
+    return [_litera(i) for i in range(_numer(od), _numer(do) + 1)]
+
+
+# nazwa, kolumny 'Wynikow', wiersz wynikow zakladki, kolumny zakladki, naglowek zakladki,
+# rodzaj ('rh' — tylko punkty z wilgotnoscia; 't' — reprezentant na temperature)
+TABELE = (
+    {"nazwa": "th", "wyniki": _kolumny("B", "M"), "wiersz": 253, "zrodlo": _kolumny("D", "O"),
+     "naglowek": (250, 252), "rodzaj": "rh"},
+    {"nazwa": "t", "wyniki": _kolumny("O", "T"), "wiersz": 260, "zrodlo": _kolumny("D", "I"),
+     "naglowek": (257, 259), "rodzaj": "t"},
+    {"nazwa": "rh", "wyniki": _kolumny("V", "AB"), "wiersz": 267, "zrodlo": _kolumny("D", "J"),
+     "naglowek": (264, 266), "rodzaj": "rh"},
+)
+# Histereza: RHm (t+RH: I253, RH: G267); przetwornik t — tm (F260).
+HISTEREZA = {"th": "I253", "rh": "G267", "t": "F260"}
 
 _RE_ARKUSZ = re.compile(r"^=(?:'((?:[^']|'')+)'|([^!'][^!]*))!")
 
@@ -62,30 +90,26 @@ def _ref(arkusz, komorka):
     return f"='{arkusz.replace(chr(39), chr(39) * 2)}'!{komorka}"
 
 
-def naglowki(pierwsza):
-    """Naglowki wierszy 1-3 'Wynikow' przetwornika (zalezne od L10 zakladki)."""
-    a = f"'{pierwsza}'!$L$10"
-    jedn = f'=IF({a}="-","-",IF({a}="Napięcie","V","mA"))'
-    return {
-        "A1": "Wyniki", "B1": "Wartość wielkości odniesienia",
-        "D1": f'=IF({a}="-","-",IF({a}="Napięcie","Zmierzona wartość napięcia",'
-              f'"Zmierzona wartość prądu"))',
-        "F1": f'=IF({a}="-","-",IF({a}="Napięcie","Wartość temperatury i wilgotności '
-              f'względnej odpowiadająca Utm oraz URHm","Wartość temperatury i wilgotności '
-              f'względnej odpowiadająca Itm oraz IRHm"))',
-        "H1": "Poprawka", "J1": "Niepewność pomiaru",
-        "A2": "dla t i rh", "B2": "t", "C2": "RH",
-        "D2": f'=IF({a}="-","-",IF({a}="Napięcie","Utm","Itm"))',
-        "E2": f'=IF({a}="-","-",IF({a}="Napięcie","URHm","IRHm"))',
-        "F2": "tm", "G2": "RHm", "H2": "Δt", "I2": "ΔRH", "J2": "Ut", "K2": "URH",
-        "B3": "°C", "C3": "%rh", "D3": jedn, "E3": jedn, "F3": "°C", "G3": "%rh",
-        "H3": "°C", "I3": "%rh", "J3": "°C", "K3": "%rh",
-    }
+def formuly_wiersza(arkusz, tabela):
+    """{kolumna Wynikow: formula} jednej zakladki dla tabeli z TABELE."""
+    return {kw: _ref(arkusz, f"{kz}{tabela['wiersz']}")
+            for kw, kz in zip(tabela["wyniki"], tabela["zrodlo"])}
 
 
-def formuly_wiersza(arkusz):
-    """{kolumna Wynikow: formula} dla jednej zakladki."""
-    return {kw: _ref(arkusz, f"{kz}{WIERSZ_WYNIKOW}") for kw, kz in KOLUMNY_WYNIKOW}
+def tabela(nazwa):
+    return next(t for t in TABELE if t["nazwa"] == nazwa)
+
+
+def zakres(tab, od_w, do_w):
+    return f"{tab['wyniki'][0]}{od_w}:{tab['wyniki'][-1]}{do_w}"
+
+
+def przepisz_naglowki(ws_wyniki, ws_zakladki, tabele):
+    """Naglowki (wiersze 1-3) tabel 'Wynikow' = wartosci naglowka bloku zakladki."""
+    for tab in tabele:
+        h0, h1 = tab["naglowek"]
+        zr = ws_zakladki.Range(f"{tab['zrodlo'][0]}{h0}:{tab['zrodlo'][-1]}{h1}")
+        ws_wyniki.Range(zakres(tab, 1, 3)).Value = zr.Value
 
 
 def zbuduj(zrodlo, cel, app=None):
@@ -110,31 +134,41 @@ def zbuduj(zrodlo, cel, app=None):
                 arkusze.append((r, a))
         if not arkusze:
             raise ValueError("W 'Wynikach' szablonu nie ma formul B4:B9 z nazwami zakladek.")
-        pierwsza = next((a for _r, a in arkusze if a == "23,30"), arkusze[0][1])
+        z0 = wb.Worksheets(arkusze[0][1])
 
-        # Tabela wynikow: B:K (o dwie kolumny szersza niz dla termohigrometru).
-        ws.Range("H1:I1").UnMerge()
-        ws.Range("H1:I9").Copy()
-        ws.Range("J1:K9").PasteSpecial(-4122)          # xlPasteFormats
-        app.api.CutCopyMode = False
-        for adres in ("B1:C1", "D1:E1", "F1:G1", "H1:I1", "J1:K1"):
-            ws.Range(adres).UnMerge()
-            ws.Range(adres).Merge()
-        for adres, wartosc in naglowki(pierwsza).items():
-            ws.Range(adres).Formula = wartosc
+        # Stare tabele (termohigrometr B:I, tylko temperatura O:R) — precz, z formatami.
+        ws.Range("B1:AB9").UnMerge()
+        ws.Range("B1:AB9").Clear()
+
+        # Naglowki z zakladki z L10 = 'Prąd' (w szablonie L10 = '-', formuly daja '-').
+        l10 = z0.Range("L10").Value
+        z0.Range("L10").Value = "Prąd"
+        z0.Calculate()
+        for tab in TABELE:
+            h0, h1 = tab["naglowek"]
+            s0, s1 = tab["zrodlo"][0], tab["zrodlo"][-1]
+            z0.Range(f"{s0}{h0}:{s1}{h1}").Copy()
+            cel_n = ws.Range(zakres(tab, 1, 3))
+            cel_n.PasteSpecial(-4122)            # formaty (ramki, scalenia)
+            cel_n.PasteSpecial(8)                # szerokosci kolumn
+            z0.Range(f"{s0}{tab['wiersz']}:{s1}{tab['wiersz']}").Copy()
+            ws.Range(zakres(tab, 4, 9)).PasteSpecial(-4122)
+            app.api.CutCopyMode = False
+        przepisz_naglowki(ws, z0, TABELE)
+        z0.Range("L10").Value = l10
+
         for r, a in arkusze:
-            for kol, f in formuly_wiersza(a).items():
-                ws.Range(f"{kol}{r}").Formula = f
-                ws.Range(f"{kol}{r}").NumberFormat = FORMATY_LICZB[kol]
-            ws.Range(f"O{r}:R{r}").ClearContents()     # tabela 'tylko temperatura' — nie dotyczy
+            for tab in TABELE:
+                for kol, f in formuly_wiersza(a, tab).items():
+                    ws.Range(f"{kol}{r}").Formula = f
 
-        # Histereza: RHm punktu i jego powtorki.
+        # Histereza: RHm punktu i jego powtorki (t + RH).
         nazwy = [a for _r, a in arkusze]
         baza = next((a for a in nazwy if a + " (2)" in nazwy), None)
         if baza:
-            ws.Range("J23").Formula = (
-                f"=ABS(VALUE({_ref(baza, KOMORKA_HISTEREZY_ZAKLADKI)[1:]})"
-                f"-VALUE({_ref(baza + ' (2)', KOMORKA_HISTEREZY_ZAKLADKI)[1:]}))")
+            k = HISTEREZA["th"]
+            ws.Range("J23").Formula = (f"=ABS(VALUE({_ref(baza, k)[1:]})"
+                                       f"-VALUE({_ref(baza + ' (2)', k)[1:]}))")
         wb.Save()
         wb.Close(False)
     finally:
