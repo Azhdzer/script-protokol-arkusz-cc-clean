@@ -194,6 +194,12 @@ _OBSERWACJA = [
     _U("OBS_PROT_CC04", "Szablon protokolu CC-04", "plik",
        "xxx_LA_TH_2026 - protokół CC-04.xlsx", "obs",
        grupa="Szablony", wzorzec=(".xlsx", ".xlsm")),
+    _U("OBS_PRZETW_PLIKI", "Pliki multimetru z wyjsciami przetwornikow", "pliki", [], "obs",
+       grupa="Przetworniki (wyjscie analogowe)", wzorzec=(".csv",),
+       opis="Eksport multimetru (np. 1586A: 'dat00001.csv') z kolumnami 'Ch 001 (ADC)' "
+            "— prad w A, przeliczany na mA — albo 'Ch NNN (VDC)'. Skopiuj plik do folderu "
+            "roboczego. Odczyty sa dopasowywane po czasie do punktow obserwacji; ktory kanal "
+            "nalezy do ktorego przyrzadu — w tabeli ponizej."),
     _U("PRZETWORNIKI", "Przetworniki — kanaly, multimetr, zakres", "tabela", [], "obs",
        grupa="Przetworniki (wyjscie analogowe)",
        kolumny=["Nr fabryczny", "Kanał t", "Kanał RH", "Multimetr",
@@ -386,6 +392,11 @@ _ARKUSZE = [
        grupa="Szablony Word", wzorzec=(".docx",),
        opis="Uzywany, gdy czesc zakladek ma wilgotnosc, a czesc nie (dwie tabele). "
             "Warianty '(uzytkownik)' dobierane sa automatycznie na podstawie PZ."),
+    _U("GEN_WORD_PRZETW_RH", "Szablon Word — przetwornik (tylko RH)", "plik",
+       "xxx_yyy_LA_TH_2026 - przetwornik RH.docx", "ark",
+       grupa="Szablony Word", wzorzec=(".docx",),
+       opis="Swiadectwo przetwornika z jednym wyjsciem — wilgotnosci (prad lub napiecie). "
+            "Kolumna Im/Um, zakres wyjscia i zasilanie Uz wpisywane automatycznie."),
 
     # --- zaawansowane ---
     _U("GEN_K18_DOM", "Higrometr K18 — domyslny", "tekst", "S8000", "ark",

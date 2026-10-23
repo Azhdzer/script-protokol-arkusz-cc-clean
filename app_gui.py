@@ -64,6 +64,8 @@ URUCHAMIALNE = {
 # Ustawienia kroku 2 pokazywane WEWNATRZ karty "Dane wejsciowe", tuz pod lista
 # plikow TXT — razem odpowiadaja na pytanie "co bierzemy do tego pomiaru".
 W_KARCIE_WEJSCIOWEJ = ("OBS_FOTO", "OBS_FOTO_ZRODLO")
+# Podpunkt 2a — przetworniki: plik multimetru + tabela kanalow, we wlasnej karcie.
+W_KARCIE_PRZETWORNIKOW = ("OBS_PRZETW_PLIKI", "PRZETWORNIKI")
 
 # Symbole statusu kroku w lewej listwie.
 STATUS = {
@@ -186,6 +188,7 @@ class Okno(QMainWindow):
         for pole in self.pola.values():
             pole.odswiez_pliki()
         self.lista_txt.odswiez(zachowaj=self.wartosci.get("OBS_TXT_FILES") or [])
+        self.lista_przetw.odswiez(zachowaj=self.wartosci.get("OBS_PRZETW_PLIKI") or [])
         self.lista_logow.odswiez(zachowaj=self.wartosci.get("ANL_PLIKI") or [])
         for wiersz in self.kontrolne:
             wiersz.odswiez()
@@ -280,6 +283,7 @@ class Okno(QMainWindow):
             self.lista_logow.odswiez(zachowaj=self.wartosci.get("ANL_PLIKI") or [])
         elif nr == 2:
             self.lista_txt.odswiez()
+            self.lista_przetw.odswiez()
 
     def _przewijalna(self):
         """Zwraca (scroll, layout) — kazda strona kroku jest przewijalna."""
@@ -514,10 +518,33 @@ class Okno(QMainWindow):
             kl.addWidget(self._zbuduj_pole(C.WG_ENV[env]))
         lay.addWidget(karta)
 
+        lay.addWidget(self._karta_przetwornikow())
+
         self._dodaj_pola(lay, [u for u in C.dla_kroku("obs", C.PODSTAWOWY)
-                               if u.env not in W_KARCIE_WEJSCIOWEJ])
+                               if u.env not in W_KARCIE_WEJSCIOWEJ + W_KARCIE_PRZETWORNIKOW])
         lay.addStretch(1)
         return strona
+
+    def _karta_przetwornikow(self):
+        """
+        Podpunkt kroku 2 — przetworniki (wyjscie pradowe/napieciowe): plik(i)
+        multimetru i tabela, ktory kanal (t / RH) nalezy do ktorego przyrzadu.
+        """
+        u_pliki = C.WG_ENV["OBS_PRZETW_PLIKI"]
+        karta, kl = self._karta("2a · " + u_pliki.grupa)
+        et = QLabel(u_pliki.etykieta)
+        et.setObjectName("EtykietaPola")
+        op = QLabel(u_pliki.opis)
+        op.setObjectName("OpisPola")
+        op.setWordWrap(True)
+        kl.addWidget(et)
+        kl.addWidget(op)
+        self.lista_przetw = ListaPlikow(tuple(u_pliki.wzorzec), lambda: self.folder)
+        self.lista_przetw.zmienione.connect(self._zmiana)
+        kl.addWidget(self.lista_przetw)
+        kl.addWidget(self._linia())
+        kl.addWidget(self._zbuduj_pole(C.WG_ENV["PRZETWORNIKI"]))
+        return karta
 
     # ── strona: arkusze ──────────────────────────────────────────────────
     def _strona_arkusze(self):
@@ -579,7 +606,7 @@ class Okno(QMainWindow):
         if odp != QMessageBox.Yes:
             return
         dom = C.domyslne()
-        zachowaj = ("CC_FOLDER", "OBS_TXT_FILES")
+        zachowaj = ("CC_FOLDER", "OBS_TXT_FILES", "OBS_PRZETW_PLIKI", "PRZETWORNIKI")
         for env, pole in self.pola.items():
             if env in zachowaj:
                 continue
@@ -653,6 +680,7 @@ class Okno(QMainWindow):
         for env, pole in self.pola.items():
             self.wartosci[env] = pole.wartosc()
         self.wartosci["OBS_TXT_FILES"] = self.lista_txt.zaznaczone()
+        self.wartosci["OBS_PRZETW_PLIKI"] = self.lista_przetw.zaznaczone()
         self.wartosci["ANL_PLIKI"] = self.lista_logow.zaznaczone()
 
     def _zapisz(self):

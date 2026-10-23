@@ -101,6 +101,8 @@ WYNIKI_FOLDER = C.sciezka("ANL_OUTPUT", "wyniki", FOLDER)
 PZ_FOLDER        = C.sciezka("CC_PZ_FOLDER", "PZ", FOLDER)
 # Przetworniki z panelu (tabela PRZETWORNIKI) — patrz pz_dane.przetworniki_z_tabeli.
 TABELA_PRZETWORNIKOW = C.tabela("PRZETWORNIKI", [])
+# Pliki multimetru z wyjsciami przetwornikow (np. eksport 1586A 'dat00001.csv').
+PLIKI_PRZETWORNIKOW = C.lista("OBS_PRZETW_PLIKI", [])
 ZESTAWIENIE_PLIK = C.sciezka("CC_ZESTAWIENIE",
                              "Zestawienie wzorcowanych przyrządów.xlsx", FOLDER)
 
@@ -300,6 +302,140 @@ def kanaly_przetwornikow(lines):
         widziane.add(nr)
         wynik.append((w_pliku.get(nr, m.group(2)), (m.group(1) or 'U').upper()))
     return wynik
+
+
+# Eksport multimetru 1586A (i podobnych): 'Record #;Time;Ch 001 (ADC);Ch 221 (ADC);...'
+# ADC = prad w AMPERACH (0.00672924 A = 6.72924 mA), VDC = napiecie w V. Kolumna
+# '(mA)' — gdy operator juz przeliczyl — brana wprost (ma pierwszenstwo przed ADC).
+_RE_KOL_MULTIMETRU = re.compile(r'^Ch\s*(\d{1,4})\s*\(\s*(ADC|mADC|mA|VDC|V|A)\s*\)$', re.I)
+_NAZWY_KOLUMNY_CZASU = ('time', 'czas', 'date/time', 'data czas', 'datetime', 'data i czas')
+
+
+def wczytaj_plik_multimetru(path):
+    """
+    Plik multimetru z wyjsciami przetwornikow -> (czasy, kanaly):
+      czasy  — lista datetime (None dla nieczytelnych),
+      kanaly — {'001': ([wartosci w mA albo V], 'I' | 'U'), ...}
+    """
+    lines = open_txt(path)
+    naglowek_i, komorki, sep = None, None, ';'
+    for i, line in enumerate(lines):
+        for sep_k in (';', '\t', ','):
+            c = [x.strip().strip('"') for x in line.rstrip('\r\n').split(sep_k)]
+            if any(_RE_KOL_MULTIMETRU.match(x) for x in c):
+                naglowek_i, komorki, sep = i, c, sep_k
+                break
+        if naglowek_i is not None:
+            break
+    if naglowek_i is None:
+        return [], {}
+
+    kol_czasu = next((j for j, x in enumerate(komorki)
+                      if x.lower() in _NAZWY_KOLUMNY_CZASU), None)
+    # kanal -> (indeks kolumny, mnoznik, typ); '(mA)' wygrywa z '(ADC)'
+    zrodla = {}
+    for j, x in enumerate(komorki):
+        m = _RE_KOL_MULTIMETRU.match(x)
+        if not m:
+            continue
+        kanal, jedn = m.group(1), m.group(2).lower()
+        if jedn in ('adc', 'a'):
+            zr, prior = (j, 1000.0, 'I'), 1
+        elif jedn in ('madc', 'ma'):
+            zr, prior = (j, 1.0, 'I'), 2
+        else:
+            zr, prior = (j, 1.0, 'U'), 1
+        if kanal not in zrodla or prior > zrodla[kanal][1]:
+            zrodla[kanal] = (zr, prior)
+
+    czasy = []
+    kanaly = {k: ([], zr[2]) for k, (zr, _p) in zrodla.items()}
+    for line in lines[naglowek_i + 1:]:
+        c = [x.strip().strip('"') for x in line.rstrip('\r\n').split(sep)]
+        if len(c) < 2 or not any(c):
+            continue
+        t = None
+        if kol_czasu is not None and kol_czasu < len(c):
+            t = _s_to_dt(c[kol_czasu])
+        if t is None:
+            t = next((d for d in (_s_to_dt(x) for x in c[:3]) if d is not None), None)
+        if t is None:
+            continue
+        czasy.append(t)
+        for k, ((j, mnoznik, _typ), _p) in zrodla.items():
+            v = _s_to_float(c[j]) if j < len(c) else None
+            kanaly[k][0].append(None if v is None else v * mnoznik)
+    return czasy, kanaly
+
+
+def dolacz_przetworniki_z_plikow(rows, sciezki, tol_min=None):
+    """
+    Dokleja do `rows` kolumny z plikow multimetru (po jednej na kanal), dopasowane
+    po czasie do wierszy obserwacji. Plik z czasem co do MINUTY (bez sekund) —
+    wiersz bierze probke z NAJBLIZSZEJ minuty (13:21:59 -> 13:22, jak przy recznym
+    przepisywaniu w zleceniu 230); z sekundami — najblizsza w tolerancji.
+    Zwraca liste (kanal, 'I'|'U', indeks w rows, nazwa pliku).
+    """
+    import bisect
+    if not rows or not sciezki:
+        return []
+    tol_s = (WYNIKI_TOLERANCJA_MIN if tol_min is None else tol_min) * 60.0
+    baza = max(len(r) for r in rows)
+    for r in rows:
+        r.extend([''] * (baza - len(r)))
+    czasy_w = [_s_to_dt(r[0]) for r in rows]
+    wynik = []
+    for sciezka in sciezki:
+        nazwa = os.path.basename(sciezka)
+        if not os.path.exists(sciezka):
+            print(f"  [Przetworniki] Brak pliku multimetru: {sciezka}")
+            continue
+        czasy, kanaly = wczytaj_plik_multimetru(sciezka)
+        if not kanaly:
+            print(f"  [Przetworniki] '{nazwa}': nie znalazlem kolumn 'Ch NNN (ADC/VDC/mA)' — pomijam.")
+            continue
+        pary = sorted((t, i) for i, t in enumerate(czasy))
+        ts = [t.timestamp() for t, _i in pary]
+        co_minute = all(t.second == 0 for t in czasy)
+        po_minucie = {}
+        if co_minute:
+            for t, i in pary:
+                po_minucie.setdefault(t.replace(second=0, microsecond=0), i)
+
+        def indeks(t):
+            if t is None:
+                return None
+            if co_minute:
+                # najblizsza minuta (13:21:59 -> 13:22) — tak dobieral operator recznie
+                return po_minucie.get((t + datetime.timedelta(seconds=30)).replace(
+                    second=0, microsecond=0))
+            x = t.timestamp()
+            j = bisect.bisect_left(ts, x)
+            best = min((k for k in (j - 1, j) if 0 <= k < len(ts)),
+                       key=lambda k: abs(ts[k] - x), default=None)
+            return pary[best][1] if best is not None and abs(ts[best] - x) <= tol_s else None
+
+        idx_wierszy = [indeks(t) for t in czasy_w]
+        trafione = sum(1 for i in idx_wierszy if i is not None)
+        for kanal, (wartosci, typ) in kanaly.items():
+            kol = len(rows[0])
+            for r, i in zip(rows, idx_wierszy):
+                v = wartosci[i] if i is not None else None
+                r.append('' if v is None else f"{v:.6f}")
+            wynik.append((kanal, typ, kol, nazwa))
+        print(f"  [Przetworniki] '{nazwa}': kanaly "
+              + ", ".join(f"Ch {k} ({'mA' if t == 'I' else 'V'})" for k, (_w, t) in kanaly.items())
+              + f" — dopasowano {trafione}/{len(rows)} wierszy obserwacji"
+              + (" (czas co do minuty)" if co_minute else ""))
+        if not trafione:
+            print(f"  [UWAGA] '{nazwa}': czasy pliku nie pokrywaja sie z pomiarem "
+                  f"({min(czasy):%d.%m %H:%M} - {max(czasy):%d.%m %H:%M}) — sprawdz plik.")
+    return wynik
+
+
+def _sciezki_plikow_przetwornikow():
+    """Pliki multimetru wybrane w panelu (wzgledem folderu roboczego)."""
+    return [p if os.path.isabs(p) else os.path.join(FOLDER, p) for p in PLIKI_PRZETWORNIKOW]
 
 
 def _numery(kanaly):
@@ -780,19 +916,31 @@ def _naglowki_cc04(kanal_pt):
 
 
 def _naglowki_przetwornikow(przetworniki):
-    """Naglowki kolumn przetwornikow w obserwacji: 'Wskazania multimetru Przetwornik U Ch105 [V]'."""
-    return [f'Wskazania multimetru Przetwornik {typ} Ch{k} [{"mA" if typ == "I" else "V"}]'
-            for k, typ in przetworniki]
-
-
-def _kolejnosc_z_przetwornikami(kolumny):
     """
-    Kolumny przetwornikow (indeksy za ukladem CC04_KOLUMNY) stawiamy w arkuszu
+    Naglowki kolumn przetwornikow w obserwacji:
+      'Wskazania multimetru Przetwornik U Ch105 [V]'
+      'Wskazania multimetru Przetwornik I Ch001 [mA] (dat00001.csv)'  — z pliku multimetru
+    """
+    wynik = []
+    for p in przetworniki:
+        k, typ = p[0], p[1]
+        plik = p[3] if len(p) > 3 and p[3] else None
+        wynik.append(f'Wskazania multimetru Przetwornik {typ} Ch{k} '
+                     f'[{"mA" if typ == "I" else "V"}]' + (f' ({plik})' if plik else ''))
+    return wynik
+
+
+def _kolejnosc_z_przetwornikami(kolumny, n=None, za_kanalami=None):
+    """
+    Kolumny przetwornikow (indeksy za ukladem kolumn pliku) stawiamy w arkuszu
     zaraz za wskazaniami multimetru — obok kanalow, z ktorymi byly mierzone.
     Dane w `rows` zostaja w swoim ukladzie; zmienia sie tylko kolejnosc w arkuszu.
+    Domyslnie uklad CC-04; dla CC: n=12, za_kanalami=5.5 (za Ch001).
     """
-    n = len(CC04_KOLUMNY)
-    za_kanalami = CC04_KOLUMNY.index('tdp') - 0.5
+    if n is None:
+        n = len(CC04_KOLUMNY)
+    if za_kanalami is None:
+        za_kanalami = CC04_KOLUMNY.index('tdp') - 0.5
     return sorted(kolumny, key=lambda i: i if i < n else za_kanalami + (i - n) / 1000)
 
 
@@ -3133,7 +3281,7 @@ def rola_przetwornika(rows, idx):
     return 't'
 
 
-def urzadzenia_przetwornikow(przetworniki, rows):
+def urzadzenia_przetwornikow(przetworniki, rows, tabela=None):
     """
     Przyrzady wzorcowane przez wyjscia analogowe. Kanaly dzielimy na temperature
     i wilgotnosc (rola_przetwornika) i laczymy w pary w kolejnosci z naglowka:
@@ -3143,17 +3291,50 @@ def urzadzenia_przetwornikow(przetworniki, rows):
     Krotka kanalu: (oznaczenie, indeks w rows, 'U' | 'I').
     """
     n = len(CC04_KOLUMNY)
+    kanaly = []
+    for j, p in enumerate(przetworniki or []):
+        idx = p[2] if len(p) > 2 else n + j
+        kanaly.append((p[0], idx, p[1]))
+
+    def nr(k):
+        try:
+            return int(str(k).strip())
+        except ValueError:
+            return None
+
+    # 1) Tabela 'Przetworniki' z panelu: operator mowi, ktory kanal to t, a ktory RH,
+    #    i do jakiego przyrzadu naleza.
+    wynik, uzyte = [], set()
+    for p in (tabela or {}).values():
+        dev = {'serial': p.serial}
+        for rola, kanal in (('t', p.kanal_t), ('rh', p.kanal_rh)):
+            trafiony = next((k for k in kanaly
+                             if kanal and nr(k[0]) == nr(kanal) and k[1] not in uzyte), None)
+            dev[rola] = trafiony
+            if trafiony:
+                uzyte.add(trafiony[1])
+        if dev['t'] or dev['rh']:
+            wynik.append(dev)
+
+    # 2) Reszta — rola z przebiegu (napiecie idzie za T albo za RH komory).
     t_k, rh_k = [], []
-    for j, (kanal, typ) in enumerate(przetworniki or []):
-        idx = n + j
-        (rh_k if rola_przetwornika(rows, idx) == 'rh' else t_k).append((kanal, idx, typ))
-    return [{'t': t_k[i] if i < len(t_k) else None,
-             'rh': rh_k[i] if i < len(rh_k) else None}
-            for i in range(max(len(t_k), len(rh_k)))]
+    for k in kanaly:
+        if k[1] in uzyte:
+            continue
+        (rh_k if rola_przetwornika(rows, k[1]) == 'rh' else t_k).append(k)
+    wynik += [{'t': t_k[i] if i < len(t_k) else None,
+               'rh': rh_k[i] if i < len(rh_k) else None}
+              for i in range(max(len(t_k), len(rh_k)))]
+    return wynik
 
 
 def opis_kanalow_przetwornika(urz):
-    """Tekst do 'Uwag' na Stronie 2 — jak wpisywany recznie: 'ch temp 105\nch humid 115'."""
+    """
+    Tekst do 'Uwag' na Stronie 2 — jak wpisywany recznie:
+      dwa wyjscia: 'ch temp 105\nch humid 115';  jedno: 'CH 001'.
+    """
+    if bool(urz.get('t')) != bool(urz.get('rh')):
+        return f"CH {(urz.get('t') or urz.get('rh'))[0]}"
     czesci = []
     if urz.get('t'):
         czesci.append(f"ch temp {urz['t'][0]}")
@@ -3346,7 +3527,8 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     _start_col = WYNIKI_START_COL_CC04 if obs_type == 'CC04' else WYNIKI_START_COL_CC
     # Przetworniki mierzone multimetrem — kazdy przyrzad dostaje wlasna pare kolumn
     # ZA przyrzadami z plikow wynikow.
-    urz_przetw = urzadzenia_przetwornikow(przetworniki, rows) if obs_type == 'CC04' else []
+    urz_przetw = urzadzenia_przetwornikow(
+        przetworniki, rows, pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW))
     _potrzebne = _policz_potrzebne_przyrzady(rep_groups, rows)
     if urz_przetw:
         _potrzebne = (_potrzebne or 0) + len(urz_przetw)
@@ -3567,20 +3749,23 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     if urz_przetw and 'Strona 1' in proto_wb.sheetnames:
         _wypelnij_strone1_przetworniki(proto_wb['Strona 1'], urz_przetw, multimetr,
                                        pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW),
-                                       _serial_przetwornika(pz_lista))
+                                       urz_przetw[0].get('serial') or _serial_przetwornika(pz_lista))
     if urz_przetw:
         uzyte = list(uzyte or [])
-        serial_pr = _serial_przetwornika(pz_lista)
+        serial_dom = _serial_przetwornika(pz_lista)
+        bez_numeru = False
         for urz in urz_przetw:
+            serial_pr = urz.get('serial') or serial_dom
+            bez_numeru = bez_numeru or not serial_pr
             col = _start_col + len(uzyte) * 2
             _wpisz_przetwornik(ws3, rep_groups, rows, urz, col, BLOCK_START_ROW, BLOCK_SIZE)
             uzyte.append((serial_pr, [], [], {'przetwornik': urz}))
             print(f"  [Przetwornik] {opis_kanalow_przetwornika(urz).replace(chr(10), ', ')}"
                   f" -> kolumny {get_column_letter(col)}/{get_column_letter(col + 1)}"
                   f" (przyrzad {len(uzyte)}, nr fabr. {serial_pr or '?'})")
-        if not serial_pr:
-            print("  [UWAGA] Nie wiem, do ktorego przyrzadu z PZ naleza przetworniki — "
-                  "uzupelnij jego wiersz na Stronie 2 recznie.")
+        if bez_numeru:
+            print("  [UWAGA] Nie wiem, do ktorego przyrzadu naleza przetworniki — wpisz "
+                  "je w tabeli 'Przetworniki' (krok 2) albo uzupelnij Strone 2 recznie.")
     if pz_lista and (uzyte_z_plikow or urz_przetw):
         _ostrzez_o_brakujacych_plikach(pz_lista, uzyte)
 
@@ -3965,12 +4150,15 @@ def main():
 
         # PELNY uklad jak w pliku multimetru: WSZYSTKIE kanaly po kolei (A..AG = 33 kol).
         # Analiza i protokol biora tylko kanaly GLOWNE (po nazwie); reszta jest do wgladu.
-        przetworniki = kanaly_przetwornikow(raw_lines)
-        N_KOL = len(CC04_KOLUMNY) + len(przetworniki)
-        kanal_pt = mapa_slot_pt(raw_lines, przetworniki)
-        if przetworniki:
+        przetworniki_txt = kanaly_przetwornikow(raw_lines)
+        kanal_pt = mapa_slot_pt(raw_lines, przetworniki_txt)
+        if przetworniki_txt:
             print("  Przetworniki (przyrzad wzorcowany, wyjscie analogowe): "
-                  + ", ".join(f"Ch{k} ({t})" for k, t in przetworniki))
+                  + ", ".join(f"Ch{k} ({t})" for k, t in przetworniki_txt))
+        przetworniki = [(k, t, len(CC04_KOLUMNY) + j, None)
+                        for j, (k, t) in enumerate(przetworniki_txt)]
+        przetworniki += dolacz_przetworniki_z_plikow(rows, _sciezki_plikow_przetwornikow())
+        N_KOL = len(CC04_KOLUMNY) + len(przetworniki)
 
         # Podpisy z szablonu (X92/X93) + ich STYL (ramka, format daty) czytamy PRZED
         # nadpisaniem danymi. W pelnym ukladzie kol. 24-25 to juz dane, wiec podpisy,
@@ -4065,12 +4253,23 @@ def main():
         wb = openpyxl.load_workbook(output_path)
         ws = wb.active
 
+        # Etykiety bloku podpisu szablonu (N91 'Data', O91 'Wykonał/a:') — czytane przed
+        # zapisem danych: przy kolumnach przetwornikow dane wchodza na N/O.
+        _etyk_podpisu = (ws.cell(row=91, column=14).value, ws.cell(row=91, column=15).value)
+
+        # Przetworniki z pliku multimetru (np. 1586A) — kolumny za ukladem pliku TXT.
+        n_kol_txt = max((len(r) for r in rows), default=0)
+        przetworniki = dolacz_przetworniki_z_plikow(rows, _sciezki_plikow_przetwornikow())
+
         # A2:L(ostatni) – dane pomiarowe, z pominieciem kolumn calkiem pustych
         n_kol_cc = max((len(r) for r in rows), default=0)
         kolumny = _kolumny_z_danymi(rows, n_kol_cc) if POMIJAJ_PUSTE_KOLUMNY \
             else list(range(n_kol_cc))
-        naglowki_cc = [ws.cell(row=1, column=1 + i).value for i in range(n_kol_cc)]
-        formaty_szablonu = _formaty_kolumn_szablonu(ws, n_kol_cc)
+        kolumny = _kolejnosc_z_przetwornikami(kolumny, n=n_kol_txt, za_kanalami=5.5)
+        naglowki_cc = ([ws.cell(row=1, column=1 + i).value for i in range(n_kol_txt)]
+                       + _naglowki_przetwornikow(przetworniki))
+        formaty_szablonu = (_formaty_kolumn_szablonu(ws, n_kol_txt)
+                            + ['0.0000'] * len(przetworniki))
         mapa_kolumn = _raport_pominietych_kolumn(kolumny, naglowki_cc, n_kol_cc)
         for r_i, row in enumerate(rows):
             for nowy, stary in enumerate(kolumny):
@@ -4095,9 +4294,17 @@ def main():
             j1.value = sensor_name
         print(f"J1 -> {j1.value!r}")
 
-        # N92 – data,  O92 – podpis
-        ws.cell(row=92, column=14).value = today
-        ws.cell(row=92, column=15).value = PODPIS
+        # N92 – data,  O92 – podpis. Przy kolumnach przetwornikow dane siegaja dalej —
+        # podpis przesuwamy na prawo od danych, zeby nie nadpisal pomiaru.
+        _kol_podpisu = max(14, len(kolumny) + 3)
+        if _kol_podpisu != 14:
+            for _r, _c in ((91, 14), (91, 15), (92, 14), (92, 15)):
+                if _c > len(kolumny):          # pozostalosc szablonu poza danymi
+                    ws.cell(row=_r, column=_c).value = None
+            ws.cell(row=91, column=_kol_podpisu).value = _etyk_podpisu[0]
+            ws.cell(row=91, column=_kol_podpisu + 1).value = _etyk_podpisu[1]
+        ws.cell(row=92, column=_kol_podpisu).value = today
+        ws.cell(row=92, column=_kol_podpisu + 1).value = PODPIS
 
         print("\nAnaliza stabilnosci...")
         rep_groups = analyze_and_highlight(ws, rows, file_type='CC', punkty_pz=punkty_pz)
@@ -4117,8 +4324,7 @@ def main():
         generuj_protokol(rep_groups, rows, measurement_id, file_type,
                          sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest,
                          pz_lista=_pz_lista, kanaly_slotow=kanaly_slotow,
-                         przetworniki=(kanaly_przetwornikow(raw_lines)
-                                       if file_type == 'CC04' else None),
+                         przetworniki=przetworniki,
                          multimetr=multimetr_z_naglowka(raw_lines))
         # Znaczniki punktow w zestawieniu przyrzadow (nawigacja po czasie)
         oznacz_zestawienie_punkty(rep_groups, rows, prefiks=prefiks)

@@ -348,6 +348,9 @@ CZYSC_AUTORECOVER = C.flaga("GEN_AUTOREC", CZYSC_AUTORECOVER)
 SPRZATAJ_ZAWIESZONE_EXCELE = C.flaga("GEN_SPRZATAJ_EXCEL", True)
 # Przetworniki z panelu (tabela PRZETWORNIKI) — patrz pz_dane.przetworniki_z_tabeli.
 TABELA_PRZETWORNIKOW = C.tabela("PRZETWORNIKI", [])
+# Swiadectwo przetwornika z jednym wyjsciem — wilgotnosci (szablon z placeholderami
+# [symbol_wy], [jedn_wy], [rh_min]..., kolumna Im: [prad_N_RH]).
+SZABLON_WORD_PRZETW_RH = C.tekst("GEN_WORD_PRZETW_RH", "xxx_yyy_LA_TH_2026 - przetwornik RH.docx")
 # Szablon arkusza dla przetwornikow ('Wyniki' z wiersza 253) — patrz cc_szablon_przetwornika.
 SZABLON_PRZETWORNIKA = os.environ.get("CC_SZABLON_PRZETW") or (
     "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik (CC).xlsx")
@@ -1710,6 +1713,75 @@ def _zakres_rh_zakladki(ws):
     return "F15:F19", [None] * 5
 
 
+def _fmt_miejsca(v, miejsca):
+    """Liczba -> tekst z ustalona liczba miejsc ('46.0'); tekst ('-') bez zmian."""
+    if isinstance(v, bool) or v is None:
+        return v
+    if isinstance(v, (int, float)):
+        return f"{v:.{miejsca}f}"
+    return v
+
+
+def kalibracja_przetwornika(wartosci, nazwa):
+    """
+    Wiersz 253 zakladki przetwornika (D..O) -> punkt do swiadectwa.
+    wartosci: {'D': t, 'E': RH, 'F': Itm, 'G': IRHm, 'H': tm, 'I': RHm,
+               'J': Δt, 'K': ΔRH, 'M': Ut, 'O': URH}
+    Formaty jak w wydanych swiadectwach: t 2 miejsca, RH 1, prad 3.
+    """
+    w = wartosci
+    return {
+        "nazwa":          nazwa,
+        "przetwornik":    True,
+        "wartosc_odn":    _fmt_miejsca(w.get("D"), 2),
+        "wartosc_odn_RH": _fmt_miejsca(w.get("E"), 1),
+        "prad":           _fmt_miejsca(w.get("F"), 3),
+        "prad_RH":        _fmt_miejsca(w.get("G"), 3),
+        "zmierzona":      _fmt_miejsca(w.get("H"), 2),
+        "zmierzona_RH":   _fmt_miejsca(w.get("I"), 1),
+        "poprawka":       _fmt_miejsca(w.get("J"), 2),
+        "poprawka_RH":    _fmt_miejsca(w.get("K"), 1),
+        "niepewnosc":     _fmt_miejsca(w.get("M"), 2),
+        "niepewnosc_RH":  _fmt_miejsca(w.get("O"), 1),
+    }
+
+
+_RE_ZASILANIE_UWAGI = re.compile(r'Uz\s*=\s*\([^)]*\)\s*V\s*DC\.?', re.I)
+
+
+def _liczba_txt(v):
+    if v is None:
+        return ""
+    return (f"{v:g}").replace(".", ",")
+
+
+def placeholdery_przetwornika(rekord):
+    """Teksty zalezne od przetwornika: rodzaj wyjscia, zakresy, zasilanie."""
+    p = rekord.get("PRZETWORNIK") or {}
+    prad = p.get("L10") != "Napięcie"
+    uz = ""
+    for zrodlo in (rekord.get("P"),):
+        m = _RE_ZASILANIE_UWAGI.search(str(zrodlo or ""))
+        if m:
+            uz = re.sub(r'\s+', ' ', m.group(0)).strip()
+            if not uz.endswith("."):
+                uz += "."
+            break
+    ewid = _cell_to_str(rekord.get("F"))
+    return {
+        "[wyjscie_dopelniacz]": "prądu" if prad else "napięcia",
+        "[wyjscie_przym]":      "prądowe" if prad else "napięciowe",
+        "[symbol_wy]":          "I" if prad else "U",
+        "[jedn_wy]":            "mA" if prad else "V",
+        "[wy_min]":             _liczba_txt(p.get("M22")),
+        "[wy_max]":             _liczba_txt(p.get("O22")),
+        "[rh_min]":             _liczba_txt(p.get("L28")),
+        "[rh_max]":             _liczba_txt(p.get("O28")),
+        "[zasilanie]":          uz,
+        "[nr_ewid_tekst]":      f", nr ewid.: {ewid}" if ewid and ewid != "-" else "",
+    }
+
+
 def _liczba_lub_none(v):
     """Liczba z komorki (0.1 / '0,1'); tekst ('-', pusto) -> None."""
     if isinstance(v, bool):
@@ -2041,6 +2113,17 @@ def _zastap_histereza_w_dok(doc, punkty):
         rh_r = int(_round_half_away_from_zero(float(hist.get("wartosc_odn_RH")) / 10)) * 10
     except (TypeError, ValueError):
         rh_r = "?"
+    # Punkt zamowiony w PZ (nazwa zakladki, np. '23, 60 (2)') ma pierwszenstwo przed
+    # zaokraglonym odczytem: przy t = 23,83 °C wychodzilo '24 °C', a w PZ i w wydanym
+    # swiadectwie (1129/230) stoi '(23 °C, 60 %rh)'.
+    _baza = _WZORZEC_POWTORKI_NAZWY.sub('', str(hist.get("nazwa") or "")).strip()
+    _z_pz = hist.get("nazwa") in ZAKLADKI_Z_PZ or _baza in ZAKLADKI_Z_PZ
+    _t_nom = _t_z_nazwy_zakladki(hist.get("nazwa")) if _z_pz else None
+    _rh_nom = _rh_z_nazwy_zakladki(hist.get("nazwa")) if _z_pz else None
+    if _t_nom is not None:
+        temp_r = int(_round_half_away_from_zero(float(_t_nom)))
+    if _rh_nom is not None:
+        rh_r = int(_round_half_away_from_zero(float(_rh_nom)))
 
     tekst_glowny = (
         f" Punkt ({temp_r} °C, {rh_r} %rh) powtórzony"
@@ -2363,6 +2446,8 @@ def _wypelnij_jedna_tabele_kalibracji(cal_table, punkty):
         val_zmi_rh = _fmt(punkt.get("zmierzona_RH"))
         val_pop_rh = _fmt(punkt.get("poprawka_RH"))
         val_nie_rh = _fmt(punkt.get("niepewnosc_RH"))
+        val_prad = _fmt(punkt.get("prad"))
+        val_prad_rh = _fmt(punkt.get("prad_RH"))
         is_hist = _to_jest_powtorka_kolizji(punkt.get("nazwa"))
         # Probujemy obie wersje: z polskimi znakami i bez (ASCII), dla pewnosci
         for placeholder, wartosc in [
@@ -2378,6 +2463,8 @@ def _wypelnij_jedna_tabele_kalibracji(cal_table, punkty):
             (f"[poprawka_{idx}_RH]",     val_pop_rh),
             (f"[niepewność_{idx}_RH]",  val_nie_rh),
             (f"[niepewnosc_{idx}_RH]",   val_nie_rh),
+            (f"[prad_{idx}]",            val_prad),       # przetwornik: Itm / Utm
+            (f"[prad_{idx}_RH]",         val_prad_rh),    # przetwornik: IRHm / URHm
         ]:
             # Dla punktu histerezy: wartość odn. RH dostaje 3 spacje + górny indeks " 1)"
             if is_hist and placeholder in (
@@ -2423,6 +2510,11 @@ def _pz_punkty_arkusze():
 # (np. PZ '25 °C / 30 %' -> nastawa komory 25,0 / 28,0).
 TOL_NAZWA_T  = 1.5    # [st.C]
 TOL_NAZWA_RH = 4.0    # [%RH]
+
+
+# Nazwy zakladek nadane wg punktow ZAMOWIONYCH w PZ — tylko dla nich nazwa jest
+# nominalem punktu (np. w nocie o histerezie swiadectwa).
+ZAKLADKI_Z_PZ = set()
 
 
 def _nazwy_zakladek_z_pz(dane_zakladek):
@@ -2471,6 +2563,7 @@ def _nazwy_zakladek_z_pz(dane_zakladek):
         czesc_t  = _cell_to_sheet_name_part(t_pz)
         czesc_rh = _cell_to_sheet_name_part(rh_pz) if rh_pz is not None else "-"
         zd["nazwa"] = f"{czesc_t}, {czesc_rh}"
+        ZAKLADKI_Z_PZ.add(zd["nazwa"])
         zmienione += 1
 
     if zmienione:
@@ -2524,9 +2617,10 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
 
     for j, (rekord, nowa_nazwa_xlsx) in enumerate(zip(dane_s2, kopie_excel)):
         nr_sw = nr_sw_poczatkowy + j
-        if rekord.get("PRZETWORNIK"):
-            print(f"  [Word] '{nowa_nazwa_xlsx}': przetwornik — swiadectwo przetwornika "
-                  f"nie jest jeszcze generowane (brak szablonu Word), pomijam.")
+        _przetw = rekord.get("PRZETWORNIK")
+        if _przetw and not (_przetw.get("K15") == "-" and _przetw.get("K16") != "-"):
+            print(f"  [Word] '{nowa_nazwa_xlsx}': przetwornik z wyjsciem temperatury — "
+                  f"brak szablonu swiadectwa dla tego wariantu, pomijam.")
             continue
         prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
 
@@ -2540,7 +2634,9 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
         nr_ewid_v  = _cell_to_str(rekord.get("F")) or (_pzdev.nr_ewid if _pzdev else "")
 
         klasa = klasa_wilg_per_kopia[j] if klasa_wilg_per_kopia and j < len(klasa_wilg_per_kopia) else "brak"
-        if klasa == "mieszana":
+        if _przetw:
+            szablon_word = SZABLON_WORD_PRZETW_RH      # przetwornik tylko RH
+        elif klasa == "mieszana":
             szablon_word = szablon_word_mieszany or szablon_word_z_rh or szablon_word_tylko_temp
         elif klasa == "pelna":
             szablon_word = szablon_word_z_rh or szablon_word_tylko_temp
@@ -2589,8 +2685,12 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             "[użytkownik]":       uzytkownik_v,     # blok adresowy z PZ (tylko szablon uzytkownika)
             "[zleceniodawca]":    zleceniodawca_v,  # blok adresowy ZLECENIODAWCY z PZ
             "[Podpis]":           PODPISUJACY_2,
+            **(placeholdery_przetwornika(rekord) if _przetw else {}),
         }.items():
             _zastap_tekst_w_dok(doc, placeholder, wartosc)
+        if _przetw and not placeholdery_przetwornika(rekord)["[zasilanie]"]:
+            _warn(f"'{nowa_nazwa_xlsx}': brak napiecia zasilania (Uz) w Uwagach Strony 2 — "
+                  f"uzupelnij zdanie o zasilaniu w swiadectwie.")
 
         punkty = dane_kalibracji[j] if j < len(dane_kalibracji) else []
         _uzupelnij_tabele_kalibracji(doc, punkty)
@@ -3685,6 +3785,18 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
         _diag_done = False
         for ws_name in working_final_list:
             ws_cal = wb.sheets[ws_name]
+
+            # Przetwornik: wyniki w bloku 'PRZETWORNIK ...' (wiersz 253), nie 239/246.
+            if str(ws_cal.range("K10").value or "").strip() == "Przetwornik":
+                w253 = {k: ws_cal.range(f"{k}253").value
+                        for k in ("D", "E", "F", "G", "H", "I", "J", "K", "M", "O")}
+                punkt = kalibracja_przetwornika(w253, ws_name)
+                print(f"    [Kalibracja {ws_name}] przetwornik: t={punkt['wartosc_odn']} "
+                      f"RH={punkt['wartosc_odn_RH']} I={punkt['prad_RH']} "
+                      f"RHm={punkt['zmierzona_RH']} dRH={punkt['poprawka_RH']} "
+                      f"U={punkt['niepewnosc_RH']}")
+                kalibracja.append(punkt)
+                continue
 
             if wilgotnosc_per_zakladka[ws_name]:
                 d = ws_cal.range("D239").value
