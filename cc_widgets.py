@@ -390,6 +390,12 @@ class Pole(QWidget):
             self._kontrolka = w
             return ramka
 
+        if typ == "przetworniki":
+            w = ListaPrzetwornikow()
+            w.zmienione.connect(self.zmienione.emit)
+            self._kontrolka = w
+            return w
+
         if typ == "tabela":
             w = QTableWidget(0, len(u.kolumny))
             w.setHorizontalHeaderLabels(u.kolumny)
@@ -537,6 +543,8 @@ class Pole(QWidget):
             return w.value()
         if typ == "plik":
             return w.currentText()
+        if typ == "przetworniki":
+            return w.wartosc()
         if typ == "tabela":
             dane = []
             for r in range(w.rowCount()):
@@ -566,6 +574,8 @@ class Pole(QWidget):
                     if w.findText(v) < 0:
                         w.insertItem(0, v)
                     w.setCurrentText(v)
+            elif typ == "przetworniki":
+                w.ustaw(v or [])
             elif typ == "tabela":
                 wiersze = v or []
                 w.setRowCount(len(wiersze) + 1)   # pusty wiersz na dopisanie
@@ -1082,3 +1092,233 @@ class WierszKontrolny(QFrame):
         self.ikona.setStyleSheet(f"color:{kolor}; font-size:15px; font-weight:700;")
         self.stan.setText(tekst)
         self.stan.setStyleSheet(f"color:{kolor}; font-weight:600;")
+
+
+# ─── Przetworniki — karta na kazdy przetwornik (krok 2a) ─────────────────────
+# Kolejnosc pol w zapisanym wierszu (= pz_dane.KOLUMNY_PRZETWORNIKOW):
+#   0 nr fabr | 1 kanal t | 2 kanal RH | 3 multimetr | 4 sygnal | 5 wy od | 6 wy do |
+#   7 tmin | 8 tmax | 9 RHmin | 10 RHmax | 11 szablon arkusza
+MULTIMETRY_PRZETWORNIKOW = ["1586A", "1586A-01", "1586A-02", "K2001", "34461A",
+                            "HP3458A", "3458A-02"]
+KANALY_SKANERA = (["-", "001"] + [str(k) for k in range(101, 121)]
+                  + [str(k) for k in range(201, 223)])
+
+
+class KartaPrzetwornika(QFrame):
+    """
+    Jeden przetwornik. Pola opisane tak samo jak blok parametrow w zakladce
+    roboczej arkusza obliczeniowego (K10..K16, M22÷O22, L27/O27, L28/O28),
+    zeby od razu bylo widac, co gdzie trafi.
+    """
+
+    zmienione = Signal()
+    usun = Signal(object)
+
+    def __init__(self, numer, parent=None):
+        super().__init__(parent)
+        self.setObjectName("Kontrolny")
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 10, 14, 12)
+        lay.setSpacing(8)
+
+        gora = QHBoxLayout()
+        self.tytul = QLabel()
+        self.tytul.setObjectName("KontrolnyTytul")
+        gora.addWidget(self.tytul)
+        gora.addStretch(1)
+        x = QPushButton("✕  Usuń")
+        x.setObjectName("Ghost")
+        x.setCursor(Qt.PointingHandCursor)
+        x.clicked.connect(lambda: self.usun.emit(self))
+        gora.addWidget(x)
+        lay.addLayout(gora)
+
+        siatka = QGridLayout()
+        siatka.setHorizontalSpacing(10)
+        siatka.setVerticalSpacing(6)
+        siatka.setColumnStretch(1, 1)
+        siatka.setColumnStretch(3, 1)
+        lay.addLayout(siatka)
+
+        def et(tekst, wsk=""):
+            w = QLabel()
+            w.setObjectName("EtykietaPola")
+            w.setTextFormat(Qt.RichText)
+            w.setWordWrap(True)
+            w.setText(tekst + (f"  <span style='color:{MUTED}'>({wsk})</span>" if wsk else ""))
+            return w
+
+        def linia(podpowiedz, szer=None):
+            w = QLineEdit()
+            w.setPlaceholderText(podpowiedz)
+            if szer:
+                w.setMaximumWidth(szer)
+            w.textChanged.connect(lambda _: self.zmienione.emit())
+            return w
+
+        def lista(elementy, edytowalna=True):
+            w = ListaRozwijana()
+            w.setEditable(edytowalna)
+            w.addItems(elementy)
+            w.currentTextChanged.connect(lambda _: self.zmienione.emit())
+            return w
+
+        def zakres(od, do, jedn):
+            w = QWidget()
+            w.setStyleSheet("background: transparent;")
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(6)
+            h.addWidget(od)
+            h.addWidget(QLabel("÷"))
+            h.addWidget(do)
+            h.addWidget(jedn)
+            h.addStretch(1)
+            return w
+
+        self.serial = linia("nr fabryczny z PZ, np. 263051")
+        self.serial.textChanged.connect(self._odswiez_tytul)
+        self.sygnal = lista(["Prąd", "Napięcie"], edytowalna=False)
+        self.sygnal.currentTextChanged.connect(self._odswiez_symbole)
+        self.multimetr = lista(MULTIMETRY_PRZETWORNIKOW)
+        self.kanal_t = lista(KANALY_SKANERA)
+        self.kanal_rh = lista(KANALY_SKANERA)
+        self.wy_od, self.wy_do = linia("np. 4", 70), linia("np. 20", 70)
+        self.t_od, self.t_do = linia("np. -40", 70), linia("np. 60", 70)
+        self.rh_od, self.rh_do = linia("np. 0", 70), linia("np. 100", 70)
+        self.szablon = linia("pusto = szablon przetwornika z kroku 3")
+        self.jedn_wy = QLabel("mA")
+        self.et_kanal_t = et("")
+        self.et_kanal_rh = et("")
+
+        siatka.addWidget(et("Nr fabryczny przetwornika"), 0, 0)
+        siatka.addWidget(self.serial, 0, 1)
+        siatka.addWidget(et("Rodzaj odczytu analogowego", "L10"), 0, 2)
+        siatka.addWidget(self.sygnal, 0, 3)
+        siatka.addWidget(et("Symbol multimetru mierzącego wyjście przetwornika", "K14"), 1, 0)
+        siatka.addWidget(self.multimetr, 1, 1)
+        siatka.addWidget(self.et_kanal_t, 2, 0)
+        siatka.addWidget(self.kanal_t, 2, 1)
+        siatka.addWidget(self.et_kanal_rh, 2, 2)
+        siatka.addWidget(self.kanal_rh, 2, 3)
+        siatka.addWidget(et("Zakres przetwornika", "M22 ÷ O22"), 3, 0)
+        siatka.addWidget(zakres(self.wy_od, self.wy_do, self.jedn_wy), 3, 1)
+        siatka.addWidget(et("tmin ÷ tmax", "L27 / O27"), 4, 0)
+        siatka.addWidget(zakres(self.t_od, self.t_do, QLabel("°C")), 4, 1)
+        siatka.addWidget(et("Rhmin ÷ Rhmax", "L28 / O28"), 4, 2)
+        siatka.addWidget(zakres(self.rh_od, self.rh_do, QLabel("%")), 4, 3)
+        siatka.addWidget(et("Szablon arkusza (opcjonalnie)"), 5, 0)
+        siatka.addWidget(self.szablon, 5, 1, 1, 3)
+
+        self.numer = numer
+        self._odswiez_symbole()
+        self._odswiez_tytul()
+
+    def _odswiez_tytul(self, *_):
+        s = self.serial.text().strip()
+        self.tytul.setText(f"Przetwornik {self.numer}" + (f" — nr fabr. {s}" if s else ""))
+
+    def _odswiez_symbole(self, *_):
+        prad = self.sygnal.currentText() != "Napięcie"
+        self.jedn_wy.setText("mA" if prad else "V")
+        lit = "I" if prad else "U"
+        szary = f"<span style='color:{MUTED}'>"
+        self.et_kanal_t.setText(f"Wejście Ch skanera, pomiar {lit}tm {szary}(K15)</span>"
+                                f"<br>{szary}'-' = brak wyjścia temperatury</span>")
+        self.et_kanal_rh.setText(f"Wejście Ch skanera, pomiar {lit}RHm {szary}(K16)</span>"
+                                 f"<br>{szary}'-' = brak wyjścia wilgotności</span>")
+
+    def _pola(self):
+        return (self.serial, self.kanal_t, self.kanal_rh, self.multimetr, self.sygnal,
+                self.wy_od, self.wy_do, self.t_od, self.t_do, self.rh_od, self.rh_do,
+                self.szablon)
+
+    def wartosc(self):
+        return [(w.currentText() if isinstance(w, QComboBox) else w.text()).strip()
+                for w in self._pola()]
+
+    def ustaw(self, wiersz):
+        wart = [("" if x is None else str(x)) for x in (list(wiersz) + [""] * 12)[:12]]
+        for widget, v in zip(self._pola(), wart):
+            widget.blockSignals(True)
+            try:
+                if isinstance(widget, QComboBox):
+                    if v and widget.findText(v) >= 0:
+                        widget.setCurrentText(v)
+                    elif v and widget.isEditable():
+                        widget.setEditText(v)
+                    else:
+                        widget.setCurrentIndex(0)
+                else:
+                    widget.setText(v)
+            finally:
+                widget.blockSignals(False)
+        self._odswiez_symbole()
+        self._odswiez_tytul()
+
+
+class ListaPrzetwornikow(QWidget):
+    """Lista kart przetwornikow + przycisk '+ Dodaj przetwornik'."""
+
+    zmienione = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(8)
+        self._karty_lay = QVBoxLayout()
+        self._karty_lay.setSpacing(8)
+        lay.addLayout(self._karty_lay)
+        self._pusto = QLabel("Brak przetworników. Dodaj, jeśli w pomiarze były przyrządy "
+                             "wzorcowane przez wyjście prądowe / napięciowe.")
+        self._pusto.setObjectName("OpisPola")
+        self._pusto.setWordWrap(True)
+        lay.addWidget(self._pusto)
+        self.dodaj_btn = QPushButton("＋  Dodaj przetwornik")
+        self.dodaj_btn.setObjectName("Ghost")
+        self.dodaj_btn.setCursor(Qt.PointingHandCursor)
+        self.dodaj_btn.clicked.connect(self._dodaj_klik)
+        r = QHBoxLayout()
+        r.addWidget(self.dodaj_btn)
+        r.addStretch(1)
+        lay.addLayout(r)
+        self.karty = []
+
+    def _dodaj_klik(self):
+        self.dodaj().serial.setFocus()
+        self.zmienione.emit()
+
+    def dodaj(self, wiersz=None):
+        k = KartaPrzetwornika(len(self.karty) + 1)
+        if wiersz:
+            k.ustaw(wiersz)
+        k.zmienione.connect(self.zmienione.emit)
+        k.usun.connect(self._usun)
+        self.karty.append(k)
+        self._karty_lay.addWidget(k)
+        self._pusto.setVisible(False)
+        return k
+
+    def _usun(self, karta):
+        self.karty.remove(karta)
+        karta.setParent(None)
+        karta.deleteLater()
+        for i, k in enumerate(self.karty, start=1):
+            k.numer = i
+            k._odswiez_tytul()
+        self._pusto.setVisible(not self.karty)
+        self.zmienione.emit()
+
+    def wartosc(self):
+        """Wiersze kart z wpisanym numerem fabrycznym (puste karty sa pomijane)."""
+        return [w for w in (k.wartosc() for k in self.karty) if w[0]]
+
+    def ustaw(self, wiersze):
+        for k in list(self.karty):
+            k.setParent(None)
+            k.deleteLater()
+        self.karty = []
+        for w in wiersze or []:
+            self.dodaj(w)
+        self._pusto.setVisible(not self.karty)

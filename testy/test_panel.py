@@ -399,6 +399,52 @@ class TestZmianaFolderu(BazaOkna):
         self.assertEqual(self.okno.lbl_folder.text(), self.folder)
 
 
+class TestKartyPrzetwornikow(unittest.TestCase):
+    """Krok 2a: przetworniki jako karty z polami nazwanymi jak w arkuszu (K14-K16, M22/O22...)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        self.pole = app_gui.Pole(C.WG_ENV["PRZETWORNIKI"], [])
+        self.lista = self.pole._kontrolka
+
+    def test_dodawanie_i_usuwanie(self):
+        self.assertEqual(self.pole.wartosc(), [])
+        k = self.lista.dodaj()
+        k.serial.setText("263051")
+        k.kanal_rh.setCurrentText("001")
+        self.lista.dodaj().serial.setText("87441")
+        self.assertEqual([w[0] for w in self.pole.wartosc()], ["263051", "87441"])
+        self.lista._usun(self.lista.karty[0])
+        self.assertEqual([w[0] for w in self.pole.wartosc()], ["87441"])
+        self.assertEqual(self.lista.karty[0].tytul.text(), "Przetwornik 1 — nr fabr. 87441")
+
+    def test_odczyt_zapis_bez_strat(self):
+        wiersze = [["263051", "-", "001", "1586A", "Prąd", "4", "20", "", "", "0", "100", ""],
+                   ["D0540007", "105", "115", "1586A-02", "Napięcie", "0", "5", "-40", "60",
+                    "0", "100", "moj.xlsx"]]
+        self.pole.ustaw(wiersze)
+        self.assertEqual(self.pole.wartosc(), wiersze)
+
+    def test_karta_bez_numeru_pomijana(self):
+        self.lista.dodaj()
+        self.assertEqual(self.pole.wartosc(), [])
+
+    def test_symbole_wg_sygnalu(self):
+        k = self.lista.dodaj()
+        k.sygnal.setCurrentText("Napięcie")
+        self.assertIn("Utm", k.et_kanal_t.text())
+        self.assertEqual(k.jedn_wy.text(), "V")
+
+    def test_env_jak_tabela(self):
+        import json
+        self.pole.ustaw([["263051", "-", "001"]])
+        env = C.WG_ENV["PRZETWORNIKI"].do_env(self.pole.wartosc())
+        self.assertEqual(json.loads(env)[0][:3], ["263051", "-", "001"])
+
+
 class TestBezPrzyciskuCalegoObiegu(unittest.TestCase):
     """Jedno klikniecie nie moze przejsc wszystkich krokow i nadpisac protokolu (230)."""
 

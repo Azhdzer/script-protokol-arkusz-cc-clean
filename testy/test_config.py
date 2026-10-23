@@ -16,7 +16,7 @@ import cc_config as C
 from wspolne import nowa_piaskownica
 
 ZNANE_TYPY = {"tekst", "calk", "liczba", "flaga", "minuty", "plik", "folder",
-              "pliki", "kolor", "tabela"}
+              "pliki", "kolor", "tabela", "przetworniki"}
 ZNANE_KROKI = {k for k, _e, _o in C.KROKI}
 
 
@@ -43,7 +43,7 @@ class TestRejestr(unittest.TestCase):
             "calk": int, "minuty": int,
             "liczba": (int, float),
             "tekst": str, "plik": str, "folder": str, "kolor": str,
-            "pliki": list, "tabela": list,
+            "pliki": list, "tabela": list, "przetworniki": list,
         }
         for u in C.USTAWIENIA:
             with self.subTest(env=u.env):

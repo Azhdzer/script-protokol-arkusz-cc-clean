@@ -67,6 +67,7 @@ class Ust:
         "pliki"        — wiele plikow z folderu (lista z zaznaczaniem)
         "kolor"        — kolor #RRGGBB
         "tabela"       — tabela (JSON w env); uzywane dla mapowania CC-04
+        "przetworniki" — lista kart przetwornikow (JSON w env, wiersze jak "tabela")
     """
 
     __slots__ = ("env", "etykieta", "typ", "domyslna", "krok", "poziom",
@@ -102,7 +103,7 @@ class Ust:
             return "1" if wartosc else "0"
         if self.typ == "pliki":
             return ";".join(wartosc or [])
-        if self.typ == "tabela":
+        if self.typ in ("tabela", "przetworniki"):
             return json.dumps(wartosc, ensure_ascii=False)
         return "" if wartosc is None else str(wartosc)
 
@@ -200,19 +201,16 @@ _OBSERWACJA = [
             "— prad w A, przeliczany na mA — albo 'Ch NNN (VDC)'. Skopiuj plik do folderu "
             "roboczego. Odczyty sa dopasowywane po czasie do punktow obserwacji; ktory kanal "
             "nalezy do ktorego przyrzadu — w tabeli ponizej."),
-    _U("PRZETWORNIKI", "Przetworniki — kanaly, multimetr, zakres", "tabela", [], "obs",
+    _U("PRZETWORNIKI", "Przetworniki w tym pomiarze", "przetworniki", [], "obs",
        grupa="Przetworniki (wyjscie analogowe)",
        kolumny=["Nr fabryczny", "Kanał t", "Kanał RH", "Multimetr",
                 "Sygnał (Prąd / Napięcie)", "Wyjście od", "Wyjście do",
                 "tmin °C", "tmax °C", "RHmin %", "RHmax %",
                 "Szablon arkusza (opcjonalnie)"],
-       opis="Jeden wiersz na przetwornik wzorcowany przez wyjscie pradowe/napieciowe. "
-            "Kanal bez wyjscia: '-'. Krok 2 wpisuje z tego skalowanie (Strona 2, M/N) "
-            "i kanaly (Uwagi); krok 3 — parametry zakladek kopii: rodzaj odczytu (L10), "
-            "multimetr (K14), kanaly (K15/K16), zakres wyjscia (M22/O22), "
-            "tmin/tmax i RHmin/RHmax, a dane wpisuje w G/H zamiast E/F. 'Szablon arkusza' "
-            "— wlasny plik szablonu dla tego przetwornika (pusto = szablon przetwornika "
-            "z kroku 3)."),
+       opis="Jedna karta na przetwornik. Pola nazwane jak w zakladce arkusza obliczeniowego "
+            "(w nawiasie — komorka, do ktorej trafia wartosc). Krok 2 wpisze z nich "
+            "skalowanie i kanaly do protokolu, krok 3 — parametry kopii arkusza; odczyty "
+            "wyjsc ida do G/H (Itm/IRHm) zamiast E/F."),
     _U("CC_PZ_FOLDER", "Folder PZ (Potwierdzenia zamowienia)", "folder", "PZ", "obs",
        grupa="Dane przyrzadow",
        opis="PDF-y PZ (PL/EN) — z nich wypelniana jest tabela przyrzadow na Stronie 2."),
