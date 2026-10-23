@@ -111,7 +111,7 @@ class TestSwiadectwo(unittest.TestCase):
         p = A.kalibracja_przetwornika(self.W253, "23, 30")
         self.assertEqual((p["wartosc_odn"], p["wartosc_odn_RH"], p["prad_RH"],
                           p["zmierzona_RH"], p["poprawka_RH"], p["niepewnosc_RH"]),
-                         ("23.59", "28.9", "8.365", "27.3", "1.6", "1.0"))
+                         ("23.59", "28.9", "8.37", "27.3", "1.6", "1.0"))    # IRHm 2 miejsca, ZAOKR jak Excel
         self.assertEqual(p["zmierzona"], "-")
 
     def test_placeholdery_przetwornika(self):
@@ -182,7 +182,7 @@ class TestWariantySwiadectw(unittest.TestCase):
     def test_niepewnosc_wyjscia(self):
         w = dict(TestSwiadectwo.W253, L=0.0375, N=0.19)
         p = A.kalibracja_przetwornika(w, "35, 60")
-        self.assertEqual((p["niepewnosc_prad"], p["niepewnosc_prad_RH"]), ("0.037", "0.19"))
+        self.assertEqual((p["niepewnosc_prad"], p["niepewnosc_prad_RH"]), ("0.038", "0.19"))   # ZAOKR jak w Excelu
 
     def test_punkt_bez_rh_tylko_w_tabeli_temperatury(self):
         p = A.kalibracja_przetwornika(TestSwiadectwo.W253, "2, -", ma_rh=False)
@@ -210,6 +210,38 @@ class TestWariantySwiadectw(unittest.TestCase):
                         self.assertIn(x, tekst)
                 if wariant:
                     self.assertIn("[użytkownik]", tekst)
+
+
+class TestTabelaRHJakPLAJ(unittest.TestCase):
+    """Szablon 'przetwornik RH' wg PLAJ 7.8#17: niepewnosc URH w mA i w %."""
+
+    def test_kolumny(self):
+        import docx
+        plik = os.path.join(KORZEN, "xxx_yyy_LA_TH_2026 - przetwornik RH.docx")
+        if not os.path.exists(plik):
+            self.skipTest("brak szablonu")
+        t = docx.Document(plik).tables[2]
+        self.assertEqual([c.text for c in t.rows[2].cells], ["°C", "%", "[jedn_wy]", "%", "%",
+                                                             "[jedn_wy]", "%"])
+        self.assertEqual(t.rows[3].cells[5].text, "[niepewnosc_prad_1_RH]")
+
+    def test_wypelnienie_tabeli(self):
+        import docx
+        plik = os.path.join(KORZEN, "xxx_yyy_LA_TH_2026 - przetwornik RH.docx")
+        if not os.path.exists(plik):
+            self.skipTest("brak szablonu")
+        d = docx.Document(plik)
+        w = dict(TestSwiadectwo.W253, N=0.184)
+        A._uzupelnij_tabele_kalibracji(d, [A.kalibracja_przetwornika(w, "23, 30")])
+        t = d.tables[2]
+        self.assertEqual(len(t.rows), 4)
+        self.assertEqual([c.text for c in t.rows[3].cells],
+                         ["23,59", "28,9", "8,37", "27,3", "1,6", "0,18", "1,0"])
+
+    def test_zaokraglenie_jak_excel(self):
+        self.assertEqual(A._fmt_miejsca(8.365, 2), "8.37")
+        self.assertEqual(A._fmt_miejsca(0.125, 2), "0.13")
+        self.assertEqual(A._fmt_miejsca(-0.05, 1), "-0.1")
 
 
 if __name__ == "__main__":

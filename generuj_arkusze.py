@@ -1720,11 +1720,17 @@ def _zakres_rh_zakladki(ws):
 
 
 def _fmt_miejsca(v, miejsca):
-    """Liczba -> tekst z ustalona liczba miejsc ('46.0'); tekst ('-') bez zmian."""
+    """
+    Liczba -> tekst z ustalona liczba miejsc ('46.0'); tekst ('-') bez zmian.
+    Zaokraglenie POLOWY W GORE jak ZAOKR w Excelu: 8,365 -> 8,37 (format '%.2f'
+    dalby 8,36, bo 8.365 w dwojkowym zapisie to 8.36499...).
+    """
     if isinstance(v, bool) or v is None:
         return v
     if isinstance(v, (int, float)):
-        return f"{v:.{miejsca}f}"
+        from decimal import Decimal, ROUND_HALF_UP
+        return str(Decimal(repr(float(v))).quantize(Decimal(1).scaleb(-miejsca),
+                                                      rounding=ROUND_HALF_UP))
     return v
 
 
@@ -1733,7 +1739,7 @@ def kalibracja_przetwornika(wartosci, nazwa, ma_rh=True):
     Wiersz 253 zakladki przetwornika (D..O) -> punkt do swiadectwa.
     wartosci: {'D': t, 'E': RH, 'F': Itm, 'G': IRHm, 'H': tm, 'I': RHm,
                'J': Δt, 'K': ΔRH, 'L': Ut [mA/V], 'M': Ut, 'N': URH [mA/V], 'O': URH}
-    Formaty jak w wydanych swiadectwach: t 2 miejsca, RH 1, prad 3, niepewnosc
+    Formaty jak w wydanych swiadectwach i PLAJ 7.8#17: t 2 miejsca, RH 1, prad t 3, prad RH 2, niepewnosc
     wyjscia t 3, RH 2. Zakladka bez wilgotnosci (`ma_rh=False`) nie ma pol '*_RH'
     — trafia tylko do tabeli temperatury (szablon 'TH + temp').
     """
@@ -1744,7 +1750,8 @@ def kalibracja_przetwornika(wartosci, nazwa, ma_rh=True):
         "wartosc_odn":    _fmt_miejsca(w.get("D"), 2),
         "wartosc_odn_RH": _fmt_miejsca(w.get("E"), 1),
         "prad":           _fmt_miejsca(w.get("F"), 3),
-        "prad_RH":        _fmt_miejsca(w.get("G"), 3),
+        # IRHm/URHm z 2 miejscami — jak w PLAJ 7.8#17 (13,60 mA) i swiadectwach 811/919/958.
+        "prad_RH":        _fmt_miejsca(w.get("G"), 2),
         "zmierzona":      _fmt_miejsca(w.get("H"), 2),
         "zmierzona_RH":   _fmt_miejsca(w.get("I"), 1),
         "poprawka":       _fmt_miejsca(w.get("J"), 2),
