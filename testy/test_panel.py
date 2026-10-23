@@ -367,15 +367,14 @@ class TestKolejkaKrokow(BazaOkna):
         self.okno._zajety(True)
         self.okno.kolejka = ["ark"]
         self.okno._koniec("obs", "2 · Obserwacja", 1)
-        self.assertTrue(self.okno.btn_obieg.isEnabled())
+        self.assertTrue(self.okno.btn_obs.isEnabled())
 
     def test_zajety_blokuje_uruchamianie(self):
         self.okno._zajety(True)
-        self.assertFalse(self.okno.btn_obieg.isEnabled())
         self.assertFalse(self.okno.btn_analiza.isEnabled())
         self.assertTrue(self.okno.btn_stop.isEnabled())
         self.okno._zajety(False)
-        self.assertTrue(self.okno.btn_obieg.isEnabled())
+        self.assertTrue(self.okno.btn_analiza.isEnabled())
         self.assertFalse(self.okno.btn_stop.isEnabled())
 
     def test_log_odnotowuje_pominiete_kroki(self):
@@ -398,6 +397,17 @@ class TestZmianaFolderu(BazaOkna):
 
     def test_naglowek_pokazuje_sciezke(self):
         self.assertEqual(self.okno.lbl_folder.text(), self.folder)
+
+
+class TestBezPrzyciskuCalegoObiegu(unittest.TestCase):
+    """Jedno klikniecie nie moze przejsc wszystkich krokow i nadpisac protokolu (230)."""
+
+    def test_brak_przycisku(self):
+        import app_gui
+        with open(app_gui.__file__, encoding="utf-8") as f:
+            zrodlo = f.read()
+        self.assertNotIn('self._uruchom(["analiza", "obs", "ark"])', zrodlo)
+        self.assertNotIn("btn_obieg", zrodlo)
 
 
 if __name__ == "__main__":

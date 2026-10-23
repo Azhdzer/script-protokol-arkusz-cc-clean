@@ -38,7 +38,8 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 import pz_dane   # wspolny modul: dane przyrzadow z PZ + Zestawienie
 import cc_config as C   # rejestr ustawien + odczyt zmiennych srodowiskowych z panelu
 import cc_widok   # widok paska zakladek w gotowych plikach .xlsx
-import cc_excel   # wlasne instancje Excela — zamykamy tylko je
+import cc_excel
+import cc_kopia   # kopia zapasowa przed nadpisaniem protokolu / obserwacji   # wlasne instancje Excela — zamykamy tylko je
 
 # =============================================================================
 # KONFIGURACJA
@@ -3312,6 +3313,7 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         print("  PROTOKOL: Brak punktow pomiarowych — pomijam.")
         return
 
+    cc_kopia.kopia_przed_nadpisaniem(out_path)   # reczne poprawki nie moga przepasc
     shutil.copy2(tmpl_path, out_path)
     print(f"\nSkopiowano szablon protokolu: {tmpl_name}")
 
@@ -3950,6 +3952,7 @@ def main():
 
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Nie znaleziono szablonu: {template_path}")
+        cc_kopia.kopia_przed_nadpisaniem(output_path)
         shutil.copy2(template_path, output_path)
         print("Skopiowano szablon.")
 
@@ -4050,6 +4053,7 @@ def main():
 
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Nie znaleziono szablonu: {template_path}")
+        cc_kopia.kopia_przed_nadpisaniem(output_path)
         shutil.copy2(template_path, output_path)
         print("Skopiowano szablon.")
 

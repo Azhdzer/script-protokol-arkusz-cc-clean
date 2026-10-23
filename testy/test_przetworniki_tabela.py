@@ -225,5 +225,31 @@ class TestKrok2(unittest.TestCase):
             ["Multimetr wzorcowy Pt100: 1586A-02", "Data Czas;Tzadana"]), "1586A-02")
 
 
+class TestSzablonPrzetwornika(unittest.TestCase):
+    """'Wyniki' przetwornika jak recznie przygotowane w zleceniu 230 (wiersz 253)."""
+
+    def test_formuly_wiersza(self):
+        import cc_szablon_przetwornika as SZ
+        f = SZ.formuly_wiersza("23,60 (2)")
+        self.assertEqual(f["B"], "='23,60 (2)'!D253")
+        self.assertEqual(f["E"], "='23,60 (2)'!G253")     # IRHm
+        self.assertEqual(f["K"], "='23,60 (2)'!O253")     # URH
+        self.assertEqual(f["J"], "='23,60 (2)'!M253")     # Ut
+
+    def test_naglowki_zalezne_od_L10(self):
+        import cc_szablon_przetwornika as SZ
+        n = SZ.naglowki("23,30")
+        self.assertIn("'23,30'!$L$10", n["E3"])            # nie L1 jak w recznej wersji
+        self.assertEqual(n["H1"], "Poprawka")
+
+    def test_wlasny_szablon_z_tabeli(self):
+        tab = pz_dane.przetworniki_z_tabeli(
+            [["263051", "-", "001", "1586A", "Prąd", "4", "20", "", "", "0", "100", "moj.xlsx"]])
+        p = A.parametry_przetwornika(TestParametryKopii.REKORD_230, tab, None, "domyslny.xlsx")
+        self.assertEqual(p["_szablon"], "moj.xlsx")
+        p = A.parametry_przetwornika(TestParametryKopii.REKORD_230, {}, None, "domyslny.xlsx")
+        self.assertEqual(p["_szablon"], "domyslny.xlsx")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

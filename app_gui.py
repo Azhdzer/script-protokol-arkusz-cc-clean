@@ -10,7 +10,7 @@ przez zmienne srodowiskowe.
 Uklad okna:
   • gora        — folder roboczy,
   • lewa listwa — kroki obiegu (Przygotowanie / 1 Analiza / 2 Obserwacja /
-                  3 Arkusze) ze statusem + "Uruchom caly obieg",
+                  3 Arkusze, 4 Warunki) ze statusem — kazdy krok osobnym przyciskiem,
   • srodek      — formularz aktywnego kroku,
   • dol         — zywy log i lista plikow, ktore powstaly.
 
@@ -56,7 +56,7 @@ URUCHAMIALNE = {
     "analiza": ("1 · Analiza logow",  "analiza",    "analizuj_excele.py"),
     "obs":     ("2 · Obserwacja",     "obserwacje", "generuj_obserwacje.py"),
     "ark":     ("3 · Arkusze i Word", "arkusze",    "generuj_arkusze.py"),
-    # Osobny krok — NIE wchodzi do 'Uruchom caly obieg'; uruchamiany przyciskiem
+    # Osobny krok, uruchamiany wlasnym przyciskiem
     # na swojej stronie, gdy trzeba dopisac warunki do gotowego protokolu.
     "srod":    ("4 · Warunki środowiskowe", "warunki", "wypelnij_warunki.py"),
 }
@@ -232,14 +232,9 @@ class Okno(QMainWindow):
         lay.addWidget(self._linia())
         lay.addSpacing(6)
 
-        self.btn_obieg = QPushButton("▶▶  Uruchom caly obieg")
-        self.btn_obieg.setObjectName("Glowny")
-        self.btn_obieg.setMinimumHeight(46)
-        self.btn_obieg.setCursor(Qt.PointingHandCursor)
-        self.btn_obieg.setToolTip("Analiza logow  →  Obserwacja i protokol  →  "
-                                  "Arkusze i swiadectwa.\nPrzerywa sie na pierwszym bledzie.")
-        self.btn_obieg.clicked.connect(lambda: self._uruchom(["analiza", "obs", "ark"]))
-        lay.addWidget(self.btn_obieg)
+        # Przycisku 'Uruchom caly obieg' NIE ma: jedno klikniecie przechodzilo kroki
+        # 1-2-3 i tworzylo protokol od nowa — w zleceniu 230 przepadlo przez to
+        # reczne wypelnienie protokolu. Kazdy krok uruchamia sie swoim przyciskiem.
 
         self.btn_stop = QPushButton("Przerwij")
         self.btn_stop.setObjectName("Ghost")
@@ -873,7 +868,6 @@ class Okno(QMainWindow):
         self.lbl_stan.setText("Przerwano.")
 
     def _zajety(self, tak):
-        self.btn_obieg.setEnabled(not tak)
         self.btn_stop.setEnabled(tak)
         for klucz in URUCHAMIALNE:
             b = getattr(self, f"btn_{klucz}", None)

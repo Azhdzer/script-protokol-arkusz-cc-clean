@@ -217,7 +217,7 @@ class TestPanel(unittest.TestCase):
         self.assertIn("srod", app_gui.URUCHAMIALNE)
         with open(app_gui.__file__, encoding="utf-8") as f:
             zrodlo = f.read()
-        self.assertIn('self._uruchom(["analiza", "obs", "ark"])', zrodlo)
+        self.assertIn('self._uruchom([k])', zrodlo)      # tylko pojedyncze kroki
 
 
 if __name__ == "__main__":

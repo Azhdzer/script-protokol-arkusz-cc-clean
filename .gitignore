@@ -60,3 +60,6 @@ PZ*.pdf
 
 # Skrot z bezwzglednymi sciezkami tej maszyny — odtwarza go zrob_skrot.py
 *.lnk
+
+# Kopie zapasowe plikow nadpisywanych przez kroki 2-4 (dane pomiarowe).
+kopie_zapasowe/

@@ -37,7 +37,8 @@ import xlwings as xw
 import pz_dane   # wspolny modul: dane przyrzadow z PZ (fallback, gdy Strona 2 pusta)
 import cc_config as C   # rejestr ustawien + odczyt zmiennych srodowiskowych z panelu
 import cc_widok   # widok paska zakladek w gotowych plikach .xlsx
-import cc_excel   # wlasne instancje Excela — zamykamy tylko je
+import cc_excel
+import cc_kopia   # kopia zapasowa przed nadpisaniem kopii arkusza / swiadectwa   # wlasne instancje Excela — zamykamy tylko je
 
 # ---------------------------------------------------------------------------
 # Wizualne helpers logowania
@@ -347,6 +348,9 @@ CZYSC_AUTORECOVER = C.flaga("GEN_AUTOREC", CZYSC_AUTORECOVER)
 SPRZATAJ_ZAWIESZONE_EXCELE = C.flaga("GEN_SPRZATAJ_EXCEL", True)
 # Przetworniki z panelu (tabela PRZETWORNIKI) — patrz pz_dane.przetworniki_z_tabeli.
 TABELA_PRZETWORNIKOW = C.tabela("PRZETWORNIKI", [])
+# Szablon arkusza dla przetwornikow ('Wyniki' z wiersza 253) — patrz cc_szablon_przetwornika.
+SZABLON_PRZETWORNIKA = os.environ.get("CC_SZABLON_PRZETW") or (
+    "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik (CC).xlsx")
 
 # =============================================================================
 # WARUNKI ŚRODOWISKOWE — czujnik + Wzory.xls
@@ -1534,13 +1538,15 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
             _multimetr_s1 = None
         _tabela = pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW)
         for _rek in dane_s2:
-            _rek["PRZETWORNIK"] = parametry_przetwornika(_rek, _tabela, _multimetr_s1)
+            _rek["PRZETWORNIK"] = parametry_przetwornika(_rek, _tabela, _multimetr_s1,
+                                                         SZABLON_PRZETWORNIKA)
             _p = _rek["PRZETWORNIK"]
             if _p:
                 print(f"  [Przetwornik] {_rek.get('E')}: {_p['L10']}, multimetr {_p['K14']}, "
                       f"kanaly t={_p['K15']} RH={_p['K16']}, wyjscie "
                       f"{_p.get('M22', '?')} ÷ {_p.get('O22', '?')} "
-                      f"(zrodlo: {_p['_zrodlo']}) — dane do G/H.")
+                      f"(zrodlo: {_p['_zrodlo']}) — dane do G/H, szablon: "
+                      f"{_p['_szablon'] or '(standardowy)'}.")
                 for _o in _p["_ostrzezenia"]:
                     _warn(f"Przetwornik {_rek.get('E')}: {_o}")
 
@@ -1602,7 +1608,7 @@ def _kanal_do_komorki(kanal):
     return n if str(n) == t else t
 
 
-def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None):
+def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domyslny=None):
     """
     Komorki zakladki roboczej dla kopii-przetwornika albo None (zwykly termohigrometr).
     Zwraca dict {'K10': ..., 'L10': ..., 'K14', 'K15', 'K16', 'M22', 'O22',
@@ -1665,7 +1671,11 @@ def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None):
         ostrz.append("brak zakresu wyjscia (M22/O22 zostaje z szablonu) — wpisz go "
                      "w tabeli 'Przetworniki' albo w skalowaniu na Stronie 2.")
 
+    # Szablon arkusza: wlasny z tabeli panelu -> szablon przetwornika z ustawien.
+    szablon = (tab.szablon if tab is not None and tab.szablon else "") or szablon_domyslny or ""
+
     wynik = {
+        "_szablon": szablon,
         "K10": "Przetwornik",
         "L10": sygnal,
         "K14": multimetr,
@@ -2514,6 +2524,10 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
 
     for j, (rekord, nowa_nazwa_xlsx) in enumerate(zip(dane_s2, kopie_excel)):
         nr_sw = nr_sw_poczatkowy + j
+        if rekord.get("PRZETWORNIK"):
+            print(f"  [Word] '{nowa_nazwa_xlsx}': przetwornik — swiadectwo przetwornika "
+                  f"nie jest jeszcze generowane (brak szablonu Word), pomijam.")
+            continue
         prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
 
         # Dane przyrzadu z PZ (po nr fabrycznym): fallback pol Strony 2 + ew. UZYTKOWNIK.
@@ -2596,6 +2610,7 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             _zastap_tekst_w_dok(doc, placeholder,
                                 _formatuj_zakres_srodowiskowy(zakresy.get(klucz), miejsca))
 
+        cc_kopia.kopia_przed_nadpisaniem(sciezka_docx)
         doc.save(sciezka_docx)
         nazwy_word.append(nowa_nazwa_docx)
         print(f"  [Word {j + 1:>{len(str(n))}}/{n}] {nowa_nazwa_docx}")
@@ -2740,6 +2755,49 @@ def dostosuj_zakladki_i_wypelnij(sciezka_pliku, dane_zakladek, dane_ef_kopia, ar
 _COLS_BI = ["B", "C", "D", "E", "F", "G", "H", "I"]
 _COLS_OR = ["O", "P", "Q", "R"]
 
+# 'Wyniki' w szablonie PRZETWORNIKA (cc_szablon_przetwornika): jedna tabela B:K
+# z wiersza 253 zakladek; tabeli 'tylko temperatura' (O:R) nie ma.
+_COLS_BI_PRZETW = ["B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]
+_KOMORKI_BI_PRZETW = ["D253", "E253", "F253", "G253", "H253", "I253",
+                      "J253", "K253", "M253", "O253"]
+
+
+def _uklad_wynikow(ws_w):
+    """
+    Uklad tabeli 'Wyniki' rozpoznany po formule B4:
+      termohigrometr — B:I z wiersza 239 + O:R z wiersza 246, histereza z E219,
+      przetwornik    — B:K z wiersza 253, histereza z RHm (I253).
+    """
+    try:
+        f = str(ws_w.range("B4").formula or "")
+    except Exception:
+        f = ""
+    if re.search(r"!\$?D\$?253\b", f):
+        return {"bi": _COLS_BI_PRZETW, "or": [], "komorki_bi": _KOMORKI_BI_PRZETW,
+                "komorki_or": [], "histereza": "I253", "przetwornik": True}
+    return {"bi": _COLS_BI, "or": _COLS_OR,
+            "komorki_bi": ["D239", "E239", "F239", "G239", "H239", "I239", "J239", "K239"],
+            "komorki_or": ["D246", "E246", "F246", "G246"],
+            "histereza": "E219", "przetwornik": False}
+
+
+def _kresk_dla_brakujacego_wyjscia(ws_w, przetw, ostatni_wiersz):
+    """
+    Przetwornik bez wyjscia temperatury (albo wilgotnosci): kolumny 'Wynikow'
+    tej wielkosci dostaja '-' — jak w recznie przygotowanych wynikach (230).
+    """
+    import cc_szablon_przetwornika as SZ
+    kolumny = []
+    if przetw.get("K15") == "-":
+        kolumny += list(SZ.KOLUMNY_T)
+    if przetw.get("K16") == "-":
+        kolumny += list(SZ.KOLUMNY_RH)
+    for r in range(4, ostatni_wiersz + 1):
+        if ws_w.range(f"B{r}").formula in (None, ""):
+            continue
+        for k in kolumny:
+            ws_w.range(f"{k}{r}").value = "-"
+
 
 def _czytaj_wiersz_formul(ws_w, r, kolumny):
     return [ws_w.range(f"{c}{r}").formula for c in kolumny]
@@ -2754,7 +2812,8 @@ def _zapisz_wiersz_formul(ws_w, r, kolumny, formuly):
 
 
 def _wyczysc_wiersz(ws_w, r, kolumny):
-    ws_w.range(f"{kolumny[0]}{r}:{kolumny[-1]}{r}").clear_contents()
+    if kolumny:
+        ws_w.range(f"{kolumny[0]}{r}:{kolumny[-1]}{r}").clear_contents()
 
 
 _WZORZEC_ARKUSZA_W_FORMULE = re.compile(r"^=(?:'([^']+)'|([^!'][^!]*))!")
@@ -2877,7 +2936,7 @@ def _znajdz_komorke_histerezy(ws_w, extra_rows=0):
     r0 = 23 + int(extra_rows or 0)
     try:
         f = ws_w.range(f"J{r0}").formula
-        if isinstance(f, str) and "E219" in f:
+        if isinstance(f, str) and ("E219" in f or "I253" in f):
             return ws_w.range(f"J{r0}"), f
     except Exception:
         pass
@@ -2887,7 +2946,7 @@ def _znajdz_komorke_histerezy(ws_w, extra_rows=0):
         return None, None
     for idx, val in enumerate(kol, start=1):
         f = val[0] if isinstance(val, (list, tuple)) else val
-        if isinstance(f, str) and f.startswith("=") and "E219" in f:
+        if isinstance(f, str) and f.startswith("=") and ("E219" in f or "I253" in f):
             return ws_w.range(f"J{idx}"), f
     return None, None
 
@@ -2919,7 +2978,8 @@ def _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows=0):
         return
 
     base = _WZORZEC_POWTORKI_NAZWY.sub('', rep).strip()
-    nowa = f"=ABS(VALUE('{base}'!E219)-VALUE('{rep}'!E219))"
+    k = _uklad_wynikow(ws_w)["histereza"]      # E219 termohigrometr / I253 przetwornik
+    nowa = f"=ABS(VALUE('{base}'!{k})-VALUE('{rep}'!{k}))"
     try:
         cell.formula = nowa
         print(f"  [Wyniki] Histereza {cell.address}: '{base}' / '{rep}'")
@@ -2948,6 +3008,8 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
     FIRST_ROW = 4
     LAST_ROW_DEFAULT = 9
     last_row = LAST_ROW_DEFAULT
+    uklad = _uklad_wynikow(ws_w)
+    _COLS_BI, _COLS_OR = uklad["bi"], uklad["or"]
 
     wiersze = []
     for r in range(FIRST_ROW, last_row + 1):
@@ -2993,8 +3055,8 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
     elif missing and not valid:
         # Brak wzorca do sklonowania — buduj formuly od zera wg stalego schematu.
         # BI: ='SHEET'!D239..K239 (8 kol.), OR: ='SHEET'!D246..G246 (4 kol.)
-        BI_KOMORKI = ["D239", "E239", "F239", "G239", "H239", "I239", "J239", "K239"]
-        OR_KOMORKI = ["D246", "E246", "F246", "G246"]
+        BI_KOMORKI = uklad["komorki_bi"]
+        OR_KOMORKI = uklad["komorki_or"]
         nowe = []
         for nazwa in missing:
             r_nowy = last_row + 1
@@ -3070,7 +3132,9 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
         is_dup = 1 if w.get("powtorka") else 0
         return (rounded, is_dup, rh_val, temp)
 
-    valid_bi_sorted = sorted((w for w in valid if w["ma_rh"]), key=_klucz_bi)
+    # Przetwornik: tabela B:K obejmuje wszystkie zakladki (brakujace wyjscie dostaje '-').
+    valid_bi_sorted = sorted((w for w in valid if w["ma_rh"] or uklad["przetwornik"]),
+                             key=_klucz_bi)
 
     wpisy_or = [
         (_temp_zaokr(w), _rh_z_nazwy_zakladki(w.get("arkusz")), w["powtorka"], w)
@@ -3438,6 +3502,11 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             ws_w = wb.sheets[ark_wyniki]
             extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final)
             _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows)
+            if rekord.get("PRZETWORNIK") and _uklad_wynikow(ws_w)["przetwornik"]:
+                _kresk_dla_brakujacego_wyjscia(ws_w, rekord["PRZETWORNIK"], 9 + extra_rows)
+            elif rekord.get("PRZETWORNIK"):
+                _warn(f"Kopia '{nowa_nazwa}': przetwornik, ale szablon ma 'Wyniki' "
+                      f"termohigrometru (wiersz 239) — wskaz szablon przetwornika.")
             if f24_val is not None:
                 ws_w.range(f"F{24 + extra_rows}").value = f24_val
             ws_w.range(f"C{28 + extra_rows}").value = dzis
@@ -3725,7 +3794,20 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki,
         sciezka_kopii = os.path.join(folder, _bezpieczna_nazwa_pliku(nowa_nazwa))
         if os.path.exists(sciezka_kopii):
             print(f"  [UWAGA] Plik już istnieje, nadpisuję: {nowa_nazwa}")
-        shutil.copy2(sciezka_szablonu, sciezka_kopii)
+        # Przetwornik: kopia z SZABLONU PRZETWORNIKA ('Wyniki' z wiersza 253) —
+        # wlasnego z tabeli panelu albo domyslnego. Nazwa kopii zostaje wg szablonu
+        # standardowego, wiec nazwa pliku szablonu przetwornika jest dowolna.
+        zrodlo = sciezka_szablonu
+        _sz = (rekord.get("PRZETWORNIK") or {}).get("_szablon")
+        if _sz:
+            _sz_sciezka = _sz if os.path.isabs(_sz) else os.path.join(folder, _sz)
+            if os.path.exists(_sz_sciezka):
+                zrodlo = _sz_sciezka
+            else:
+                _warn(f"Brak szablonu przetwornika '{_sz}' — kopia '{nowa_nazwa}' "
+                      f"z szablonu standardowego ('Wyniki' trzeba poprawic recznie).")
+        cc_kopia.kopia_przed_nadpisaniem(sciezka_kopii)
+        shutil.copy2(zrodlo, sciezka_kopii)
         kopie.append((j, nowa_nazwa, sciezka_kopii, rekord))
 
     print(f"  Skopiowano {n} plików. Modyfikuję zakładki i komórki przez Excel COM...")

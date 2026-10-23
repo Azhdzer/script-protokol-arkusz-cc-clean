@@ -1359,19 +1359,22 @@ def rozdzielczosc_z_kolumny(values):
 
 KOLUMNY_PRZETWORNIKOW = ["Nr fabryczny", "Kanał t", "Kanał RH", "Multimetr",
                          "Sygnał (Prąd / Napięcie)", "Wyjście od", "Wyjście do",
-                         "tmin °C", "tmax °C", "RHmin %", "RHmax %"]
+                         "tmin °C", "tmax °C", "RHmin %", "RHmax %",
+                         "Szablon arkusza (opcjonalnie)"]
 
 
 class Przetwornik:
     __slots__ = ("serial", "kanal_t", "kanal_rh", "multimetr", "sygnal",
-                 "wy_od", "wy_do", "t_od", "t_do", "rh_od", "rh_do")
+                 "wy_od", "wy_do", "t_od", "t_do", "rh_od", "rh_do", "szablon")
 
     def __init__(self, serial="", kanal_t="", kanal_rh="", multimetr="", sygnal="Prąd",
-                 wy_od=None, wy_do=None, t_od=None, t_do=None, rh_od=None, rh_do=None):
+                 wy_od=None, wy_do=None, t_od=None, t_do=None, rh_od=None, rh_do=None,
+                 szablon=""):
         self.serial, self.kanal_t, self.kanal_rh = serial, kanal_t, kanal_rh
         self.multimetr, self.sygnal = multimetr, sygnal
         self.wy_od, self.wy_do = wy_od, wy_do
         self.t_od, self.t_do, self.rh_od, self.rh_do = t_od, t_do, rh_od, rh_do
+        self.szablon = szablon   # wlasny szablon arkusza (plik w folderze roboczym)
 
     @property
     def jednostka(self):
@@ -1412,7 +1415,7 @@ def przetworniki_z_tabeli(tabela):
             multimetr=_bez_kreski(w[3]), sygnal=sygnal_z_tekstu(w[4]) or "Prąd",
             wy_od=_do_float(w[5]), wy_do=_do_float(w[6]),
             t_od=_do_float(w[7]), t_do=_do_float(w[8]),
-            rh_od=_do_float(w[9]), rh_do=_do_float(w[10]))
+            rh_od=_do_float(w[9]), rh_do=_do_float(w[10]), szablon=_bez_kreski(w[11]))
     return wynik
 
 

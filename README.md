@@ -204,8 +204,9 @@ Na dole okna zawsze widoczne są dwie zakładki:
 - **Utworzone pliki** — różnica stanu folderu przed/po przebiegu: co powstało, co się
   zmieniło, ile waży i **jakie zakładki są w środku** (dwuklik otwiera plik).
 
-`▶▶ Uruchom caly obieg` odpala kroki 1 → 2 → 3 po kolei i **przerywa się na pierwszym
-błędzie**. Przed startem panel sprawdza dane wejściowe (brak zaznaczonego TXT, brak
+Każdy krok uruchamia się **własnym przyciskiem** — przycisku „Uruchom cały obieg” nie ma
+(jedno kliknięcie tworzyło protokół od nowa i kasowało ręczne poprawki). Nadpisywane pliki
+trafiają najpierw do `kopie_zapasowe/`. Przed startem panel sprawdza dane wejściowe (brak zaznaczonego TXT, brak
 protokołu, brak `Wzory.xls`…) i pokazuje listę zastrzeżeń do zatwierdzenia.
 
 ## ▶️ Uruchamianie — jeden exe, cztery tryby
@@ -282,7 +283,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 681 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 691 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -342,7 +343,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**681 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**691 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -414,6 +415,15 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
   przy dużym pliku instancja skryptu jest kończona po swoim PID — inne okna Excela zostają.
+- **Szablon arkusza przetwornika** (`… - 1 - Przetwornik (CC).xlsx`, budowany z szablonu standardowego
+  przez `python cc_szablon_przetwornika.py`): *Wyniki* zbierają wiersz 253 zakładek (Itm/IRHm, tm/RHm,
+  Δ, U), nagłówki zależą od L10, histereza z RHm (I253). Krok 3 bierze go dla kopii-przetwornika
+  (ustawienie `CC_SZABLON_PRZETW`); własny szablon dla konkretnego przetwornika — kolumna
+  *Szablon arkusza* w tabeli Przetworniki. Brakujące wyjście (np. bez t) dostaje `-` w *Wynikach*.
+  Świadectwo Word dla przetwornika nie jest jeszcze generowane.
+- **Kopie zapasowe:** kroki 2–4 przed nadpisaniem protokołu, obserwacji, kopii arkusza i świadectwa
+  zapisują poprzednią wersję w `kopie_zapasowe/` (20 najnowszych na plik). Przycisk „Uruchom cały
+  obieg” usunięty.
 - **Tabela „Przetworniki” w panelu (krok 2)** — wiersz na przetwornik: nr fabryczny, kanał t, kanał RH
   (osobno), multimetr, sygnał (Prąd/Napięcie), zakres wyjścia, tmin/tmax, RHmin/RHmax. Krok 2 wpisuje
   z niej skalowanie (Strona 2, M/N) i kanały (Uwagi), a na Stronie 1 multimetr sygnału analogowego

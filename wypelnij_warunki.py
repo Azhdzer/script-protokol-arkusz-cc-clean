@@ -29,6 +29,7 @@ import sys
 import openpyxl
 
 import cc_config as C
+import cc_kopia
 import cc_widok
 # Te same funkcje i stale co w kroku 3 — wynik ma byc identyczny.
 import generuj_arkusze as A
@@ -126,6 +127,7 @@ def wypelnij_protokol(sciezka, nadpisuj=False, nr_pom=None, model=None):
                   f"t = {t}  RH = {rh}")
 
     if wynik["wpisane"]:
+        cc_kopia.kopia_przed_nadpisaniem(sciezka)
         wb.save(sciezka)
         cc_widok.wymus_widok(sciezka, TAB_RATIO, pierwszy=0)
     wb.close()

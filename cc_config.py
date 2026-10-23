@@ -198,12 +198,15 @@ _OBSERWACJA = [
        grupa="Przetworniki (wyjscie analogowe)",
        kolumny=["Nr fabryczny", "Kanał t", "Kanał RH", "Multimetr",
                 "Sygnał (Prąd / Napięcie)", "Wyjście od", "Wyjście do",
-                "tmin °C", "tmax °C", "RHmin %", "RHmax %"],
+                "tmin °C", "tmax °C", "RHmin %", "RHmax %",
+                "Szablon arkusza (opcjonalnie)"],
        opis="Jeden wiersz na przetwornik wzorcowany przez wyjscie pradowe/napieciowe. "
             "Kanal bez wyjscia: '-'. Krok 2 wpisuje z tego skalowanie (Strona 2, M/N) "
             "i kanaly (Uwagi); krok 3 — parametry zakladek kopii: rodzaj odczytu (L10), "
             "multimetr (K14), kanaly (K15/K16), zakres wyjscia (M22/O22), "
-            "tmin/tmax i RHmin/RHmax, a dane wpisuje w G/H zamiast E/F."),
+            "tmin/tmax i RHmin/RHmax, a dane wpisuje w G/H zamiast E/F. 'Szablon arkusza' "
+            "— wlasny plik szablonu dla tego przetwornika (pusto = szablon przetwornika "
+            "z kroku 3)."),
     _U("CC_PZ_FOLDER", "Folder PZ (Potwierdzenia zamowienia)", "folder", "PZ", "obs",
        grupa="Dane przyrzadow",
        opis="PDF-y PZ (PL/EN) — z nich wypelniana jest tabela przyrzadow na Stronie 2."),
@@ -328,6 +331,15 @@ _ARKUSZE = [
     _U("CC_SZABLON", "Szablon arkusza obliczeniowego", "plik", "", "ark",
        grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"), podpowiedz="ark. obl",
        opis="Wzor ark. obl. — z niego powstaje kopia dla kazdego przyrzadu."),
+    _U("CC_SZABLON_PRZETW", "Szablon arkusza obliczeniowego — przetwornik", "plik",
+       "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - "
+       "Przetwornik (CC).xlsx", "ark",
+       grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"), podpowiedz="Przetwornik",
+       opis="Dla przyrzadow wzorcowanych przez wyjscie pradowe/napieciowe: 'Wyniki' "
+            "zbieraja wiersz 253 zakladek (Itm/IRHm, tm/RHm). Inny szablon dla "
+            "konkretnego przetwornika — kolumna 'Szablon arkusza' w tabeli Przetworniki "
+            "(krok 2). Nowy szablon z aktualnego standardowego: "
+            "python cc_szablon_przetwornika.py"),
     _U("GEN_EXCEL", "Generuj arkusze Excel", "flaga", True, "ark",
        grupa="Etapy",
        opis="Wylaczone = korzysta z juz istniejacych kopii (przydatne, gdy chcesz "
