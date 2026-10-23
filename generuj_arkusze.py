@@ -351,6 +351,12 @@ TABELA_PRZETWORNIKOW = C.tabela("PRZETWORNIKI", [])
 # Swiadectwo przetwornika z jednym wyjsciem — wilgotnosci (szablon z placeholderami
 # [symbol_wy], [jedn_wy], [rh_min]..., kolumna Im: [prad_N_RH]).
 SZABLON_WORD_PRZETW_RH = C.tekst("GEN_WORD_PRZETW_RH", "xxx_yyy_LA_TH_2026 - przetwornik RH.docx")
+# ... z wyjsciem temperatury; z oboma wyjsciami (wszystkie punkty z RH); z oboma,
+# gdy czesc punktow jest tylko temperaturowa (dwie tabele, jak 'zakres + temp').
+SZABLON_WORD_PRZETW_T = C.tekst("GEN_WORD_PRZETW_T", "xxx_yyy_LA_TH_2026 - przetwornik T.docx")
+SZABLON_WORD_PRZETW_TH = C.tekst("GEN_WORD_PRZETW_TH", "xxx_yyy_LA_TH_2026 - przetwornik TH.docx")
+SZABLON_WORD_PRZETW_MIX = C.tekst("GEN_WORD_PRZETW_MIX",
+                                  "xxx_yyy_LA_TH_2026 - przetwornik TH + temp.docx")
 # Szablon arkusza dla przetwornikow ('Wyniki' z wiersza 253) — patrz cc_szablon_przetwornika.
 SZABLON_PRZETWORNIKA = os.environ.get("CC_SZABLON_PRZETW") or (
     "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik (CC).xlsx")
@@ -1722,15 +1728,17 @@ def _fmt_miejsca(v, miejsca):
     return v
 
 
-def kalibracja_przetwornika(wartosci, nazwa):
+def kalibracja_przetwornika(wartosci, nazwa, ma_rh=True):
     """
     Wiersz 253 zakladki przetwornika (D..O) -> punkt do swiadectwa.
     wartosci: {'D': t, 'E': RH, 'F': Itm, 'G': IRHm, 'H': tm, 'I': RHm,
-               'J': Δt, 'K': ΔRH, 'M': Ut, 'O': URH}
-    Formaty jak w wydanych swiadectwach: t 2 miejsca, RH 1, prad 3.
+               'J': Δt, 'K': ΔRH, 'L': Ut [mA/V], 'M': Ut, 'N': URH [mA/V], 'O': URH}
+    Formaty jak w wydanych swiadectwach: t 2 miejsca, RH 1, prad 3, niepewnosc
+    wyjscia t 3, RH 2. Zakladka bez wilgotnosci (`ma_rh=False`) nie ma pol '*_RH'
+    — trafia tylko do tabeli temperatury (szablon 'TH + temp').
     """
     w = wartosci
-    return {
+    punkt = {
         "nazwa":          nazwa,
         "przetwornik":    True,
         "wartosc_odn":    _fmt_miejsca(w.get("D"), 2),
@@ -1743,7 +1751,12 @@ def kalibracja_przetwornika(wartosci, nazwa):
         "poprawka_RH":    _fmt_miejsca(w.get("K"), 1),
         "niepewnosc":     _fmt_miejsca(w.get("M"), 2),
         "niepewnosc_RH":  _fmt_miejsca(w.get("O"), 1),
+        "niepewnosc_prad":    _fmt_miejsca(w.get("L"), 3),
+        "niepewnosc_prad_RH": _fmt_miejsca(w.get("N"), 2),
     }
+    if not ma_rh:
+        punkt = {k: v for k, v in punkt.items() if not k.endswith("_RH")}
+    return punkt
 
 
 _RE_ZASILANIE_UWAGI = re.compile(r'Uz\s*=\s*\([^)]*\)\s*V\s*DC\.?', re.I)
@@ -1775,11 +1788,30 @@ def placeholdery_przetwornika(rekord):
         "[jedn_wy]":            "mA" if prad else "V",
         "[wy_min]":             _liczba_txt(p.get("M22")),
         "[wy_max]":             _liczba_txt(p.get("O22")),
+        "[t_min]":              _liczba_txt(p.get("L27")),
+        "[t_max]":              _liczba_txt(p.get("O27")),
         "[rh_min]":             _liczba_txt(p.get("L28")),
         "[rh_max]":             _liczba_txt(p.get("O28")),
         "[zasilanie]":          uz,
         "[nr_ewid_tekst]":      f", nr ewid.: {ewid}" if ewid and ewid != "-" else "",
     }
+
+
+def szablon_word_przetwornika(przetw, klasa):
+    """
+    Szablon swiadectwa przetwornika wg jego wyjsc i punktow:
+      tylko RH               -> 'przetwornik RH'
+      tylko t (albo brak pkt z RH) -> 'przetwornik T'
+      t + RH, wszystkie pkt z RH   -> 'przetwornik TH'
+      t + RH, czesc pkt tylko t    -> 'przetwornik TH + temp' (dwie tabele)
+    """
+    ma_t = przetw.get("K15") not in (None, "", "-")
+    ma_rh = przetw.get("K16") not in (None, "", "-")
+    if ma_rh and not ma_t:
+        return SZABLON_WORD_PRZETW_RH
+    if not ma_rh or klasa == "brak":
+        return SZABLON_WORD_PRZETW_T
+    return SZABLON_WORD_PRZETW_MIX if klasa == "mieszana" else SZABLON_WORD_PRZETW_TH
 
 
 def _liczba_lub_none(v):
@@ -2448,6 +2480,8 @@ def _wypelnij_jedna_tabele_kalibracji(cal_table, punkty):
         val_nie_rh = _fmt(punkt.get("niepewnosc_RH"))
         val_prad = _fmt(punkt.get("prad"))
         val_prad_rh = _fmt(punkt.get("prad_RH"))
+        val_nie_prad = _fmt(punkt.get("niepewnosc_prad"))
+        val_nie_prad_rh = _fmt(punkt.get("niepewnosc_prad_RH"))
         is_hist = _to_jest_powtorka_kolizji(punkt.get("nazwa"))
         # Probujemy obie wersje: z polskimi znakami i bez (ASCII), dla pewnosci
         for placeholder, wartosc in [
@@ -2465,6 +2499,8 @@ def _wypelnij_jedna_tabele_kalibracji(cal_table, punkty):
             (f"[niepewnosc_{idx}_RH]",   val_nie_rh),
             (f"[prad_{idx}]",            val_prad),       # przetwornik: Itm / Utm
             (f"[prad_{idx}_RH]",         val_prad_rh),    # przetwornik: IRHm / URHm
+            (f"[niepewnosc_prad_{idx}]",    val_nie_prad),     # przetwornik: Ut w mA / V
+            (f"[niepewnosc_prad_{idx}_RH]", val_nie_prad_rh),  # przetwornik: URH w mA / V
         ]:
             # Dla punktu histerezy: wartość odn. RH dostaje 3 spacje + górny indeks " 1)"
             if is_hist and placeholder in (
@@ -2618,10 +2654,6 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
     for j, (rekord, nowa_nazwa_xlsx) in enumerate(zip(dane_s2, kopie_excel)):
         nr_sw = nr_sw_poczatkowy + j
         _przetw = rekord.get("PRZETWORNIK")
-        if _przetw and not (_przetw.get("K15") == "-" and _przetw.get("K16") != "-"):
-            print(f"  [Word] '{nowa_nazwa_xlsx}': przetwornik z wyjsciem temperatury — "
-                  f"brak szablonu swiadectwa dla tego wariantu, pomijam.")
-            continue
         prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
 
         # Dane przyrzadu z PZ (po nr fabrycznym): fallback pol Strony 2 + ew. UZYTKOWNIK.
@@ -2635,7 +2667,8 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
 
         klasa = klasa_wilg_per_kopia[j] if klasa_wilg_per_kopia and j < len(klasa_wilg_per_kopia) else "brak"
         if _przetw:
-            szablon_word = SZABLON_WORD_PRZETW_RH      # przetwornik tylko RH
+            szablon_word = szablon_word_przetwornika(_przetw, klasa)
+            print(f"  [Word] '{nowa_nazwa_xlsx}': przetwornik -> szablon '{szablon_word}'.")
         elif klasa == "mieszana":
             szablon_word = szablon_word_mieszany or szablon_word_z_rh or szablon_word_tylko_temp
         elif klasa == "pelna":
@@ -2685,12 +2718,14 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             "[użytkownik]":       uzytkownik_v,     # blok adresowy z PZ (tylko szablon uzytkownika)
             "[zleceniodawca]":    zleceniodawca_v,  # blok adresowy ZLECENIODAWCY z PZ
             "[Podpis]":           PODPISUJACY_2,
-            **(placeholdery_przetwornika(rekord) if _przetw else {}),
+            **({**placeholdery_przetwornika(rekord),
+                "[zasilanie]": placeholdery_przetwornika(rekord)["[zasilanie]"]
+                or "Uz = (UZUPEŁNIJ) V DC."} if _przetw else {}),
         }.items():
             _zastap_tekst_w_dok(doc, placeholder, wartosc)
         if _przetw and not placeholdery_przetwornika(rekord)["[zasilanie]"]:
             _warn(f"'{nowa_nazwa_xlsx}': brak napiecia zasilania (Uz) w Uwagach Strony 2 — "
-                  f"uzupelnij zdanie o zasilaniu w swiadectwie.")
+                  f"w swiadectwie wpisano 'Uz = (UZUPEŁNIJ) V DC.', popraw recznie.")
 
         punkty = dane_kalibracji[j] if j < len(dane_kalibracji) else []
         _uzupelnij_tabele_kalibracji(doc, punkty)
@@ -3789,12 +3824,13 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
             # Przetwornik: wyniki w bloku 'PRZETWORNIK ...' (wiersz 253), nie 239/246.
             if str(ws_cal.range("K10").value or "").strip() == "Przetwornik":
                 w253 = {k: ws_cal.range(f"{k}253").value
-                        for k in ("D", "E", "F", "G", "H", "I", "J", "K", "M", "O")}
-                punkt = kalibracja_przetwornika(w253, ws_name)
+                        for k in ("D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O")}
+                punkt = kalibracja_przetwornika(w253, ws_name,
+                                                ma_rh=wilgotnosc_per_zakladka[ws_name])
                 print(f"    [Kalibracja {ws_name}] przetwornik: t={punkt['wartosc_odn']} "
-                      f"RH={punkt['wartosc_odn_RH']} I={punkt['prad_RH']} "
-                      f"RHm={punkt['zmierzona_RH']} dRH={punkt['poprawka_RH']} "
-                      f"U={punkt['niepewnosc_RH']}")
+                      f"I={punkt['prad']} tm={punkt['zmierzona']} "
+                      f"RH={punkt.get('wartosc_odn_RH')} I_RH={punkt.get('prad_RH')} "
+                      f"RHm={punkt.get('zmierzona_RH')} U={punkt.get('niepewnosc_RH')}")
                 kalibracja.append(punkt)
                 continue
 

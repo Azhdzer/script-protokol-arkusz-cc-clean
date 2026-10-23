@@ -397,6 +397,19 @@ _ARKUSZE = [
        grupa="Szablony Word", wzorzec=(".docx",),
        opis="Swiadectwo przetwornika z jednym wyjsciem — wilgotnosci (prad lub napiecie). "
             "Kolumna Im/Um, zakres wyjscia i zasilanie Uz wpisywane automatycznie."),
+    _U("GEN_WORD_PRZETW_T", "Szablon Word — przetwornik (tylko t)", "plik",
+       "xxx_yyy_LA_TH_2026 - przetwornik T.docx", "ark",
+       grupa="Szablony Word", wzorzec=(".docx",),
+       opis="Przetwornik z wyjsciem temperatury (albo bez punktow z wilgotnoscia)."),
+    _U("GEN_WORD_PRZETW_TH", "Szablon Word — przetwornik (t + RH)", "plik",
+       "xxx_yyy_LA_TH_2026 - przetwornik TH.docx", "ark",
+       grupa="Szablony Word", wzorzec=(".docx",),
+       opis="Przetwornik z wyjsciami t i RH, wszystkie punkty z wilgotnoscia."),
+    _U("GEN_WORD_PRZETW_MIX", "Szablon Word — przetwornik (t + RH oraz same t)", "plik",
+       "xxx_yyy_LA_TH_2026 - przetwornik TH + temp.docx", "ark",
+       grupa="Szablony Word", wzorzec=(".docx",),
+       opis="Przetwornik t + RH, gdy czesc punktow jest tylko temperaturowa — dwie tabele. "
+            "Warianty '(uzytkownik)' wszystkich szablonow przetwornikow dobierane sa wg PZ."),
 
     # --- zaawansowane ---
     _U("GEN_K18_DOM", "Higrometr K18 — domyslny", "tekst", "S8000", "ark",

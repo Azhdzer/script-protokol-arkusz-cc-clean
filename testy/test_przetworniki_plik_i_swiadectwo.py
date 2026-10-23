@@ -168,5 +168,49 @@ class TestHistereza(unittest.TestCase):
         self.assertIn("Punkt (20 °C, 40 %rh)", d.paragraphs[0].text)
 
 
+class TestWariantySwiadectw(unittest.TestCase):
+    """Szablony przetwornikow wg wydanych swiadectw: 1109 (t), 811 (t+RH), 919 (t+RH i same t)."""
+
+    def test_wybor_szablonu(self):
+        s = A.szablon_word_przetwornika
+        self.assertEqual(s({"K15": "-", "K16": "001"}, "pelna"), A.SZABLON_WORD_PRZETW_RH)
+        self.assertEqual(s({"K15": 105, "K16": "-"}, "brak"), A.SZABLON_WORD_PRZETW_T)
+        self.assertEqual(s({"K15": 105, "K16": 115}, "pelna"), A.SZABLON_WORD_PRZETW_TH)
+        self.assertEqual(s({"K15": 105, "K16": 115}, "mieszana"), A.SZABLON_WORD_PRZETW_MIX)
+        self.assertEqual(s({"K15": 105, "K16": 115}, "brak"), A.SZABLON_WORD_PRZETW_T)
+
+    def test_niepewnosc_wyjscia(self):
+        w = dict(TestSwiadectwo.W253, L=0.0375, N=0.19)
+        p = A.kalibracja_przetwornika(w, "35, 60")
+        self.assertEqual((p["niepewnosc_prad"], p["niepewnosc_prad_RH"]), ("0.037", "0.19"))
+
+    def test_punkt_bez_rh_tylko_w_tabeli_temperatury(self):
+        p = A.kalibracja_przetwornika(TestSwiadectwo.W253, "2, -", ma_rh=False)
+        self.assertFalse(any(k.endswith("_RH") for k in p))
+        self.assertEqual(A._punkty_z_rh([p]), [])
+
+    def test_szablony_maja_placeholdery(self):
+        import docx
+        wymagane = {
+            "przetwornik T.docx": ["[prad_1]", "[niepewnosc_prad_1]", "[t_min]", "[symbol_wy]"],
+            "przetwornik TH.docx": ["[prad_1_RH]", "[niepewnosc_prad_1_RH]", "[t_min]", "[rh_min]",
+                                    "[histereza]"],
+            "przetwornik TH + temp.docx": ["[prad_1_RH]", "[niepewnosc_prad_1]", "[histereza]"],
+        }
+        for nazwa, ph in wymagane.items():
+            for wariant in ("", " (uzytkownik)"):
+                plik = os.path.join(KORZEN, "xxx_yyy_LA_TH_2026 - " + nazwa.replace(".docx", wariant + ".docx"))
+                if not os.path.exists(plik):
+                    self.skipTest("brak szablonow przetwornikow w folderze roboczym")
+                d = docx.Document(plik)
+                tekst = "\n".join([p.text for p in d.paragraphs]
+                                  + [c.text for t in d.tables for r in t.rows for c in r.cells])
+                for x in ph + ["[zleceniodawca]", "[nr_fabr]", "[zasilanie]"]:
+                    with self.subTest(plik=nazwa + wariant, ph=x):
+                        self.assertIn(x, tekst)
+                if wariant:
+                    self.assertIn("[użytkownik]", tekst)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

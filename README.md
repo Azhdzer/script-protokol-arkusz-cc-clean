@@ -283,7 +283,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 705 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 709 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -343,7 +343,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**705 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**709 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -420,6 +420,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   który kanał (t / RH) należy do którego przyrządu. Krok 2 dopasowuje odczyty do wierszy obserwacji
   (najbliższa minuta), dokłada je jako kolumny obserwacji i jako przyrządy na Stronach 2-3 (CC i CC-04).
   Zlecenie 230: 60/60 wartości zgodnych z ręcznie przepisanymi.
+- **Świadectwa przetworników — cztery warianty** (szablony z wydanych świadectw, bez danych klientów,
+  każdy także w wariancie `(uzytkownik)`): `przetwornik RH` (tylko wyjście RH), `przetwornik T` (tylko t),
+  `przetwornik TH` (t + RH, wszystkie punkty z RH) i `przetwornik TH + temp` (t + RH oraz punkty tylko
+  temperaturowe — dwie tabele). Krok 3 dobiera wariant wg wyjść przetwornika (K15/K16) i punktów;
+  napisy I/U, mA/V, prądu/napięcia, zakresy t/RH/wyjścia i niepewności w mA/V wypełniane automatycznie.
+  Brak Uz w Uwagach → w świadectwie `Uz = (UZUPEŁNIJ) V DC.` + ostrzeżenie.
 - **Świadectwo przetwornika (tylko RH)** — szablon `xxx_yyy_LA_TH_2026 - przetwornik RH.docx`
   (`GEN_WORD_PRZETW_RH`): kolumna Im/Um, zakres wyjścia, zasilanie Uz z Uwag; wyniki z wiersza 253
   zakładek. Nota o histerezie bierze punkt z PZ (nazwa zakładki), nie zaokrąglony odczyt.
