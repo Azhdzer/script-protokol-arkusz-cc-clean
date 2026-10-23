@@ -282,7 +282,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 657 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 681 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -342,7 +342,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**657 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**681 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -414,6 +414,15 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
   przy dużym pliku instancja skryptu jest kończona po swoim PID — inne okna Excela zostają.
+- **Tabela „Przetworniki” w panelu (krok 2)** — wiersz na przetwornik: nr fabryczny, kanał t, kanał RH
+  (osobno), multimetr, sygnał (Prąd/Napięcie), zakres wyjścia, tmin/tmax, RHmin/RHmax. Krok 2 wpisuje
+  z niej skalowanie (Strona 2, M/N) i kanały (Uwagi), a na Stronie 1 multimetr sygnału analogowego
+  (D53/I53/I58). Krok 3 rozpoznaje kopię-przetwornik po jednostce `mA`/`V` w wierszu 19 Strony 3 i
+  ustawia: dane w **G/H** (Itm/IRHm) zamiast E/F, K10 `Przetwornik`, L10 `Prąd`/`Napięcie`, K14
+  multimetr, K15/K16 kanały, M22/O22 zakres wyjścia, tmin/tmax, RHmin/RHmax. Bez wpisu w tabeli —
+  z protokołu (skalowanie M/N, kanały z Uwag, multimetr z Strony 1 I53).
+- **PZ jako skrót `.lnk`** w folderze PZ jest czytany; blok `UWAGA: 1) ÷ 6) …` nie tworzy już
+  fikcyjnych przyrządów, a napięcie zasilania (`Uz = …`) trafia do Uwag przyrządu.
 - **Przetworniki w pliku CC-04** (`Przetwornik U; Wejście pomiarowe Ch: 105`): kanał przetwornika nie
   zajmuje już miejsca czujnika wzorcowego Pt100 i nie ginie, gdy leży poza 101–108 (np. Ch115).
   W obserwacji — osobne kolumny `Wskazania multimetru Przetwornik U ChNNN [V]` obok wskazań

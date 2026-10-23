@@ -394,9 +394,16 @@ class Pole(QWidget):
             w = QTableWidget(0, len(u.kolumny))
             w.setHorizontalHeaderLabels(u.kolumny)
             w.verticalHeader().setVisible(False)
-            w.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            if len(u.kolumny) > 6:
+                # Szeroka tabela (np. Przetworniki, 11 kolumn) — kolumny wg tresci
+                # i przewijanie w poziomie, zamiast sciskania naglowkow.
+                w.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+                w.horizontalHeader().setStretchLastSection(True)
+            else:
+                w.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             w.setMinimumHeight(150)
             w.itemChanged.connect(lambda _: self.zmienione.emit())
+            w.itemChanged.connect(lambda _: self._dodaj_pusty_wiersz())
             self._kontrolka = w
             return w
 
@@ -406,6 +413,20 @@ class Pole(QWidget):
         return w
 
     # ── obsluga ──────────────────────────────────────────────────────────
+    def _dodaj_pusty_wiersz(self):
+        """Tabela: gdy ostatni wiersz dostal tresc, dokladamy pusty na kolejny wpis."""
+        w = self._kontrolka
+        ost = w.rowCount() - 1
+        if ost < 0 or any((w.item(ost, c) and w.item(ost, c).text().strip())
+                          for c in range(w.columnCount())):
+            w.blockSignals(True)
+            try:
+                w.insertRow(w.rowCount())
+                for c in range(w.columnCount()):
+                    w.setItem(w.rowCount() - 1, c, QTableWidgetItem(""))
+            finally:
+                w.blockSignals(False)
+
     def _wybierz_plik(self):
         """
         Wybor pliku przez okno systemowe.

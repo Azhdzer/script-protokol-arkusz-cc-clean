@@ -345,6 +345,8 @@ GENERUJ_EXCEL = C.flaga("GEN_EXCEL", GENERUJ_EXCEL)
 GENERUJ_WORD  = C.flaga("GEN_WORD", GENERUJ_WORD)
 CZYSC_AUTORECOVER = C.flaga("GEN_AUTOREC", CZYSC_AUTORECOVER)
 SPRZATAJ_ZAWIESZONE_EXCELE = C.flaga("GEN_SPRZATAJ_EXCEL", True)
+# Przetworniki z panelu (tabela PRZETWORNIKI) — patrz pz_dane.przetworniki_z_tabeli.
+TABELA_PRZETWORNIKOW = C.tabela("PRZETWORNIKI", [])
 
 # =============================================================================
 # WARUNKI ŚRODOWISKOWE — czujnik + Wzory.xls
@@ -1384,6 +1386,11 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
             # kopii zostawalo szablonowe (0,1) niezaleznie od tego, co stalo w
             # protokole — a od H55 zalezy niepewnosc wilgotnosci.
             val_L = ws2.cells(row, 12).value  # kolumna L -> H55 kopii (rozdz. RH)
+            # M/N — skalowanie przetwornika, P — Uwagi (kanaly). Dla przetwornika
+            # z nich bierzemy zakres i kanaly, gdy nie ma go w tabeli panelu.
+            val_M = ws2.cells(row, 13).value
+            val_N = ws2.cells(row, 14).value
+            val_P = ws2.cells(row, 16).value
             dane_s2.append({
                 "O": _cell_to_str(val_O),
                 "E": _cell_to_str(val_E),
@@ -1392,6 +1399,9 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                 "F": val_F,
                 "K": val_K,
                 "L": val_L,
+                "M": val_M,
+                "N": val_N,
+                "P": val_P,
                 "IS_CC04_PROTO": protokol_cc04,
                 "CC04_RAW": "",
                 "CC04_TAG": None,
@@ -1470,6 +1480,11 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                     if tag:
                         col_c_cc04 = MAPOWANIE_KOLUMNY_C_CC04.get(str(tag).upper())
 
+                # Jednostki odczytu przyrzadu (wiersz 19): 'mA' / 'V' = przetwornik.
+                if j < len(dane_s2):
+                    dane_s2[j]["JEDN_T"] = _cell_to_str(ws3.cells(WIERSZ_JEDNOSTEK_S3, col_e).value)
+                    dane_s2[j]["JEDN_RH"] = _cell_to_str(ws3.cells(WIERSZ_JEDNOSTEK_S3, col_f).value)
+
                 zakl = []
                 for i in range(n_zakladek):
                     r0 = start_s3 + i * blok
@@ -1510,6 +1525,25 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                         })
                 dane_ef.append(zakl)
 
+        # --- Przetworniki: parametry zakladek roboczych (tabela panelu / protokol) ---
+        _multimetr_s1 = None
+        try:
+            if "Strona 1" in [s.name for s in wb.sheets]:
+                _multimetr_s1 = wb.sheets["Strona 1"].range(KOMORKA_MULTIMETRU_S1).value
+        except Exception:
+            _multimetr_s1 = None
+        _tabela = pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW)
+        for _rek in dane_s2:
+            _rek["PRZETWORNIK"] = parametry_przetwornika(_rek, _tabela, _multimetr_s1)
+            _p = _rek["PRZETWORNIK"]
+            if _p:
+                print(f"  [Przetwornik] {_rek.get('E')}: {_p['L10']}, multimetr {_p['K14']}, "
+                      f"kanaly t={_p['K15']} RH={_p['K16']}, wyjscie "
+                      f"{_p.get('M22', '?')} ÷ {_p.get('O22', '?')} "
+                      f"(zrodlo: {_p['_zrodlo']}) — dane do G/H.")
+                for _o in _p["_ostrzezenia"]:
+                    _warn(f"Przetwornik {_rek.get('E')}: {_o}")
+
         # --- Strona 3: F24 dla arkusza Wyniki, per kopia (wiersz 17) ---
         # Wymaganie: czytaj wartosc ze scalonej komorki Q:R17 (lub S:T17 dla CC-04),
         # z kolejnymi kopiami co 2 kolumny w prawo.
@@ -1527,6 +1561,144 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
 # =============================================================================
 # GENEROWANIE NAZWY KOPII
 # =============================================================================
+
+# =============================================================================
+# PRZETWORNIKI — parametry zakladek roboczych kopii
+# =============================================================================
+# Przetwornik (wyjscie pradowe/napieciowe mierzone multimetrem) liczy sie w tym
+# samym arkuszu co termohigrometr, ale:
+#   * dane ida do G/H (Itm/IRHm albo Utm/URHm), a nie do E/F (tm/RHm),
+#   * K10 = 'Przetwornik', L10 = 'Prąd' / 'Napięcie' (jak jednostka na Stronie 3),
+#   * K14 = multimetr mierzacy wyjscie, K15/K16 = jego kanaly (Itm / IRHm),
+#   * M22/O22 = zakres wyjscia (np. 4 ÷ 20 mA), L27/O27 = tmin/tmax,
+#     L28/O28 = RHmin/RHmax.
+# Rozpoznanie: jednostka odczytu przyrzadu w wierszu 19 Strony 3 to 'mA' albo 'V'.
+# Parametry: najpierw tabela 'Przetworniki' z panelu (po nr fabrycznym), a gdy
+# jej brak — Strona 2 protokolu (M/N: skalowanie, P: kanaly) i Strona 1 (I53).
+
+WIERSZ_JEDNOSTEK_S3 = 19
+KOMORKA_MULTIMETRU_S1 = "I53"     # Strona 1, p. 1.5: multimetr mierzacy sygnal analogowy
+MULTIMETR_PRZETWORNIKA_DOMYSLNY = "1586A"
+
+
+def _sygnal_z_jednostki(jednostka):
+    j = str(jednostka or "").strip().lower()
+    if j == "ma":
+        return "Prąd"
+    if j in ("v", "mv"):
+        return "Napięcie"
+    return None
+
+
+def _kanal_do_komorki(kanal):
+    """'001' zostaje tekstem (zera wiodace), '105' -> 105 — jak lista w szablonie."""
+    t = str(kanal or "").strip()
+    if not t:
+        return "-"
+    try:
+        n = int(t)
+    except ValueError:
+        return t
+    return n if str(n) == t else t
+
+
+def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None):
+    """
+    Komorki zakladki roboczej dla kopii-przetwornika albo None (zwykly termohigrometr).
+    Zwraca dict {'K10': ..., 'L10': ..., 'K14', 'K15', 'K16', 'M22', 'O22',
+    'L27', 'O27', 'L28', 'O28', '_ostrzezenia': [...]}; brakujace zakresy pomijane
+    (zostaja z szablonu).
+    """
+    sygnal_t = _sygnal_z_jednostki(rekord.get("JEDN_T"))
+    sygnal_rh = _sygnal_z_jednostki(rekord.get("JEDN_RH"))
+    sygnal = sygnal_t or sygnal_rh
+    if not sygnal:
+        return None
+    ostrz = []
+    serial = str(rekord.get("E") or "")
+    tab = (tabela or {}).get(pz_dane.normalizuj_serial(serial))
+
+    if tab is not None and tab.sygnal != sygnal:
+        ostrz.append(f"w tabeli panelu sygnal '{tab.sygnal}', a jednostka na Stronie 3 "
+                     f"wskazuje '{sygnal}' — przyjeto '{sygnal}'.")
+
+    # Kanaly: tabela -> Uwagi (P) ze Strony 2.
+    if tab is not None and (tab.kanal_t or tab.kanal_rh):
+        kanal_t, kanal_rh = tab.kanal_t, tab.kanal_rh
+    else:
+        kanal_t, kanal_rh, reszta = pz_dane.kanaly_z_uwag(rekord.get("P"))
+        for k in reszta:
+            if sygnal_t and not kanal_t:
+                kanal_t = k
+            elif sygnal_rh and not kanal_rh:
+                kanal_rh = k
+        if not (kanal_t or kanal_rh):
+            ostrz.append("brak kanalow multimetru (tabela 'Przetworniki' w panelu "
+                         "albo Uwagi na Stronie 2) — K15/K16 = '-'.")
+
+    # Multimetr: tabela -> Strona 1 I53 -> domyslny.
+    multimetr = (tab.multimetr if tab is not None and tab.multimetr else "")
+    if not multimetr:
+        s1 = str(multimetr_s1 or "").strip()
+        multimetr = s1 if s1 and s1 != "-" else ""
+    if not multimetr:
+        multimetr = MULTIMETR_PRZETWORNIKA_DOMYSLNY
+        ostrz.append(f"multimetr nieznany — przyjeto {multimetr} "
+                     f"(uzupelnij tabele 'Przetworniki' w panelu).")
+
+    # Zakresy: tabela -> skalowanie ze Strony 2 (M = temperatura, N = wilgotnosc).
+    sk_t = pz_dane.zakresy_ze_skalowania(rekord.get("M"))
+    sk_rh = pz_dane.zakresy_ze_skalowania(rekord.get("N"))
+    wy = None
+    if tab is not None and None not in (tab.wy_od, tab.wy_do):
+        wy = (tab.wy_od, tab.wy_do)
+    else:
+        for sk in (sk_rh, sk_t):
+            if sk:
+                wy = sk[0][:2]
+                break
+    t_zakres = ((tab.t_od, tab.t_do) if tab is not None and None not in (tab.t_od, tab.t_do)
+                else (sk_t[1] if sk_t else None))
+    rh_zakres = ((tab.rh_od, tab.rh_do) if tab is not None and None not in (tab.rh_od, tab.rh_do)
+                 else (sk_rh[1] if sk_rh else None))
+    if wy is None:
+        ostrz.append("brak zakresu wyjscia (M22/O22 zostaje z szablonu) — wpisz go "
+                     "w tabeli 'Przetworniki' albo w skalowaniu na Stronie 2.")
+
+    wynik = {
+        "K10": "Przetwornik",
+        "L10": sygnal,
+        "K14": multimetr,
+        "K15": _kanal_do_komorki(kanal_t),
+        "K16": _kanal_do_komorki(kanal_rh),
+        "_ostrzezenia": ostrz,
+        "_zrodlo": "tabela panelu" if tab is not None else "protokol",
+    }
+    if wy:
+        wynik["M22"], wynik["O22"] = wy
+    if t_zakres:
+        wynik["L27"], wynik["O27"] = t_zakres
+    if rh_zakres:
+        wynik["L28"], wynik["O28"] = rh_zakres
+    return wynik
+
+
+KOMORKI_PRZETWORNIKA = ("K10", "L10", "K14", "K15", "K16",
+                        "M22", "O22", "L27", "O27", "L28", "O28")
+
+
+def _zakres_rh_zakladki(ws):
+    """
+    Komorki z odczytami wilgotnosci zakladki: F15:F19 (termohigrometr) albo
+    H15:H19 (przetwornik — IRHm/URHm). Zwraca liste wartosci z niepustego zakresu.
+    """
+    for adres in ("F15:F19", "H15:H19"):
+        v = ws.range(adres).value
+        v = v if isinstance(v, list) else [v]
+        if any(x is not None and not (isinstance(x, str) and not x.strip()) for x in v):
+            return adres, v
+    return "F15:F19", [None] * 5
+
 
 def _liczba_lub_none(v):
     """Liczba z komorki (0.1 / '0,1'); tekst ('-', pusto) -> None."""
@@ -2867,13 +3039,13 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final):
         arkusz = _arkusz_z_formuly(w["formula_bi"][0])
         w["arkusz"] = arkusz
         if arkusz and arkusz in sheet_names:
-            rhm_vals = wb.sheets[arkusz].range("F15:F19").value
-            if not isinstance(rhm_vals, list):
-                rhm_vals = [rhm_vals]
+            _adres_rh, rhm_vals = _zakres_rh_zakladki(wb.sheets[arkusz])
             non_puste = [v for v in rhm_vals if not _brak_wartosci(v)]
             w["ma_rh"] = bool(non_puste)
             try:
-                w["rh_ref"] = float(non_puste[0]) if non_puste else None
+                # Przetwornik (H15:H19) ma tu mA/V — nominal RH bierzemy z nazwy zakladki.
+                w["rh_ref"] = (_rh_z_nazwy_zakladki(arkusz) if _adres_rh != "F15:F19"
+                               else (float(non_puste[0]) if non_puste else None))
             except (TypeError, ValueError):
                 w["rh_ref"] = None
         else:
@@ -3140,6 +3312,9 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                     if fmt:
                         cell.api.NumberFormat = fmt
 
+            # Przetwornik: odczyty wyjsc (mA/V) ida do G/H (Itm/IRHm), nie do E/F.
+            _przetw = rekord.get("PRZETWORNIK")
+            _kol_t, _kol_rh = (7, 8) if _przetw else (5, 6)
             if isinstance(ef, dict):
                 e_dane = ef.get("E_dane") or []
                 e_fmt_list = ef.get("E_fmt") or []
@@ -3148,8 +3323,10 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 for offset in range(5):
                     val = e_dane[offset] if offset < len(e_dane) else None
                     fmt = e_fmt_list[offset] if offset < len(e_fmt_list) else None
+                    if _przetw and isinstance(val, str) and val.strip() in ("-", ""):
+                        val = None          # wyjscie nieuzywane ('-' na Stronie 3)
                     if val is not None:
-                        cell = ws.cells(15 + offset, 5)
+                        cell = ws.cells(15 + offset, _kol_t)
                         cell.value = val
                         if fmt:
                             cell.api.NumberFormat = fmt
@@ -3158,8 +3335,10 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 for offset in range(5):
                     val = f_dane[offset] if offset < len(f_dane) else None
                     fmt = f_fmt_list[offset] if offset < len(f_fmt_list) else None
+                    if _przetw and isinstance(val, str) and val.strip() in ("-", ""):
+                        val = None
                     if val is not None:
-                        cell = ws.cells(15 + offset, 6)
+                        cell = ws.cells(15 + offset, _kol_rh)
                         cell.value = val
                         if fmt:
                             cell.api.NumberFormat = fmt
@@ -3176,7 +3355,18 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws.range("E5").value = rekord["B"]
             if rekord.get("D") is not None:
                 ws.range("E6").value = rekord["D"]
-            if rekord.get("K") is not None:
+            if _przetw:
+                for _kom in KOMORKI_PRZETWORNIKA:
+                    if _kom in _przetw:
+                        _v = _przetw[_kom]
+                        # '001' jako TEKST — inaczej Excel zamienia go na 1.
+                        if isinstance(_v, str) and _v.isdigit():
+                            _v = "'" + _v
+                        ws.range(_kom).value = _v
+                # Bez wyjscia temperatury rozdzielczosc t nie dotyczy.
+                if _przetw.get("K15") == "-":
+                    ws.range("H57").value = "-"
+            if rekord.get("K") is not None and not _przetw:
                 # Rozdzielczosc bywa podana osobno dla kazdej temperatury
                 # ('dla 70°C t: 0,056 °C / dla 20°C t: 0,024 °C ...'). Zakladka
                 # dostaje wtedy wartosc dla SWOJEJ temperatury — tekst wpisany
@@ -3412,9 +3602,7 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
         # --- Wykryj obecnosc aktywnych danych wilgotnosci (RHm, F15:F19) per zakladka ---
         wilgotnosc_per_zakladka = {}
         for ws_name in working_final_list:
-            rhm_vals = wb.sheets[ws_name].range("F15:F19").value
-            if not isinstance(rhm_vals, list):
-                rhm_vals = [rhm_vals]
+            _adres, rhm_vals = _zakres_rh_zakladki(wb.sheets[ws_name])
             wilgotnosc_per_zakladka[ws_name] = any(not _brak_wartosci(v) for v in rhm_vals)
 
         liczba_z_wilgotnoscia = sum(1 for v in wilgotnosc_per_zakladka.values() if v)

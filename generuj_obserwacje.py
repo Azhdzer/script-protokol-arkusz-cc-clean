@@ -98,6 +98,8 @@ WYNIKI_FOLDER = C.sciezka("ANL_OUTPUT", "wyniki", FOLDER)
 
 # Dane przyrzadow: PDFy "Potwierdzenie zamowienia" (PZ/) + Zestawienie rozdzielczosci.
 PZ_FOLDER        = C.sciezka("CC_PZ_FOLDER", "PZ", FOLDER)
+# Przetworniki z panelu (tabela PRZETWORNIKI) — patrz pz_dane.przetworniki_z_tabeli.
+TABELA_PRZETWORNIKOW = C.tabela("PRZETWORNIKI", [])
 ZESTAWIENIE_PLIK = C.sciezka("CC_ZESTAWIENIE",
                              "Zestawienie wzorcowanych przyrządów.xlsx", FOLDER)
 
@@ -3137,12 +3139,13 @@ def urzadzenia_przetwornikow(przetworniki, rows):
     pierwszy kanal t + pierwszy kanal RH = jeden przyrzad (jedna para kolumn
     w protokole), itd. Zwraca liste {'t': (kanal, idx) | None, 'rh': (...) | None}.
     Indeks w `rows` — za ukladem CC04_KOLUMNY, w kolejnosci przetwornikow.
+    Krotka kanalu: (oznaczenie, indeks w rows, 'U' | 'I').
     """
     n = len(CC04_KOLUMNY)
     t_k, rh_k = [], []
-    for j, (kanal, _typ) in enumerate(przetworniki or []):
+    for j, (kanal, typ) in enumerate(przetworniki or []):
         idx = n + j
-        (rh_k if rola_przetwornika(rows, idx) == 'rh' else t_k).append((kanal, idx))
+        (rh_k if rola_przetwornika(rows, idx) == 'rh' else t_k).append((kanal, idx, typ))
     return [{'t': t_k[i] if i < len(t_k) else None,
              'rh': rh_k[i] if i < len(rh_k) else None}
             for i in range(max(len(t_k), len(rh_k)))]
@@ -3158,8 +3161,25 @@ def opis_kanalow_przetwornika(urz):
     return "\n".join(czesci)
 
 
+WIERSZ_JEDNOSTEK_S3 = 19
+
+
+def jednostka_przetwornika(urz, rola):
+    """'V' / 'mA' dla wyjscia przetwornika, '-' gdy tego wyjscia nie ma."""
+    k = urz.get(rola)
+    if not k:
+        return '-'
+    return 'mA' if (k[2] if len(k) > 2 else 'U') == 'I' else 'V'
+
+
 def _wpisz_przetwornik(ws3, rep_groups, rows, urz, col, block_start, block_size):
-    """Wskazania multimetru z wyjsc przetwornika -> para kolumn przyrzadu (t, RH)."""
+    """
+    Wskazania multimetru z wyjsc przetwornika -> para kolumn przyrzadu (t, RH).
+    Wiersz 19 (jednostki) dostaje 'V' / 'mA' — po nim krok 3 rozpoznaje
+    przetwornik i ustawia rodzaj odczytu (L10 kopii).
+    """
+    ws3.cell(row=WIERSZ_JEDNOSTEK_S3, column=col).value = jednostka_przetwornika(urz, 't')
+    ws3.cell(row=WIERSZ_JEDNOSTEK_S3, column=col + 1).value = jednostka_przetwornika(urz, 'rh')
     for punkt_idx, (rep_indices, _powod, *_r) in enumerate(rep_groups):
         r0 = block_start + punkt_idx * block_size
         for off, data_i in enumerate(rep_indices[:block_size]):
@@ -3182,13 +3202,14 @@ def _serial_przetwornika(pz_lista):
     return seriale.pop() if len(seriale) == 1 else ''
 
 
-def _wypelnij_przetworniki_strona2(ws2, uzyte):
+def _wypelnij_przetworniki_strona2(ws2, uzyte, tabela=None):
     """
     Wiersz przetwornika na Stronie 2: dane przyrzadu jak zwykle (z PZ), ale
     rozdzielczosc odczytu nie dotyczy ('-'), a skalowanie przetwornika zostaje
     PUSTE do uzupelnienia — zakresu wyjscia (np. 0-5 V = -40..60 °C) w PZ nie ma.
     W 'Uwagach' kanaly multimetru: 'ch temp 105' / 'ch humid 115'.
     """
+    tabela = tabela or {}
     for i, wpis in enumerate(uzyte or []):
         urz = wpis[3].get('przetwornik') if len(wpis) > 3 and wpis[3] else None
         if not urz:
@@ -3196,18 +3217,63 @@ def _wypelnij_przetworniki_strona2(ws2, uzyte):
         w = STRONA2_PIERWSZY_WIERSZ + i
         ws2.cell(row=w, column=11).value = '-'                    # K
         ws2.cell(row=w, column=12).value = '-'                    # L
-        for kol in (13, 14):                                      # M, N
-            if ws2.cell(row=w, column=kol).value == '-':
+        tab = tabela.get(pz_dane.normalizuj_serial(str(wpis[0] or "")))
+        brak = []
+        for kol, wielkosc in ((13, 't'), (14, 'rh')):              # M, N
+            opis_sk = pz_dane.opis_skalowania(tab, wielkosc) if tab else None
+            if opis_sk:
+                ws2.cell(row=w, column=kol).value = opis_sk
+            elif urz.get(wielkosc):
                 ws2.cell(row=w, column=kol).value = None
+                brak.append("M" if kol == 13 else "N")
+            else:
+                ws2.cell(row=w, column=kol).value = '-'
         opis = opis_kanalow_przetwornika(urz)
-        ws2.cell(row=w, column=16).value = opis                   # P
-        print(f"    wiersz {w}: przetwornik ({opis.replace(chr(10), ', ')}) — "
-              f"UZUPELNIJ skalowanie w M/N (np. 0-5V (-40 / +60)'C).")
+        z_pz = ws2.cell(row=w, column=16).value                   # np. 'Uz = (24,0 ± 0,1) V DC.'
+        ws2.cell(row=w, column=16).value = "\n".join(
+            x for x in (opis, str(z_pz).strip() if z_pz else "") if x)   # P
+        print(f"    wiersz {w}: przetwornik ({opis.replace(chr(10), ', ')})"
+              + (f" — UZUPELNIJ skalowanie w {'/'.join(brak)} "
+                 f"(albo wpisz przetwornik w tabeli 'Przetworniki' w panelu)." if brak
+                 else " — skalowanie z tabeli 'Przetworniki'."))
+
+
+# Strona 1, p. 1.5 'Multimetr mierzacy (sygnal analogowy)': D53 rodzaj sygnalu,
+# I53 symbol multimetru, I58 kanal (kolejne kanaly — w Uwagach Strony 2).
+STRONA1_SYGNAL, STRONA1_MULTIMETR, STRONA1_KANAL = (53, 4), (53, 9), (58, 9)
+
+
+def multimetr_z_naglowka(lines):
+    """'Multimetr wzorcowy Pt100: 1586A-02' -> '1586A-02' (None, gdy brak)."""
+    for line in lines or []:
+        if line.strip().lower().startswith('data czas'):
+            break
+        m = re.search(r'Multimetr\b[^:]*:\s*(\S+)', line, re.I)
+        if m:
+            return m.group(1).strip()
+    return None
+
+
+def _wypelnij_strone1_przetworniki(ws1, urz_przetw, multimetr, tabela, serial):
+    """Przetworniki mierzone multimetrem -> Strona 1, p. 1.5 (D53, I53, I58)."""
+    urz = urz_przetw[0]
+    pierwszy = urz.get('t') or urz.get('rh')
+    prad = pierwszy and len(pierwszy) > 2 and pierwszy[2] == 'I'
+    tab = (tabela or {}).get(pz_dane.normalizuj_serial(serial or ""))
+    symbol = (tab.multimetr if tab and tab.multimetr else None) or multimetr
+    _ustaw_komorke(ws1, *STRONA1_SYGNAL,
+                   'prąd wyjściowy przetwornika' if prad else 'napięcie wyjściowe przetwornika')
+    if symbol:
+        _ustaw_komorke(ws1, *STRONA1_MULTIMETR, symbol)
+    if pierwszy:
+        _ustaw_komorke(ws1, *STRONA1_KANAL, kanal_do_komorki(pierwszy[0]))
+    print(f"  [Strona 1] Multimetr mierzacy sygnal analogowy: {symbol or '?'}, "
+          f"{'prad' if prad else 'napiecie'}, kanal {pierwszy[0] if pierwszy else '-'}")
 
 
 def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=None,
                      pz_mapa=None, zest=None, pz_lista=None, kanaly_slotow=None,
-                     przetworniki=None):
+                     przetworniki=None, multimetr=None):
     """
     Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.
 
@@ -3496,6 +3562,10 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
             uzyte = z_pz
             print(f"  [PZ] Brak plikow wynikow — tabele przyrzadow buduje z PZ "
                   f"({len(uzyte)} przyrzad(ow) z komory klimatycznej).")
+    if urz_przetw and 'Strona 1' in proto_wb.sheetnames:
+        _wypelnij_strone1_przetworniki(proto_wb['Strona 1'], urz_przetw, multimetr,
+                                       pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW),
+                                       _serial_przetwornika(pz_lista))
     if urz_przetw:
         uzyte = list(uzyte or [])
         serial_pr = _serial_przetwornika(pz_lista)
@@ -3522,7 +3592,8 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
     if 'Strona 2' in proto_wb.sheetnames:
         wypelnij_strone2_z_pz(proto_wb['Strona 2'], uzyte, pz_mapa, zest,
                               nr_zlecenia=measurement_id)
-        _wypelnij_przetworniki_strona2(proto_wb['Strona 2'], uzyte)
+        _wypelnij_przetworniki_strona2(
+            proto_wb['Strona 2'], uzyte, pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW))
         # Data pomiaru = dzien OSTATNIEGO punktu (wtedy pomiary zostaly zakonczone).
         _dt_ost = _s_to_dt(rows[rep_groups[-1][0][-1]][0]) if rep_groups else None
         wypelnij_podpisy_strona2(proto_wb['Strona 2'],
@@ -4043,7 +4114,8 @@ def main():
                          sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest,
                          pz_lista=_pz_lista, kanaly_slotow=kanaly_slotow,
                          przetworniki=(kanaly_przetwornikow(raw_lines)
-                                       if file_type == 'CC04' else None))
+                                       if file_type == 'CC04' else None),
+                         multimetr=multimetr_z_naglowka(raw_lines))
         # Znaczniki punktow w zestawieniu przyrzadow (nawigacja po czasie)
         oznacz_zestawienie_punkty(rep_groups, rows, prefiks=prefiks)
         # Pliki kroku 1 po opracowaniu: podpis i nazwa zlecenia.

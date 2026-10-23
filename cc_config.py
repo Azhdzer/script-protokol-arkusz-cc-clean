@@ -194,6 +194,16 @@ _OBSERWACJA = [
     _U("OBS_PROT_CC04", "Szablon protokolu CC-04", "plik",
        "xxx_LA_TH_2026 - protokół CC-04.xlsx", "obs",
        grupa="Szablony", wzorzec=(".xlsx", ".xlsm")),
+    _U("PRZETWORNIKI", "Przetworniki — kanaly, multimetr, zakres", "tabela", [], "obs",
+       grupa="Przetworniki (wyjscie analogowe)",
+       kolumny=["Nr fabryczny", "Kanał t", "Kanał RH", "Multimetr",
+                "Sygnał (Prąd / Napięcie)", "Wyjście od", "Wyjście do",
+                "tmin °C", "tmax °C", "RHmin %", "RHmax %"],
+       opis="Jeden wiersz na przetwornik wzorcowany przez wyjscie pradowe/napieciowe. "
+            "Kanal bez wyjscia: '-'. Krok 2 wpisuje z tego skalowanie (Strona 2, M/N) "
+            "i kanaly (Uwagi); krok 3 — parametry zakladek kopii: rodzaj odczytu (L10), "
+            "multimetr (K14), kanaly (K15/K16), zakres wyjscia (M22/O22), "
+            "tmin/tmax i RHmin/RHmax, a dane wpisuje w G/H zamiast E/F."),
     _U("CC_PZ_FOLDER", "Folder PZ (Potwierdzenia zamowienia)", "folder", "PZ", "obs",
        grupa="Dane przyrzadow",
        opis="PDF-y PZ (PL/EN) — z nich wypelniana jest tabela przyrzadow na Stronie 2."),

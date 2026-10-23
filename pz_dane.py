@@ -842,7 +842,7 @@ def wczytaj_punkty_przyrzadow(folder_pz):
     wynik = {}
     if not _PDF_OK or not os.path.isdir(folder_pz):
         return wynik
-    for path in sorted(glob.glob(os.path.join(folder_pz, "*.pdf"))):
+    for path in pliki_pz(folder_pz):
         try:
             reader = PdfReader(path)
             text = "\n".join((p.extract_text() or "") for p in reader.pages)
@@ -884,7 +884,7 @@ def wczytaj_punkty(folder_pz):
     if not _PDF_OK or not os.path.isdir(folder_pz):
         return []
     grupy = []
-    for path in sorted(glob.glob(os.path.join(folder_pz, "*.pdf"))):
+    for path in pliki_pz(folder_pz):
         try:
             reader = PdfReader(path)
             text = "\n".join((p.extract_text() or "") for p in reader.pages)
@@ -904,6 +904,72 @@ def wczytaj_punkty(folder_pz):
     if punkty:
         print(f"  [PZ] Razem punktow do obserwacji ({len(punkty)}): {_opis_punktow(punkty)}")
     return punkty
+
+
+def _cel_skrotu(sciezka_lnk):
+    """Plik, na ktory wskazuje skrot Windows (.lnk), albo None."""
+    try:
+        import win32com.client
+        cel = win32com.client.Dispatch("WScript.Shell").CreateShortcut(
+            os.path.abspath(sciezka_lnk)).TargetPath
+        return cel or None
+    except Exception:
+        return None
+
+
+def pliki_pz(folder_pz):
+    """
+    PDF-y PZ z folderu: pliki .pdf ORAZ skroty .lnk do PDF-ow.
+
+    Zlecenie 230: PZ lezy w folderze innego zlecenia na serwerze (552/LA/T),
+    a do folderu PZ trafia jako skrot 'PZ ...pdf — skrot.lnk'. Szukanie
+    samego '*.pdf' go pomijalo — Strona 2 zostawala bez danych przyrzadow.
+    """
+    wynik = sorted(glob.glob(os.path.join(folder_pz, "*.pdf")))
+    znane = {os.path.normcase(os.path.abspath(x)) for x in wynik}
+    for lnk in sorted(glob.glob(os.path.join(folder_pz, "*.lnk"))):
+        cel = _cel_skrotu(lnk)
+        if not cel or not cel.lower().endswith(".pdf"):
+            continue
+        if not os.path.exists(cel):
+            print(f"  [PZ] Skrot '{os.path.basename(lnk)}' wskazuje na niedostepny plik: {cel}")
+            continue
+        klucz = os.path.normcase(os.path.abspath(cel))
+        if klucz not in znane:
+            znane.add(klucz)
+            wynik.append(cel)
+    return wynik
+
+
+# Blok 'UWAGA:' za lista obiektow:
+#   UWAGA:
+#   1) ÷ 6) Odczyt petli pradowej 4..20 mA. Wzorcowanie ... Uz = (18,0 ± 0,1) VDC.
+#   7) ÷ 8) Wzorcowanie zostanie wykonane przy napieciu zasilajacym Uz = (24,0 ± 0,1) V DC.
+# Numeracja '1) ÷ 6)' rozbijala go na fikcyjne, puste przyrzady. Blok konczy liste
+# obiektow; napiecie zasilania trafia do 'Uwag' przyrzadow z tych pozycji.
+_RE_UWAGA = re.compile(r'\b(?:UWAGA|Uwaga|NOTE|Note)\s*:', re.S)
+# Numer pozycji stoi na poczatku albo po odstepie — '0,1)' z '(24,0 ± 0,1)' to nie pozycja.
+_RE_POZYCJE_UWAGI = re.compile(r'(?:^|(?<=\s))(\d{1,2})\)\s*(?:÷\s*(\d{1,2})\)\s*)?')
+_RE_ZASILANIE = re.compile(r'Uz\s*=\s*\([^)]*\)\s*V\s*DC\.?', re.I)
+
+
+def _zasilanie_wg_pozycji(uwaga):
+    """{pozycja: 'Uz = (24,0 ± 0,1) V DC.'} z bloku 'UWAGA:'."""
+    wynik = {}
+    znaczniki = list(_RE_POZYCJE_UWAGI.finditer(uwaga))
+    for i, m in enumerate(znaczniki):
+        koniec = znaczniki[i + 1].start() if i + 1 < len(znaczniki) else len(uwaga)
+        mz = _RE_ZASILANIE.search(uwaga[m.end():koniec])
+        if not mz:
+            continue
+        od = int(m.group(1))
+        do = int(m.group(2)) if m.group(2) else od
+        tekst = re.sub(r'\s+', ' ', mz.group(0)).strip()
+        if not tekst.endswith('.'):
+            tekst += '.'
+        for poz in range(od, do + 1):
+            wynik[poz] = tekst
+    return wynik
 
 
 def parsuj_pdf(path):
@@ -934,7 +1000,13 @@ def parsuj_tekst(text):
         r'(?:(?:Metoda\s+wzorcowania|Calibration\s+methods?)\s*:|$)', text, re.I | re.S)
     if not m:
         return []
-    sekcja = re.sub(r'\s+', ' ', m.group(1)).strip()
+    sekcja = m.group(1)
+    zasilanie = {}
+    mu = _RE_UWAGA.search(sekcja)
+    if mu:
+        zasilanie = _zasilanie_wg_pozycji(re.sub(r'\s+', ' ', sekcja[mu.end():]))
+        sekcja = sekcja[:mu.start()]
+    sekcja = re.sub(r'\s+', ' ', sekcja).strip()
 
     # Pozycje wzorcowane w komorze klimatycznej (nasz protokol) — z sekcji 'Metoda wzorcowania'.
     komora_poz = _pozycje_komory(text)
@@ -970,6 +1042,8 @@ def parsuj_tekst(text):
         p.wytworca, uw = rozdziel_wytworce(p.wytworca)
         p.czuj_wytworca, uw_cz = rozdziel_wytworce(p.czuj_wytworca)
         p.uwagi = uw or uw_cz
+        if zasilanie.get(p.pozycja):
+            p.uwagi = "\n".join(x for x in (p.uwagi, zasilanie[p.pozycja]) if x)
         # Uzytkownik JEGO pozycji; gdy lista nie jest numerowana — wspolny dla wszystkich.
         p.uzytkownik = (uzyt_wg_poz.get(p.pozycja)
                         or uzyt_wg_poz.get(None)
@@ -991,7 +1065,7 @@ def wczytaj_pz(folder_pz):
         print(f"  [PZ] Brak folderu '{folder_pz}' — pomijam dane z PZ.")
         return mapa, lista
 
-    pliki = sorted(glob.glob(os.path.join(folder_pz, "*.pdf")))
+    pliki = pliki_pz(folder_pz)
     for path in pliki:
         try:
             przyrzady = parsuj_pdf(path)
@@ -1266,3 +1340,137 @@ def rozdzielczosc_z_kolumny(values):
         if dec > max_dec:
             max_dec = dec
     return {0: 1.0, 1: 0.1, 2: 0.01, 3: 0.001}.get(max_dec, 10 ** (-max_dec))
+
+
+# =============================================================================
+# PRZETWORNIKI (wyjscie analogowe) — tabela z panelu i opisy na Stronie 2
+# =============================================================================
+# Przetwornik wzorcuje sie przez jego wyjscie pradowe/napieciowe mierzone
+# multimetrem. Ani plik pomiarowy, ani PZ nie mowia wszystkiego: na jakich
+# kanalach byl wpiety, jakim multimetrem mierzony i jaki ma zakres. Te dane
+# operator wpisuje w panelu (tabela 'Przetworniki', ustawienie PRZETWORNIKI):
+#
+#   Nr fabryczny | Kanal t | Kanal RH | Multimetr | Sygnal | Wyjscie od | do |
+#   tmin | tmax | RHmin | RHmax
+#
+# Krok 2 bierze z niej opis skalowania (Strona 2, M/N) i kanaly (Uwagi),
+# krok 3 — parametry zakladek roboczych kopii (K10/L10, K14-K16, M22/O22,
+# tmin/tmax, RHmin/RHmax).
+
+KOLUMNY_PRZETWORNIKOW = ["Nr fabryczny", "Kanał t", "Kanał RH", "Multimetr",
+                         "Sygnał (Prąd / Napięcie)", "Wyjście od", "Wyjście do",
+                         "tmin °C", "tmax °C", "RHmin %", "RHmax %"]
+
+
+class Przetwornik:
+    __slots__ = ("serial", "kanal_t", "kanal_rh", "multimetr", "sygnal",
+                 "wy_od", "wy_do", "t_od", "t_do", "rh_od", "rh_do")
+
+    def __init__(self, serial="", kanal_t="", kanal_rh="", multimetr="", sygnal="Prąd",
+                 wy_od=None, wy_do=None, t_od=None, t_do=None, rh_od=None, rh_do=None):
+        self.serial, self.kanal_t, self.kanal_rh = serial, kanal_t, kanal_rh
+        self.multimetr, self.sygnal = multimetr, sygnal
+        self.wy_od, self.wy_do = wy_od, wy_do
+        self.t_od, self.t_do, self.rh_od, self.rh_do = t_od, t_do, rh_od, rh_do
+
+    @property
+    def jednostka(self):
+        return "V" if self.sygnal == "Napięcie" else "mA"
+
+    def __repr__(self):
+        return (f"Przetwornik({self.serial!r}, t={self.kanal_t!r}, rh={self.kanal_rh!r}, "
+                f"{self.sygnal}, {self.wy_od}÷{self.wy_do} {self.jednostka})")
+
+
+def _bez_kreski(v):
+    v = str(v or "").strip()
+    return "" if v in ("-", "–") else v
+
+
+def sygnal_z_tekstu(tekst):
+    """'Prąd' / 'Napięcie' z wpisu operatora albo z jednostki ('mA', 'V', 'U', 'I')."""
+    t = str(tekst or "").strip().lower()
+    if not t:
+        return None
+    if t.startswith(("nap", "u", "v")) or t in ("mv",):
+        return "Napięcie"
+    if t.startswith(("pr", "i", "ma", "a")):
+        return "Prąd"
+    return None
+
+
+def przetworniki_z_tabeli(tabela):
+    """{nr fabryczny (znormalizowany): Przetwornik} z tabeli panelu."""
+    wynik = {}
+    for w in tabela or []:
+        w = list(w) + [""] * (len(KOLUMNY_PRZETWORNIKOW) - len(w))
+        serial = _bez_kreski(w[0])
+        if not serial:
+            continue
+        wynik[normalizuj_serial(serial)] = Przetwornik(
+            serial=serial, kanal_t=_bez_kreski(w[1]), kanal_rh=_bez_kreski(w[2]),
+            multimetr=_bez_kreski(w[3]), sygnal=sygnal_z_tekstu(w[4]) or "Prąd",
+            wy_od=_do_float(w[5]), wy_do=_do_float(w[6]),
+            t_od=_do_float(w[7]), t_do=_do_float(w[8]),
+            rh_od=_do_float(w[9]), rh_do=_do_float(w[10]))
+    return wynik
+
+
+def _liczba_txt(v):
+    return (f"{v:g}").replace('.', ',')
+
+
+def opis_skalowania(p, wielkosc):
+    """
+    Tekst do Strony 2 (M — temperatura, N — wilgotnosc), jak wpisywany recznie:
+        '(4 ÷ 20) mA\nodpowiada:\n(0 ÷ 100) %'
+    None, gdy przetwornik nie ma tego wyjscia albo zakresu.
+    """
+    od, do, jedn, kanal = ((p.t_od, p.t_do, "°C", p.kanal_t) if wielkosc == "t"
+                           else (p.rh_od, p.rh_do, "%", p.kanal_rh))
+    if not kanal or None in (od, do, p.wy_od, p.wy_do):
+        return None
+    return (f"({_liczba_txt(p.wy_od)} ÷ {_liczba_txt(p.wy_do)}) {p.jednostka}\n"
+            f"odpowiada:\n({_liczba_txt(od)} ÷ {_liczba_txt(do)}) {jedn}")
+
+
+# Zakres w opisie skalowania: '(4 ÷ 20) mA', '0-5V', '(-40 / +60)', '( 0 - 100)RH'.
+_RE_ZAKRES_SKALOWANIA = re.compile(
+    r'([-+]?\d+(?:[.,]\d+)?)\s*(?:÷|–|-|/|\.\.)\s*([-+]?\d+(?:[.,]\d+)?)\s*\)?\s*(mA|V)?',
+    re.I)
+
+
+def zakresy_ze_skalowania(tekst):
+    """
+    Opis ze Strony 2 -> ((wy_od, wy_do, 'mA'|'V'|None), (od, do)) albo None.
+    Pierwszy zakres to wyjscie przetwornika, drugi — wielkosc mierzona.
+    """
+    zakresy = [(float(a.replace(',', '.')), float(b.replace(',', '.')), j)
+               for a, b, j in _RE_ZAKRES_SKALOWANIA.findall(str(tekst or ""))]
+    if len(zakresy) < 2:
+        return None
+    (w1, w2, jedn), (o1, o2, _j) = zakresy[0], zakresy[1]
+    return (w1, w2, (jedn or None) and ("mA" if jedn.lower() == "ma" else "V")), (o1, o2)
+
+
+# Kanaly w 'Uwagach': 'CH 001', 'ch temp 105', 'ch humid 115', 'Ch: 221'.
+_RE_KANAL_UWAGI = re.compile(
+    r'\bch\.?\s*(temp\w*|t|humid\w*|rh|wilg\w*)?\s*[:=]?\s*(\d{1,4})\b', re.I)
+
+
+def kanaly_z_uwag(tekst):
+    """
+    'Uwagi' ze Strony 2 -> (kanal_t, kanal_rh, kanaly_bez_opisu). Kanaly z opisem
+    'temp'/'humid' trafiaja na swoje miejsce, reszta — w kolejnosci wpisu.
+    """
+    t = rh = ""
+    bez_opisu = []
+    for opis, kanal in _RE_KANAL_UWAGI.findall(str(tekst or "")):
+        o = opis.lower()
+        if o.startswith(("temp", "t")) and o and not t:
+            t = kanal
+        elif o.startswith(("humid", "rh", "wilg")) and not rh:
+            rh = kanal
+        else:
+            bez_opisu.append(kanal)
+    return t, rh, bez_opisu
