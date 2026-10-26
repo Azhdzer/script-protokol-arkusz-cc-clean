@@ -619,6 +619,11 @@ def sniff_format(filepath):
     if b'PuTTY log' in raw:
         return 'putty'
 
+    # Eksport multimetru (np. 1586A: 'Record #,Time,Ch 001 (ADC),Ch 221 (ADC)') — to
+    # wyjscia PRZETWORNIKOW (prad/napiecie), nie loger temperatury i wilgotnosci.
+    if re.search(rb'Ch\s*\d{1,4}\s*\((?:ADC|VDC|mADC|mA)\)', raw, re.I):
+        return 'multimetr_przetworniki'
+
     if b'[#I]Device Name' in raw or b'[#D]Measurements' in raw:
         return 'rotronic_hw4'
 
@@ -1481,6 +1486,33 @@ def parse_putty(filepath, output_dir):
     save_result(times, temps, hums, filepath.name, output_dir)
 
 
+def parse_multimetr_przetworniki(filepath, output_dir):
+    """
+    Eksport multimetru z wyjsciami PRZETWORNIKOW (zlecenie 230: 1586A, kolumny
+    'Ch 001 (ADC)', 'Ch 221 (ADC)' — prad w A). To nie loger temperatury
+    i wilgotnosci: kazdy kanal to wyjscie innego przyrzadu (albo inna wielkosc),
+    wiec NIE robimy z niego pliku wynikow '<plik>_wynik.xlsx' — wczesniej Ch 001
+    ladowal jako 'temperatura', a Ch 221 jako 'wilgotnosc' jednego przyrzadu.
+    Plik czyta krok 2 (2a · Przetworniki). Stary wynik z poprzednich przebiegow
+    jest usuwany, zeby krok 2 nie wzial go za loger.
+    """
+    with open(filepath, encoding='utf-8', errors='replace') as f:
+        naglowek = f.readline()
+    kanaly = re.findall(r'Ch\s*(\d{1,4})\s*\(\s*(ADC|VDC|mADC|mA)\s*\)', naglowek, re.I)
+    opis = ", ".join(f"Ch {k} ({'mA' if j.lower() in ('adc', 'madc', 'ma') else 'V'})"
+                     for k, j in kanaly)
+    print(f"    Kanaly: {opis or '?'} — to wyjscia przetwornikow, nie loger.")
+    print("    Pliku wynikow nie tworze. Krok 2 wczyta go sam (2a · Przetworniki) —"
+          " wpisz tam, ktory kanal nalezy do ktorego przyrzadu.")
+    stary = Path(output_dir) / f"{Path(filepath).stem}_wynik.xlsx"
+    try:
+        if stary.exists():
+            stary.unlink()
+            print(f"    → usunieto '{stary.name}' z poprzedniego przebiegu (kanaly jako T/RH).")
+    except OSError as e:
+        print(f"    [UWAGA] Nie udalo sie usunac '{stary.name}': {e}")
+
+
 PARSERS = {
     'rotronic_hw4':  parse_rotronic_hw4,
     'almemo':        parse_almemo,
@@ -1493,6 +1525,7 @@ PARSERS = {
     'txt_generic':   parse_txt_generic,
     'pdf_logger':    parse_pdf_logger,
     'putty':         parse_putty,
+    'multimetr_przetworniki': parse_multimetr_przetworniki,
 }
 
 # ─── ENTRY POINT ─────────────────────────────────────────────────────────────
@@ -1502,6 +1535,7 @@ PARSERS = {
 # uzywany zarowno przez Comet/TFA, jak i przez LogSoft — stad wspolna etykieta.
 OPISY_FORMATOW = {
     'comet_txt': 'comet/logsoft_txt',
+    'multimetr_przetworniki': 'multimetr — wyjscia przetwornikow (krok 2a)',
 }
 
 

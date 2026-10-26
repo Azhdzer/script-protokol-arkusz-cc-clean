@@ -103,6 +103,8 @@ PZ_FOLDER        = C.sciezka("CC_PZ_FOLDER", "PZ", FOLDER)
 TABELA_PRZETWORNIKOW = C.tabela("PRZETWORNIKI", [])
 # Pliki multimetru z wyjsciami przetwornikow (np. eksport 1586A 'dat00001.csv').
 PLIKI_PRZETWORNIKOW = C.lista("OBS_PRZETW_PLIKI", [])
+# Folder logow kroku 1 — tam tez bywa eksport multimetru przetwornikow.
+FOLDER_LOGOW = C.sciezka("ANL_INPUT", "excel_do_analizy", FOLDER)
 ZESTAWIENIE_PLIK = C.sciezka("CC_ZESTAWIENIE",
                              "Zestawienie wzorcowanych przyrządów.xlsx", FOLDER)
 
@@ -417,6 +419,10 @@ def dolacz_przetworniki_z_plikow(rows, sciezki, tol_min=None):
 
         idx_wierszy = [indeks(t) for t in czasy_w]
         trafione = sum(1 for i in idx_wierszy if i is not None)
+        if not trafione:
+            print(f"  [Przetworniki] '{nazwa}': czasy pliku ({min(czasy):%d.%m %H:%M} - "
+                  f"{max(czasy):%d.%m %H:%M}) nie pokrywaja sie z pomiarem — pomijam plik.")
+            continue
         for kanal, (wartosci, typ) in kanaly.items():
             kol = len(rows[0])
             for r, i in zip(rows, idx_wierszy):
@@ -427,15 +433,43 @@ def dolacz_przetworniki_z_plikow(rows, sciezki, tol_min=None):
               + ", ".join(f"Ch {k} ({'mA' if t == 'I' else 'V'})" for k, (_w, t) in kanaly.items())
               + f" — dopasowano {trafione}/{len(rows)} wierszy obserwacji"
               + (" (czas co do minuty)" if co_minute else ""))
-        if not trafione:
-            print(f"  [UWAGA] '{nazwa}': czasy pliku nie pokrywaja sie z pomiarem "
-                  f"({min(czasy):%d.%m %H:%M} - {max(czasy):%d.%m %H:%M}) — sprawdz plik.")
     return wynik
 
 
+_RE_EKSPORT_MULTIMETRU = re.compile(r'Ch\s*\d{1,4}\s*\(\s*(?:ADC|VDC|mADC|mA)\s*\)', re.I)
+
+
+def _czy_eksport_multimetru(sciezka):
+    try:
+        with open(sciezka, encoding='utf-8', errors='replace') as f:
+            return bool(_RE_EKSPORT_MULTIMETRU.search(f.read(4096)))
+    except OSError:
+        return False
+
+
 def _sciezki_plikow_przetwornikow():
-    """Pliki multimetru wybrane w panelu (wzgledem folderu roboczego)."""
-    return [p if os.path.isabs(p) else os.path.join(FOLDER, p) for p in PLIKI_PRZETWORNIKOW]
+    """
+    Pliki multimetru wybrane w panelu (wzgledem folderu roboczego). Gdy nic nie
+    wybrano — eksporty multimetru (.csv z kolumnami 'Ch NNN (ADC/VDC)') z folderu roboczego
+    i folderu logow kroku 1; plik spoza czasu pomiaru i tak jest potem pomijany.
+    """
+    if PLIKI_PRZETWORNIKOW:
+        return [p if os.path.isabs(p) else os.path.join(FOLDER, p) for p in PLIKI_PRZETWORNIKOW]
+    znalezione = []
+    for folder in dict.fromkeys((FOLDER, FOLDER_LOGOW)):
+        try:
+            nazwy = sorted(os.listdir(folder))
+        except OSError:
+            continue
+        for n in nazwy:
+            p = os.path.join(folder, n)
+            if (n.lower().endswith('.csv') and not n.startswith('~$')
+                    and os.path.isfile(p) and _czy_eksport_multimetru(p)):
+                znalezione.append(p)
+    if znalezione:
+        print("  [Przetworniki] W kroku 2a nie wybrano plikow multimetru — znalazlem sam: "
+              + ", ".join(os.path.basename(p) for p in znalezione))
+    return znalezione
 
 
 def _numery(kanaly):
@@ -1157,7 +1191,9 @@ def _s_to_float(s):
         return None
 
 
-_DT_FORMATS = ('%Y-%m-%d %H:%M:%S', '%d.%m.%Y %H:%M:%S', '%d.%m.%Y %H:%M')
+# Ulamki sekund ('13:53:35.191') — eksport multimetru 1586A.
+_DT_FORMATS = ('%Y-%m-%d %H:%M:%S', '%d.%m.%Y %H:%M:%S', '%d.%m.%Y %H:%M',
+               '%Y-%m-%d %H:%M:%S.%f', '%d.%m.%Y %H:%M:%S.%f', '%Y-%m-%d %H:%M')
 
 def _s_to_dt(s):
     """Parsuje string daty na datetime; obsługuje kilka formatów i podwójne spacje."""

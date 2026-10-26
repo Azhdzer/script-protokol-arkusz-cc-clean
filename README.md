@@ -415,6 +415,10 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
   przy dużym pliku instancja skryptu jest kończona po swoim PID — inne okna Excela zostają.
+- **Eksport multimetru (1586A, `Ch NNN (ADC/VDC)`) w kroku 1** nie jest już traktowany jak loger (wcześniej
+  Ch 001 stawał się „temperaturą”, a Ch 221 „wilgotnością” jednego przyrządu) — krok 1 go pomija i usuwa stary
+  `…_wynik.xlsx`. Krok 2, gdy w 2a nic nie wybrano, sam znajduje takie pliki `.csv` (folder roboczy i folder logów)
+  pokrywające się czasem z pomiarem; czyta czas z ułamkiem sekundy. Każdy kanał RH/t = osobny przyrząd.
 - **Karty przetworników (krok 2a):** każdy przetwornik to osobna karta (`＋ Dodaj przetwornik`, `✕ Usuń`)
   z polami nazwanymi jak w zakładce arkusza obliczeniowego: rodzaj odczytu (L10), multimetr (K14),
   wejście Ch pomiar Itm/IRHm (K15/K16, `-` = brak wyjścia), zakres przetwornika (M22 ÷ O22),

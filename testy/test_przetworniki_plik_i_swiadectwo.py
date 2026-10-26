@@ -266,5 +266,58 @@ class TestWierszeZakladki(unittest.TestCase):
         self.assertFalse(any(k.endswith("_RH") for k in p))
 
 
+class TestSurowyEksport1586A(unittest.TestCase):
+    """
+    Surowy eksport 1586A: przecinki, czas z ulamkiem sekundy, wartosci 8.51e-03 A.
+    Zgloszenie: krok 1 robil z niego JEDEN przyrzad (Ch 001 = 'temperatura',
+    Ch 221 = 'wilgotnosc'), a krok 2 bez wyboru w 2a nie widzial przetwornikow.
+    """
+
+    SUROWY = ("Record #,Time,Ch 001 (ADC),Ch 221 (ADC),Alarm Output,Signature\n"
+              "1,2026-10-23 13:53:35.191,8.512492e-03,8.567765e-03,0,aZRcH\n"
+              "2,2026-10-23 13:54:34.971,8.450831e-03,8.504510e-03,0,aMYaK\n")
+
+    def test_czas_z_ulamkiem_i_notacja_naukowa(self):
+        czasy, kanaly = G.wczytaj_plik_multimetru(plik_csv(self.SUROWY))
+        self.assertEqual(czasy[0], datetime.datetime(2026, 10, 23, 13, 53, 35, 191000))
+        self.assertAlmostEqual(kanaly["001"][0][0], 8.512492, places=6)
+
+    def test_krok1_nie_robi_logera(self):
+        import analizuj_excele as AE
+        sciezka = plik_csv(self.SUROWY)
+        self.assertEqual(AE.sniff_format(sciezka), "multimetr_przetworniki")
+        wyj = os.path.join(os.path.dirname(sciezka), "wyniki")
+        os.makedirs(wyj, exist_ok=True)
+        stary = os.path.join(wyj, "dat00001_wynik.xlsx")
+        open(stary, "wb").close()
+        with redirect_stdout(io.StringIO()):
+            AE.process_file(sciezka, wyj)
+        self.assertFalse(os.path.exists(stary), "stary wynik (kanaly jako T/RH) zostal")
+        self.assertEqual(os.listdir(wyj), [])
+
+    def test_dwa_kanaly_rh_to_dwa_przyrzady(self):
+        rows = [wiersz("2026-10-23 13:53:30"), wiersz("2026-10-23 13:54:30")]
+        with redirect_stdout(io.StringIO()):
+            kan = G.dolacz_przetworniki_z_plikow(rows, [plik_csv(self.SUROWY)])
+        urz = G.urzadzenia_przetwornikow(kan, rows, {})
+        self.assertEqual(len(urz), 2)
+
+    def test_plik_spoza_pomiaru_pomijany(self):
+        rows = [wiersz("2026-11-30 10:00:00")]
+        with redirect_stdout(io.StringIO()):
+            kan = G.dolacz_przetworniki_z_plikow(rows, [plik_csv(self.SUROWY)])
+        self.assertEqual(kan, [])
+
+    def test_automatyczne_wyszukanie_bez_wyboru_w_panelu(self):
+        sciezka = plik_csv(self.SUROWY)
+        stare = (G.PLIKI_PRZETWORNIKOW, G.FOLDER, G.FOLDER_LOGOW)
+        G.PLIKI_PRZETWORNIKOW, G.FOLDER, G.FOLDER_LOGOW = [], os.path.dirname(sciezka), "/brak"
+        try:
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(G._sciezki_plikow_przetwornikow(), [sciezka])
+        finally:
+            G.PLIKI_PRZETWORNIKOW, G.FOLDER, G.FOLDER_LOGOW = stare
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
