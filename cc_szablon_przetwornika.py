@@ -178,7 +178,73 @@ def zbuduj(zrodlo, cel, app=None):
     return cel
 
 
+# ─── Szablon przetwornika TYLKO RH — 'Wyniki' 1:1 z wzorcowego pliku ─────────
+# Operator przygotowal 'Wyniki' dla przetwornika wilgotnosci recznie (zlecenie 230,
+# 263051): tabela B:L z wiersza 253 zakladek, kolumny temperatury '-', URH w mA i %.
+# Szablon RH dostaje DOKLADNIE ten wyglad (formaty, scalenia, szerokosci, wysokosci,
+# formuly) — krok 3 zmienia tylko formuly wg punktow.
+DOMYSLNY_CEL_RH = ("xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 "
+                   "z 17.06.2026 - 1 - Przetwornik RH (CC).xlsx")
+ZAKRES_WZORU_RH = "A1:S12"
+# kolumna 'Wynikow' -> komorka wiersza 253 ('-' = stala kreska)
+KOLUMNY_RH = (("B", "D253"), ("C", "E253"), ("D", "-"), ("E", "G253"), ("F", "-"),
+              ("G", "I253"), ("H", "-"), ("I", "K253"), ("J", "-"), ("K", "N253"),
+              ("L", "O253"))
+
+
+def zbuduj_rh(zrodlo, wzor_wynikow, cel, app=None):
+    """
+    Szablon przetwornika RH: szablon standardowy `zrodlo` + blok 'Wynikow'
+    A1:S12 przeniesiony 1:1 z pliku `wzor_wynikow` (wyglad i formuly).
+    """
+    shutil.copy2(zrodlo, cel)
+    try:
+        os.chmod(cel, 0o666)
+    except OSError:
+        pass
+    wlasny = app is None
+    if wlasny:
+        import xlwings as xw
+        app = xw.App(visible=False, add_book=False)
+        app.display_alerts = False
+    try:
+        wb = app.books.api.Open(os.path.abspath(cel), UpdateLinks=0)
+        wz = app.books.api.Open(os.path.abspath(wzor_wynikow), UpdateLinks=0, ReadOnly=True)
+        ws, ww = wb.Worksheets("Wyniki"), wz.Worksheets("Wyniki")
+        ws.Range(ZAKRES_WZORU_RH).UnMerge()
+        ws.Range(ZAKRES_WZORU_RH).Clear()
+        ww.Range(ZAKRES_WZORU_RH).Copy()
+        ws.Range("A1").PasteSpecial(-4122)          # formaty, ramki, scalenia
+        ws.Range("A1").PasteSpecial(8)              # szerokosci kolumn
+        app.api.CutCopyMode = False
+        for r in range(1, 13):
+            ws.Rows(r).RowHeight = ww.Rows(r).RowHeight
+            for c in range(1, 20):
+                f = ww.Cells(r, c).Formula
+                if f not in (None, ""):
+                    # wzor ma w E3 odwolanie do L1 zamiast $L$10 — poprawiamy
+                    ws.Cells(r, c).Formula = str(f).replace("'!L1=", "'!$L$10=")
+        nazwy = [_arkusz(ws.Range(f"B{r}").Formula) for r in range(4, 10)]
+        nazwy = [n for n in nazwy if n]
+        baza = next((a for a in nazwy if a + " (2)" in nazwy), None)
+        if baza:
+            ws.Range("J23").Formula = (f"=ABS(VALUE({_ref(baza, 'I253')[1:]})"
+                                       f"-VALUE({_ref(baza + ' (2)', 'I253')[1:]}))")
+        wz.Close(False)
+        wb.Save()
+        wb.Close(False)
+    finally:
+        if wlasny:
+            cc_excel.zamknij_excel_xlwings(app)
+    return cel
+
+
 if __name__ == "__main__":
-    zr = sys.argv[1] if len(sys.argv) > 1 else DOMYSLNE_ZRODLO
-    ce = sys.argv[2] if len(sys.argv) > 2 else DOMYSLNY_CEL
-    print(f"Szablon przetwornika: {zbuduj(zr, ce)}")
+    if len(sys.argv) > 1 and sys.argv[1] == "--rh":
+        # python cc_szablon_przetwornika.py --rh <plik z wzorcowymi 'Wynikami'> [cel]
+        ce = sys.argv[3] if len(sys.argv) > 3 else DOMYSLNY_CEL_RH
+        print(f"Szablon przetwornika RH: {zbuduj_rh(DOMYSLNE_ZRODLO, sys.argv[2], ce)}")
+    else:
+        zr = sys.argv[1] if len(sys.argv) > 1 else DOMYSLNE_ZRODLO
+        ce = sys.argv[2] if len(sys.argv) > 2 else DOMYSLNY_CEL
+        print(f"Szablon przetwornika: {zbuduj(zr, ce)}")

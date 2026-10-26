@@ -237,6 +237,34 @@ class TestSzablonPrzetwornika(unittest.TestCase):
         self.assertEqual((f["O"], f["T"]), ("='10,60'!D260", "='10,60'!I260"))
         self.assertEqual([t["nazwa"] for t in SZ.TABELE], ["th", "t"])
 
+    def test_uklad_szablonu_rh(self):
+        """'Wyniki' 1:1 z recznie przygotowanych (263051): jedna tabela B:L, kreski w kolumnach t."""
+        class _Kom:
+            def __init__(self, f):
+                self.formula = f
+
+        class _Ark:
+            dane = {"B4": "='10,60'!D253", "D4": "-", "K4": "='10,60'!N253",
+                    "L4": "='10,60'!O253"}
+
+            def range(self, adres):
+                return _Kom(self.dane.get(adres, ""))
+        u = A._uklad_wynikow(_Ark())
+        self.assertTrue(u.get("szablon_rh"))
+        self.assertEqual(u["histereza"], "I253")
+        t = u["tabele"][0]
+        self.assertEqual(t["kolumny"], list("BCDEFGHIJKL"))
+        self.assertEqual(t["komorki"][2], "-")
+        self.assertEqual(t["komorki"][9], "N253")
+
+    def test_domyslny_szablon_rh(self):
+        rek = {"E": "263051", "JEDN_T": "-", "JEDN_RH": "mA", "P": "CH 001"}
+        p = A.parametry_przetwornika(rek, {}, "1586A", {"ogolny": "TH.xlsx", "rh": "RH.xlsx"})
+        self.assertEqual(p["_szablon"], "RH.xlsx")
+        rek = {"E": "D0540007", "JEDN_T": "V", "JEDN_RH": "V", "P": "ch temp 105\nch humid 115"}
+        p = A.parametry_przetwornika(rek, {}, "1586A", {"ogolny": "TH.xlsx", "rh": "RH.xlsx"})
+        self.assertEqual(p["_szablon"], "TH.xlsx")
+
     def test_tabele_wg_wyjsc(self):
         self.assertEqual(A.tabele_przetwornika({"K15": 105, "K16": 115}), {"th", "t"})
         # tylko RH: tabela 253 z '-' w kolumnach temperatury (wyniki 263051)

@@ -344,6 +344,14 @@ _ARKUSZE = [
             "konkretnego przetwornika — kolumna 'Szablon arkusza' w tabeli Przetworniki "
             "(krok 2). Nowy szablon z aktualnego standardowego: "
             "python cc_szablon_przetwornika.py"),
+    _U("CC_SZABLON_PRZETW_RH", "Szablon arkusza obliczeniowego — przetwornik tylko RH", "plik",
+       "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - "
+       "Przetwornik RH (CC).xlsx", "ark",
+       grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"), podpowiedz="Przetwornik RH",
+       opis="Przetwornik z jednym wyjsciem — wilgotnosci: 'Wyniki' dokladnie jak w recznie "
+            "przygotowanych (tabela z wiersza 253, kolumny temperatury '-'); krok 3 zmienia "
+            "tylko formuly wg punktow. Z innego wzoru: "
+            "python cc_szablon_przetwornika.py --rh <plik z 'Wynikami'>"),
     _U("GEN_EXCEL", "Generuj arkusze Excel", "flaga", True, "ark",
        grupa="Etapy",
        opis="Wylaczone = korzysta z juz istniejacych kopii (przydatne, gdy chcesz "

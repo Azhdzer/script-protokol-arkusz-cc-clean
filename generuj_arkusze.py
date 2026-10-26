@@ -360,6 +360,9 @@ SZABLON_WORD_PRZETW_MIX = C.tekst("GEN_WORD_PRZETW_MIX",
 # Szablon arkusza dla przetwornikow ('Wyniki' z wiersza 253) — patrz cc_szablon_przetwornika.
 SZABLON_PRZETWORNIKA = os.environ.get("CC_SZABLON_PRZETW") or (
     "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik (CC).xlsx")
+# Przetwornik tylko RH — 'Wyniki' 1:1 jak w recznie przygotowanych (230, 263051).
+SZABLON_PRZETWORNIKA_RH = os.environ.get("CC_SZABLON_PRZETW_RH") or (
+    "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik RH (CC).xlsx")
 
 # =============================================================================
 # WARUNKI ŚRODOWISKOWE — czujnik + Wzory.xls
@@ -1547,8 +1550,9 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
             _multimetr_s1 = None
         _tabela = pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW)
         for _rek in dane_s2:
-            _rek["PRZETWORNIK"] = parametry_przetwornika(_rek, _tabela, _multimetr_s1,
-                                                         SZABLON_PRZETWORNIKA)
+            _rek["PRZETWORNIK"] = parametry_przetwornika(
+                _rek, _tabela, _multimetr_s1,
+                {"ogolny": SZABLON_PRZETWORNIKA, "rh": SZABLON_PRZETWORNIKA_RH})
             _p = _rek["PRZETWORNIK"]
             if _p:
                 print(f"  [Przetwornik] {_rek.get('E')}: {_p['L10']}, multimetr {_p['K14']}, "
@@ -1680,7 +1684,11 @@ def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domys
         ostrz.append("brak zakresu wyjscia (M22/O22 zostaje z szablonu) — wpisz go "
                      "w tabeli 'Przetworniki' albo w skalowaniu na Stronie 2.")
 
-    # Szablon arkusza: wlasny z tabeli panelu -> szablon przetwornika z ustawien.
+    # Szablon arkusza: wlasny z karty panelu -> szablon przetwornika z ustawien
+    # (tylko RH — osobny szablon z 'Wynikami' jak w recznie przygotowanych).
+    if isinstance(szablon_domyslny, dict):
+        szablon_domyslny = (szablon_domyslny.get("rh") if (sygnal_rh and not sygnal_t)
+                            else szablon_domyslny.get("ogolny"))
     szablon = (tab.szablon if tab is not None and tab.szablon else "") or szablon_domyslny or ""
 
     wynik = {
@@ -2957,6 +2965,12 @@ def _uklad_wynikow(ws_w):
             return str(ws_w.range(adres).formula or "")
         except Exception:
             return ""
+    # Szablon przetwornika RH: jedna tabela B:L z wiersza 253, kolumny t to '-'.
+    if (re.search(r"!\$?D\$?253\b", f("B4")) and re.search(r"!\$?N\$?253\b", f("K4"))
+            and f("D4").strip() == "-"):
+        return {"przetwornik": True, "szablon_rh": True, "histereza": "I253", "tabele": [
+            {"nazwa": "rh253", "kolumny": [k for k, _z in SZ.KOLUMNY_RH], "rodzaj": "rh",
+             "komorki": [z for _k, z in SZ.KOLUMNY_RH]}]}
     if any(re.search(rf"!\$?D\$?{t['wiersz']}\b", f(f"{t['wyniki'][0]}4")) for t in SZ.TABELE):
         return {"przetwornik": True, "histereza": SZ.HISTEREZA["th"],
                 "tabele": [{"nazwa": t["nazwa"], "kolumny": t["wyniki"], "rodzaj": t["rodzaj"],
@@ -3275,7 +3289,8 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
                 f[t["nazwa"]] = [_podmien_arkusz_w_formule(x, nazwa) for x in valid[0]["f"][t["nazwa"]]]
             else:
                 # Brak wzorca do sklonowania — formuly wg stalego schematu ukladu.
-                f[t["nazwa"]] = [f"='{nazwa_esc}'!{k}" for k in t["komorki"]]
+                f[t["nazwa"]] = [("-" if k == "-" else f"='{nazwa_esc}'!{k}")
+                                 for k in t["komorki"]]
             _zapisz_wiersz_formul(ws_w, r_nowy, t["kolumny"], f[t["nazwa"]])
         nowe.append({"f": f, "r": r_nowy, "blad": False})
         if not valid:
@@ -3707,8 +3722,11 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             _log_etap(f"arkusz '{ark_wyniki}': porzadkuje tabele wynikow...", _t0)
             ws_w = wb.sheets[ark_wyniki]
             _przetw_w = rekord.get("PRZETWORNIK")
+            _uklad_w = _uklad_wynikow(ws_w)
+            # Szablon RH ma 'Wyniki' gotowe 1:1 — zmieniaja sie tylko formuly (punkty).
             _aktywne = (tabele_przetwornika(_przetw_w)
-                        if _przetw_w and _uklad_wynikow(ws_w)["przetwornik"] else None)
+                        if _przetw_w and _uklad_w["przetwornik"]
+                        and not _uklad_w.get("szablon_rh") else None)
             extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=_aktywne)
             _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows,
                                           klucz=klucz_histerezy(_aktywne))

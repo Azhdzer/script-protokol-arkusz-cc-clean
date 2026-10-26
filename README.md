@@ -415,6 +415,10 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
   przy dużym pliku instancja skryptu jest kończona po swoim PID — inne okna Excela zostają.
+- **Szablon przetwornika tylko RH** (`… - 1 - Przetwornik RH (CC).xlsx`, ustawienie `CC_SZABLON_PRZETW_RH`):
+  *Wyniki* przeniesione 1:1 z ręcznie przygotowanego pliku (230, 263051 — wygląd, scalenia, szerokości,
+  wysokości, formuły); krok 3 zmienia tylko formuły wg punktów. Z innego wzoru:
+  `python cc_szablon_przetwornika.py --rh <plik z Wynikami>`.
 - **Obserwacja CC z kolumnami przetworników:** blok podpisu (Data / Wykonał/a) przenoszony na prawo od danych
   razem z wyglądem (pogrubienie, ramki, format daty, szerokości), stare komórki dostają wygląd danych.
 - **Eksport multimetru (1586A, `Ch NNN (ADC/VDC)`) w kroku 1** nie jest już traktowany jak loger (wcześniej
