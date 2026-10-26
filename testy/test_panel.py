@@ -452,6 +452,17 @@ class TestKartyPrzetwornikow(unittest.TestCase):
         self.lista._dodaj_klik()
         self.assertEqual(self.lista.karty[0].wartosc()[3:6], ["1586A", "Prąd", ""])
 
+    def test_lista_szablonow(self):
+        """Szablon arkusza wybierany z listy (arkusze obliczeniowe z folderu), nie wpisywany."""
+        k = self.lista.dodaj()
+        pozycje = [k.szablon.itemText(i) for i in range(k.szablon.count())]
+        self.assertEqual(pozycje[0], k.BEZ_SZABLONU)
+        self.assertFalse(any("protok" in p.lower() or "obserwacj" in p.lower() for p in pozycje))
+        self.assertEqual(k.wartosc()[11], "")
+        k.ustaw(["1", "-", "001", "", "", "", "", "", "", "", "", "inny.xlsx"])
+        self.assertEqual(k.wartosc()[11], "inny.xlsx")          # spoza folderu — zachowany
+        self.assertIn("brak w folderze", k.szablon.currentText())
+
     def test_env_jak_tabela(self):
         import json
         self.pole.ustaw([["263051", "-", "001"]])

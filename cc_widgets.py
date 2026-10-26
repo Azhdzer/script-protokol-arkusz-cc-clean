@@ -391,7 +391,7 @@ class Pole(QWidget):
             return ramka
 
         if typ == "przetworniki":
-            w = ListaPrzetwornikow()
+            w = ListaPrzetwornikow(folder_cb=self._folder_cb)
             w.zmienione.connect(self.zmienione.emit)
             self._kontrolka = w
             return w
@@ -489,6 +489,9 @@ class Pole(QWidget):
 
     def odswiez_pliki(self):
         """Dla typu 'plik' — przeladowuje liste z aktualnego folderu roboczego."""
+        if self.ust.typ == "przetworniki":
+            self._kontrolka.odswiez_szablony()
+            return
         if self.ust.typ != "plik":
             return
         biezaca = self._kontrolka.currentText()
@@ -1114,8 +1117,9 @@ class KartaPrzetwornika(QFrame):
     zmienione = Signal()
     usun = Signal(object)
 
-    def __init__(self, numer, parent=None):
+    def __init__(self, numer, folder_cb=None, parent=None):
         super().__init__(parent)
+        self._folder_cb = folder_cb or (lambda: os.getcwd())
         self.setObjectName("Kontrolny")
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 10, 14, 12)
@@ -1186,7 +1190,9 @@ class KartaPrzetwornika(QFrame):
         self.wy_od, self.wy_do = linia("np. 4", 70), linia("np. 20", 70)
         self.t_od, self.t_do = linia("np. -40", 70), linia("np. 60", 70)
         self.rh_od, self.rh_do = linia("np. 0", 70), linia("np. 100", 70)
-        self.szablon = linia("pusto = szablon przetwornika z kroku 3")
+        self.szablon = ListaRozwijana()
+        self.szablon.currentIndexChanged.connect(lambda _: self.zmienione.emit())
+        self.odswiez_szablony()
         self.jedn_wy = QLabel("mA")
         self.et_kanal_t = et("")
         self.et_kanal_rh = et("")
@@ -1228,18 +1234,51 @@ class KartaPrzetwornika(QFrame):
         self.et_kanal_rh.setText(f"Wejście Ch skanera, pomiar {lit}RHm {szary}(K16)</span>"
                                  f"<br>{szary}'-' = brak wyjścia wilgotności</span>")
 
+    BEZ_SZABLONU = "— szablon przetwornika z kroku 3 —"
+
+    def szablony_w_folderze(self):
+        """Szablony arkuszy obliczeniowych w folderze roboczym ('xxx_….xlsx')."""
+        try:
+            return sorted(f for f in os.listdir(self._folder_cb())
+                          if f.lower().endswith((".xlsx", ".xlsm")) and f.lower().startswith("xxx")
+                          and not f.startswith("~$")
+                          # szablony obserwacji i protokolu to nie arkusze obliczeniowe
+                          and not any(x in f.lower() for x in ("obserwacj", "protokół", "protokol")))
+        except OSError:
+            return []
+
+    def odswiez_szablony(self, wybrany=None):
+        """Lista: pozycja domyslna (pusta wartosc) + szablony z folderu (+ wybrany, gdy go brak)."""
+        if wybrany is None:
+            wybrany = self.szablon.currentData() or ""
+        self.szablon.blockSignals(True)
+        try:
+            self.szablon.clear()
+            self.szablon.addItem(self.BEZ_SZABLONU, "")
+            for f in self.szablony_w_folderze():
+                self.szablon.addItem(f, f)
+            if wybrany and self.szablon.findData(wybrany) < 0:
+                self.szablon.addItem(f"{wybrany}  (brak w folderze)", wybrany)
+            self.szablon.setCurrentIndex(max(0, self.szablon.findData(wybrany)))
+        finally:
+            self.szablon.blockSignals(False)
+
     def _pola(self):
         return (self.serial, self.kanal_t, self.kanal_rh, self.multimetr, self.sygnal,
                 self.wy_od, self.wy_do, self.t_od, self.t_do, self.rh_od, self.rh_do,
                 self.szablon)
 
     def wartosc(self):
-        return [(w.currentText() if isinstance(w, QComboBox) else w.text()).strip()
+        return [((w.currentData() or "") if w is self.szablon
+                 else (w.currentText() if isinstance(w, QComboBox) else w.text())).strip()
                 for w in self._pola()]
 
     def ustaw(self, wiersz):
         wart = [("" if x is None else str(x)) for x in (list(wiersz) + [""] * 12)[:12]]
         for widget, v in zip(self._pola(), wart):
+            if widget is self.szablon:
+                self.odswiez_szablony(v)
+                continue
             widget.blockSignals(True)
             try:
                 if isinstance(widget, QComboBox):
@@ -1263,8 +1302,9 @@ class ListaPrzetwornikow(QWidget):
 
     zmienione = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, folder_cb=None, parent=None):
         super().__init__(parent)
+        self._folder_cb = folder_cb
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
@@ -1306,7 +1346,7 @@ class ListaPrzetwornikow(QWidget):
         self.zmienione.emit()
 
     def dodaj(self, wiersz=None):
-        k = KartaPrzetwornika(len(self.karty) + 1)
+        k = KartaPrzetwornika(len(self.karty) + 1, folder_cb=self._folder_cb)
         if wiersz:
             k.ustaw(wiersz)
         k.zmienione.connect(self.zmienione.emit)
@@ -1325,6 +1365,10 @@ class ListaPrzetwornikow(QWidget):
             k._odswiez_tytul()
         self._pusto.setVisible(not self.karty)
         self.zmienione.emit()
+
+    def odswiez_szablony(self):
+        for k in self.karty:
+            k.odswiez_szablony()
 
     def wartosc(self):
         """Wiersze kart z wpisanym numerem fabrycznym (puste karty sa pomijane)."""
