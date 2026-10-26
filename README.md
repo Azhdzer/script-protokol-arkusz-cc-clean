@@ -206,7 +206,8 @@ Na dole okna zawsze widoczne są dwie zakładki:
 
 Każdy krok uruchamia się **własnym przyciskiem** — przycisku „Uruchom cały obieg” nie ma
 (jedno kliknięcie tworzyło protokół od nowa i kasowało ręczne poprawki). Nadpisywane pliki
-trafiają najpierw do `kopie_zapasowe/`. Przed startem panel sprawdza dane wejściowe (brak zaznaczonego TXT, brak
+trafiają najpierw do `kopie_zapasowe/`. Gdy protokół lub obserwacja wybranego pomiaru już istnieje,
+krok 2 przed startem pyta „Nadpisać?” (domyślnie „Nie”) i wymienia pliki z datą ostatniej zmiany. Przed startem panel sprawdza dane wejściowe (brak zaznaczonego TXT, brak
 protokołu, brak `Wzory.xls`…) i pokazuje listę zastrzeżeń do zatwierdzenia.
 
 ## ▶️ Uruchamianie — jeden exe, cztery tryby

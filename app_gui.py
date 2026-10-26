@@ -20,6 +20,7 @@ Zamrozony .exe uruchamia workery jako podprocesy (patrz app_entry.py).
 
 import datetime
 import os
+import re
 import sys
 import traceback
 
@@ -752,6 +753,45 @@ class Okno(QMainWindow):
                              f"(brak zakladki 'Strona 3').")
         return p
 
+    def pliki_nadpisywane_przez_krok2(self):
+        """
+        Protokol i arkusz obserwacji, ktore krok 2 utworzy OD NOWA dla wybranego
+        pomiaru (numer z nazwy pliku TXT: '2026-10-22 09.46_219.txt' -> '219').
+        """
+        txt = self.lista_txt.zaznaczone() if hasattr(self, "lista_txt") else []
+        if not txt:
+            return []
+        m = re.search(r"\d{4}-\d{2}-\d{2} \d{2}\.\d{2}[ _](.+)", os.path.splitext(txt[0])[0])
+        if not m:
+            return []
+        prefiks = f"{m.group(1)}_LA_TH_"
+        try:
+            nazwy = sorted(os.listdir(self.folder))
+        except OSError:
+            return []
+        return [n for n in nazwy
+                if n.startswith(prefiks) and n.lower().endswith(".xlsx")
+                and ("protokół" in n.lower() or "protokol" in n.lower() or "obserwacje" in n.lower())]
+
+    def _potwierdz_nadpisanie_protokolu(self):
+        """
+        Krok 2 tworzy protokol i obserwacje OD NOWA. Dwa razy przepadlo przez to
+        reczne wypelnienie protokolu (230, 219) — pytamy, gdy pliki juz sa.
+        """
+        pliki = self.pliki_nadpisywane_przez_krok2()
+        if not pliki:
+            return True
+        lista = "\n".join(
+            f"  •  {n}   (zmieniony {datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(self.folder, n))):%d.%m.%Y %H:%M})"
+            for n in pliki)
+        odp = QMessageBox.question(
+            self, "Nadpisac protokol?",
+            "Krok 2 utworzy od nowa:\n\n" + lista +
+            "\n\nReczne poprawki w tych plikach przepadna (poprzednia wersja trafi do "
+            "folderu 'kopie_zapasowe').\n\nNadpisac?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        return odp == QMessageBox.Yes
+
     def _problemy_zawartosci(self):
         """
         Sprawdza, czy wybrane pliki SA tym, za co sie podaja.
@@ -804,6 +844,9 @@ class Okno(QMainWindow):
                 QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
             if odp != QMessageBox.Yes:
                 return
+
+        if "obs" in kroki and not self._potwierdz_nadpisanie_protokolu():
+            return
 
         for k in kroki:
             self._status(k, "gotowy")

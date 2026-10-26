@@ -399,6 +399,35 @@ class TestZmianaFolderu(BazaOkna):
         self.assertEqual(self.okno.lbl_folder.text(), self.folder)
 
 
+class TestPytanieONadpisanieProtokolu(BazaOkna):
+    """Krok 2 tworzy protokol od nowa — gdy juz jest, panel pyta (230 i 219: przepadly poprawki)."""
+
+    def przygotuj(self):
+        for n in ("2026-10-22 09.46_219.txt", "219_LA_TH_2026 - protokół CC-04.xlsx",
+                  "219_LA_TH_2026 - obserwacje.xlsx", "220_LA_TH_2026 - protokół CC.xlsx"):
+            open(os.path.join(self.folder, n), "wb").close()
+        self.okno.lista_txt.odswiez()
+        self.okno.lista_txt.ustaw_zaznaczone(["2026-10-22 09.46_219.txt"])
+
+    def test_wykrywa_pliki_tego_pomiaru(self):
+        self.przygotuj()
+        self.assertEqual(self.okno.pliki_nadpisywane_przez_krok2(),
+                         ["219_LA_TH_2026 - obserwacje.xlsx", "219_LA_TH_2026 - protokół CC-04.xlsx"])
+
+    def test_odpowiedz_nie_blokuje(self):
+        self.przygotuj()
+        pierwotny = QMessageBox.question
+        QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.No)
+        try:
+            self.assertFalse(self.okno._potwierdz_nadpisanie_protokolu())
+        finally:
+            QMessageBox.question = pierwotny
+
+    def test_bez_plikow_bez_pytania(self):
+        self.okno.lista_txt.odswiez()
+        self.assertTrue(self.okno._potwierdz_nadpisanie_protokolu())
+
+
 class TestKartyPrzetwornikow(unittest.TestCase):
     """Krok 2a: przetworniki jako karty z polami nazwanymi jak w arkuszu (K14-K16, M22/O22...)."""
 
