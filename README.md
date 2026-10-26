@@ -415,6 +415,8 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
   przy dużym pliku instancja skryptu jest kończona po swoim PID — inne okna Excela zostają.
+- **Obserwacja CC z kolumnami przetworników:** blok podpisu (Data / Wykonał/a) przenoszony na prawo od danych
+  razem z wyglądem (pogrubienie, ramki, format daty, szerokości), stare komórki dostają wygląd danych.
 - **Eksport multimetru (1586A, `Ch NNN (ADC/VDC)`) w kroku 1** nie jest już traktowany jak loger (wcześniej
   Ch 001 stawał się „temperaturą”, a Ch 221 „wilgotnością” jednego przyrządu) — krok 1 go pomija i usuwa stary
   `…_wynik.xlsx`. Krok 2, gdy w 2a nic nie wybrano, sam znajduje takie pliki `.csv` (folder roboczy i folder logów)
@@ -441,8 +443,8 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 - **Wyniki przetwornika = bloki zakładki** („Wyniki do umieszczenia na świadectwie”): szablon przetwornika ma
   w *Wynikach* tabele z wierszy 253 (t + RH), 260 (t) i 267 (RH), wygląd skopiowany z bloków zakładki.
   Krok 3 zostawia tabele pasujące do przetwornika — t + RH: 253 i 260 (jak 239 + 246 termohigrometru),
-  t: 260, RH: 267 (pojedyncza tabela przesuwana do kolumny B) — nagłówki przepisuje z zakładki (prąd /
-  napięcie), histereza z RHm (I253 / G267). Świadectwo bierze wartości z tego samego wiersza zakładki
+  t: 260, tylko RH: 253 z `-` w kolumnach temperatury (Itm, tm, Δt, Ut) jak w ręcznie przygotowanych
+  wynikach — nagłówki przepisuje z zakładki (prąd / napięcie), histereza z RHm (I253). Świadectwo bierze wartości z tego samego wiersza zakładki
   z liczbą miejsc wg formatu komórki — zaokrąglenie ustawione w zakładce trafia do świadectwa.
 - **Szablon arkusza przetwornika** (`… - 1 - Przetwornik (CC).xlsx`, budowany z szablonu standardowego
   przez `python cc_szablon_przetwornika.py`): *Wyniki* zbierają wiersz 253 zakładek (Itm/IRHm, tm/RHm,

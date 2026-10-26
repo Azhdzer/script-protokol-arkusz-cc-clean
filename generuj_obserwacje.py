@@ -949,6 +949,17 @@ def _naglowki_cc04(kanal_pt):
     )
 
 
+def _styl_komorki(c):
+    """Wyglad komorki do przeniesienia (font, ramka, wypelnienie, format, wyrownanie)."""
+    return (_copy_obj(c.font), _copy_obj(c.border), _copy_obj(c.fill),
+            c.number_format, _copy_obj(c.alignment))
+
+
+def _nadaj_styl(c, styl):
+    c.font, c.border, c.fill, c.number_format, c.alignment = (
+        _copy_obj(styl[0]), _copy_obj(styl[1]), _copy_obj(styl[2]), styl[3], _copy_obj(styl[4]))
+
+
 def _naglowki_przetwornikow(przetworniki):
     """
     Naglowki kolumn przetwornikow w obserwacji:
@@ -4292,6 +4303,10 @@ def main():
         # Etykiety bloku podpisu szablonu (N91 'Data', O91 'Wykonał/a:') — czytane przed
         # zapisem danych: przy kolumnach przetwornikow dane wchodza na N/O.
         _etyk_podpisu = (ws.cell(row=91, column=14).value, ws.cell(row=91, column=15).value)
+        # ...razem z WYGLADEM bloku (pogrubienie, ramki, format daty) i szerokosciami N/O.
+        _styl_podpisu = {(r, c): _styl_komorki(ws.cell(row=r, column=c))
+                         for r in (91, 92) for c in (14, 15)}
+        _szer_podpisu = [ws.column_dimensions[get_column_letter(c)].width for c in (14, 15)]
 
         # Przetworniki z pliku multimetru (np. 1586A) — kolumny za ukladem pliku TXT.
         n_kol_txt = max((len(r) for r in rows), default=0)
@@ -4334,9 +4349,18 @@ def main():
         # podpis przesuwamy na prawo od danych, zeby nie nadpisal pomiaru.
         _kol_podpisu = max(14, len(kolumny) + 3)
         if _kol_podpisu != 14:
+            # Stary blok N91:O92 — pozostalosc szablonu. Gdzie wchodza dane, komorka
+            # dostaje wyglad wiersza danych nad nia (bez ramki i pogrubienia).
             for _r, _c in ((91, 14), (91, 15), (92, 14), (92, 15)):
-                if _c > len(kolumny):          # pozostalosc szablonu poza danymi
-                    ws.cell(row=_r, column=_c).value = None
+                _kom = ws.cell(row=_r, column=_c)
+                if _c > len(kolumny):
+                    _kom.value = None
+                _nadaj_styl(_kom, _styl_komorki(ws.cell(row=90, column=_c)))
+            for (_r, _c), _st in _styl_podpisu.items():
+                _nadaj_styl(ws.cell(row=_r, column=_kol_podpisu + _c - 14), _st)
+            for _i, _w in enumerate(_szer_podpisu):
+                if _w:
+                    ws.column_dimensions[get_column_letter(_kol_podpisu + _i)].width = _w
             ws.cell(row=91, column=_kol_podpisu).value = _etyk_podpisu[0]
             ws.cell(row=91, column=_kol_podpisu + 1).value = _etyk_podpisu[1]
         ws.cell(row=92, column=_kol_podpisu).value = today

@@ -235,14 +235,14 @@ class TestSzablonPrzetwornika(unittest.TestCase):
                          ("='23,60 (2)'!D253", "='23,60 (2)'!G253", "='23,60 (2)'!O253"))
         f = SZ.formuly_wiersza("10,60", SZ.tabela("t"))
         self.assertEqual((f["O"], f["T"]), ("='10,60'!D260", "='10,60'!I260"))
-        f = SZ.formuly_wiersza("10,60", SZ.tabela("rh"))
-        self.assertEqual((f["V"], f["AB"]), ("='10,60'!D267", "='10,60'!J267"))
+        self.assertEqual([t["nazwa"] for t in SZ.TABELE], ["th", "t"])
 
     def test_tabele_wg_wyjsc(self):
         self.assertEqual(A.tabele_przetwornika({"K15": 105, "K16": 115}), {"th", "t"})
-        self.assertEqual(A.tabele_przetwornika({"K15": "-", "K16": "001"}), {"rh"})
+        # tylko RH: tabela 253 z '-' w kolumnach temperatury (wyniki 263051)
+        self.assertEqual(A.tabele_przetwornika({"K15": "-", "K16": "001"}), {"th"})
         self.assertEqual(A.tabele_przetwornika({"K15": 105, "K16": "-"}), {"t"})
-        self.assertEqual(A.klucz_histerezy({"rh"}), "G267")
+        self.assertEqual(A.klucz_histerezy({"th"}), "I253")
         self.assertEqual(A.klucz_histerezy({"th", "t"}), "I253")
 
     def test_wlasny_szablon_z_tabeli(self):

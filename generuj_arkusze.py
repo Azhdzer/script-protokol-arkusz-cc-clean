@@ -2970,12 +2970,37 @@ def _uklad_wynikow(ws_w):
 
 
 def tabele_przetwornika(przetw):
-    """Tabele 'Wynikow' dla przetwornika: t + RH -> {'th','t'}, RH -> {'rh'}, t -> {'t'}."""
+    """
+    Tabele 'Wynikow' dla przetwornika: t + RH -> {'th','t'}; RH -> {'th'} (z '-'
+    w kolumnach temperatury, jak w recznie przygotowanych wynikach); t -> {'t'}.
+    """
     ma_t = przetw.get("K15") not in (None, "", "-")
     ma_rh = przetw.get("K16") not in (None, "", "-")
     if ma_t and ma_rh:
         return {"th", "t"}
-    return {"rh"} if ma_rh else {"t"}
+    return {"th"} if ma_rh else {"t"}
+
+
+def _kreski_temperatury(ws_w, ostatni_wiersz):
+    """
+    Przetwornik tylko RH w tabeli 253: Itm, tm, Δt -> '-'; Ut (mA i °C) -> jedna
+    scalona kolumna z '-' (jak 'Ut' w wynikach 263051).
+    """
+    import cc_szablon_przetwornika as SZ
+    j, k = SZ.KOLUMNY_UT_TABELI_TH
+    rng = ws_w.range(f"{j}3:{k}3")
+    rng.api.UnMerge()
+    ws_w.range(f"{k}3").clear_contents()
+    rng.api.Merge()
+    ws_w.range(f"{j}3").value = "°C"
+    for r in range(4, ostatni_wiersz + 1):
+        if ws_w.range(f"B{r}").formula in (None, ""):
+            continue
+        for kol in SZ.KOLUMNY_T_TABELI_TH:
+            ws_w.range(f"{kol}{r}").value = "-"
+        ws_w.range(f"{j}{r}:{k}{r}").clear_contents()
+        ws_w.range(f"{j}{r}:{k}{r}").api.Merge()
+        ws_w.range(f"{j}{r}").value = "-"
 
 
 def klucz_histerezy(aktywne):
@@ -2983,7 +3008,7 @@ def klucz_histerezy(aktywne):
     import cc_szablon_przetwornika as SZ
     if not aktywne:
         return None
-    for n in ("th", "rh", "t"):
+    for n in ("th", "t"):
         if n in aktywne:
             return SZ.HISTEREZA[n]
 
@@ -3703,6 +3728,8 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                             ws_w.range("B1").api)
                         for _k, _w in zip(_cel, _szer):
                             ws_w.range(f"{_k}1").column_width = _w
+                if _przetw_w.get("K15") in (None, "", "-"):
+                    _kreski_temperatury(ws_w, 9 + extra_rows)
                 print(f"  [Wyniki] Przetwornik — tabele: "
                       f"{', '.join(sorted(_aktywne))} (pozostale usuniete).")
             elif _przetw_w:

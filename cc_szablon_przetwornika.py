@@ -13,15 +13,14 @@ wzorcowania' — osobna tabela dla kazdego rodzaju przyrzadu:
 
 'Wyniki' standardowego szablonu zbieraja dwie z nich: termohigrometr (239, B:I)
 i 'tylko temperatura' (246, O:R). Szablon przetwornika robi to samo dla
-przetwornikow — trzy tabele obok siebie, wyglad (ramki, scalenia, szerokosci,
-formaty liczb) skopiowany z blokow zakladki:
+przetwornikow — wyglad (ramki, scalenia, szerokosci, formaty liczb) skopiowany
+z blokow zakladki:
 
-    B:M   ← 253  przetwornik t + RH
-    O:T   ← 260  przetwornik t           (dla t + RH: punkty tylko temperaturowe)
-    V:AB  ← 267  przetwornik RH
+    B:M   ← 253  przetwornik t + RH   (tylko RH: kolumny temperatury '-')
+    O:T   ← 260  przetwornik t        (dla t + RH: punkty tylko temperaturowe)
 
-Krok 3 zostawia tabele pasujace do przetwornika (t + RH: 253 i 260; t: 260;
-RH: 267), a pozostale czysci. Naglowki przepisuje z zakladki, w ktorej L10 jest
+Krok 3 zostawia tabele pasujace do przetwornika (t + RH: 253 i 260; RH: 253
+z '-' w kolumnach t — jak w recznie przygotowanych wynikach; t: 260). Naglowki przepisuje z zakladki, w ktorej L10 jest
 juz ustawione — wiec 'pradu/napiecia', I/U i mA/V sa wlasciwe.
 
 Modul robi szablon przetwornika z szablonu standardowego — przez Excela (wlasna
@@ -70,11 +69,13 @@ TABELE = (
      "naglowek": (250, 252), "rodzaj": "rh"},
     {"nazwa": "t", "wyniki": _kolumny("O", "T"), "wiersz": 260, "zrodlo": _kolumny("D", "I"),
      "naglowek": (257, 259), "rodzaj": "t"},
-    {"nazwa": "rh", "wyniki": _kolumny("V", "AB"), "wiersz": 267, "zrodlo": _kolumny("D", "J"),
-     "naglowek": (264, 266), "rodzaj": "rh"},
 )
-# Histereza: RHm (t+RH: I253, RH: G267); przetwornik t — tm (F260).
-HISTEREZA = {"th": "I253", "rh": "G267", "t": "F260"}
+# Histereza: RHm (I253); przetwornik t — tm (F260).
+HISTEREZA = {"th": "I253", "t": "F260"}
+# Przetwornik tylko RH: tabela 253 z '-' w kolumnach temperatury (Itm, tm, Δt, Ut) —
+# jak w recznie przygotowanych 'Wynikach' (230, 263051).
+KOLUMNY_T_TABELI_TH = ("D", "F", "H")
+KOLUMNY_UT_TABELI_TH = ("J", "K")
 
 _RE_ARKUSZ = re.compile(r"^=(?:'((?:[^']|'')+)'|([^!'][^!]*))!")
 
