@@ -438,6 +438,20 @@ class TestKartyPrzetwornikow(unittest.TestCase):
         self.assertIn("Utm", k.et_kanal_t.text())
         self.assertEqual(k.jedn_wy.text(), "V")
 
+    def test_nowa_karta_kopiuje_poprzednia(self):
+        """'+ Dodaj' kopiuje dane poprzedniej karty, bez nr fabrycznego i kanalu z numerem."""
+        self.pole.ustaw([["87441", "-", "221", "1586A-01", "Napięcie", "0", "10", "", "",
+                          "0", "100", "moj.xlsx"]])
+        self.lista._dodaj_klik()
+        nowa = self.lista.karty[-1].wartosc()
+        self.assertEqual(nowa, ["", "-", "", "1586A-01", "Napięcie", "0", "10", "", "",
+                                "0", "100", "moj.xlsx"])
+        self.assertEqual(self.lista.karty[-1].jedn_wy.text(), "V")
+
+    def test_pierwsza_karta_pusta(self):
+        self.lista._dodaj_klik()
+        self.assertEqual(self.lista.karty[0].wartosc()[3:6], ["1586A", "Prąd", ""])
+
     def test_env_jak_tabela(self):
         import json
         self.pole.ustaw([["263051", "-", "001"]])

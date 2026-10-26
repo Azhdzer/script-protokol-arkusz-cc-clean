@@ -422,7 +422,8 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 - **Karty przetworników (krok 2a):** każdy przetwornik to osobna karta (`＋ Dodaj przetwornik`, `✕ Usuń`)
   z polami nazwanymi jak w zakładce arkusza obliczeniowego: rodzaj odczytu (L10), multimetr (K14),
   wejście Ch pomiar Itm/IRHm (K15/K16, `-` = brak wyjścia), zakres przetwornika (M22 ÷ O22),
-  tmin/tmax (L27/O27), Rhmin/Rhmax (L28/O28), własny szablon. Do skryptów trafia ten sam JSON co dawniej.
+  tmin/tmax (L27/O27), Rhmin/Rhmax (L28/O28), własny szablon. Nowa karta kopiuje poprzednią (bez nr
+  fabrycznego i kanału z numerem). Do skryptów trafia ten sam JSON co dawniej.
 - **Krok 2a · Przetworniki (panel, krok 2):** plik(i) multimetru z wyjściami przetworników — eksport
   1586A (`dat00001.csv`, kolumny `Ch NNN (ADC)` w A → mA, `(VDC)` w V, `(mA)` wprost) — plus tabela,
   który kanał (t / RH) należy do którego przyrządu. Krok 2 dopasowuje odczyty do wierszy obserwacji

@@ -1245,7 +1245,8 @@ class KartaPrzetwornika(QFrame):
                 if isinstance(widget, QComboBox):
                     if v and widget.findText(v) >= 0:
                         widget.setCurrentText(v)
-                    elif v and widget.isEditable():
+                    elif widget.isEditable() and (v or widget in (self.kanal_t, self.kanal_rh)):
+                        # pusty kanal zostaje pusty — do uzupelnienia (nie '-')
                         widget.setEditText(v)
                     else:
                         widget.setCurrentIndex(0)
@@ -1286,7 +1287,22 @@ class ListaPrzetwornikow(QWidget):
         self.karty = []
 
     def _dodaj_klik(self):
-        self.dodaj().serial.setFocus()
+        """
+        Nowa karta = kopia poprzedniej (multimetr, sygnal, zakresy, szablon) —
+        przetworniki w jednym pomiarze sa zwykle takie same. Pusty zostaje nr
+        fabryczny i kanaly z numerem (kazdy przyrzad ma swoj); '-' (brak wyjscia)
+        jest kopiowany.
+        """
+        wzor = self.karty[-1].wartosc() if self.karty else None
+        k = self.dodaj()
+        if wzor:
+            w = list(wzor)
+            w[0] = ""
+            for i in (1, 2):
+                if w[i] not in ("", "-"):
+                    w[i] = ""
+            k.ustaw(w)
+        k.serial.setFocus()
         self.zmienione.emit()
 
     def dodaj(self, wiersz=None):
