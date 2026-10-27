@@ -416,6 +416,10 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
   przy dużym pliku instancja skryptu jest kończona po swoim PID — inne okna Excela zostają.
+- **Punkty PZ zapisane bez nawiasu** — `5 °C, (37 °C, 35 %rh); …` (232), `2 °C, (10 °C, 70 %rh) …`,
+  `1) 37 °C, z niepewnością …` — oraz lista z jednostką w nawiasie `(-15; -30 °C)`. Wcześniej te punkty
+  przepadały i obserwacja ich nie wybierała. Opis niepewności (`Ut (0,2 ÷ 0,4) °C`) nie jest brany za punkt.
+  Sprawdzone na 268 PZ z serwera — poza tymi zapisami wynik bez zmian.
 - **Szablon przetwornika tylko RH** (`… - 1 - Przetwornik RH (CC).xlsx`, ustawienie `CC_SZABLON_PRZETW_RH`):
   *Wyniki* przeniesione 1:1 z ręcznie przygotowanego pliku (230, 263051 — wygląd, scalenia, szerokości,
   wysokości, formuły); krok 3 zmienia tylko formuły wg punktów. Z innego wzoru:

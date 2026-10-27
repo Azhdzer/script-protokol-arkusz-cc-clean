@@ -639,6 +639,9 @@ _RE_PUNKT_TRH = re.compile(
     r'\(\s*(-?[\d.,]+)\s*°?\s*C\s*[;,]\s*(-?[\d.,]+)\s*%\s*rh\s*\)', re.I)
 # '(0; 10; 20; 30) °C'  — lista punktow samej temperatury
 _RE_PUNKT_T   = re.compile(r'\(\s*(-?[\d.,]+(?:\s*;\s*-?[\d.,]+)+)\s*\)\s*°?\s*C', re.I)
+# '(-15; -30 °C)' — ta sama lista z jednostka WEWNATRZ nawiasu (PZ 49/2025)
+_RE_PUNKT_T_JEDN_W_NAWIASIE = re.compile(
+    r'\(\s*(-?[\d.,]+(?:\s*;\s*-?[\d.,]+)+)\s*°\s*C\s*\)', re.I)
 # 'temperature: 20 °C; relative humidity: 15 %rh, 45 %rh, 95 %rh'
 # (PL: 'temperatura: 20 °C; wilgotnosc wzgledna: ...') — jedna temperatura i LISTA
 # wilgotnosci. Tak pisane sa PZ w ukladzie wypunktowanym, czesto po angielsku.
@@ -647,6 +650,13 @@ _RE_PUNKT_T_LISTA_RH = re.compile(
     r'(?:wilgotno[śs][ćc](?:\s+wzgl[eę]dna)?|relative\s+humidity|humidity)\s*:\s*'
     r'((?:\s*-?[\d.,]+\s*%\s*rh\s*[,;]?)+)', re.I)
 _RE_WARTOSC_RH = re.compile(r'(-?[\d.,]+)\s*%\s*rh', re.I)
+# '5 °C' — pojedynczy punkt temperatury bez nawiasow (liczba nie jest czescia
+# innej liczby ani zapisu 'a ÷ b').
+_RE_PUNKT_T_POJEDYNCZY = re.compile(
+    r'(?<![\d.,÷±≥≤])(?<![\d.,÷±≥≤]\s)(-?\d+(?:[.,]\d+)?)\s*°\s*C\b', re.I)
+# Koniec listy punktow — dalej jest opis niepewnosci, w ktorym tez stoja '°C'.
+_RE_KONIEC_LISTY_PUNKTOW = re.compile(
+    r'niepewno|uncertaint|\bU\w{0,3}\s*[≥≤=(]|\bk\s*=\s*2', re.I)
 
 # Przypis pod lista punktow, np. 'Point (20 °C, 45 %rh) will be repeated in order
 # to determine hysteresis' albo 'powtorzony punkt 60 %rh w celu wyznaczenia
@@ -712,11 +722,27 @@ def _punkty_z_fragmentu(frag):
             znalezione.append((m.start(), 0, (t, rh)))
 
     # '(0; 10; 20) °C' — jedna lista to kilka punktow; moze wystapic wiele razy.
-    for m in _RE_PUNKT_T.finditer(frag):
+    # Takze '(-15; -30 °C)' — z jednostka w nawiasie.
+    for m in list(_RE_PUNKT_T.finditer(frag)) + list(_RE_PUNKT_T_JEDN_W_NAWIASIE.finditer(frag)):
         for i, kawalek in enumerate(m.group(1).split(';')):
             t = _do_float(kawalek)
             if t is not None:
                 znalezione.append((m.start(), i, (t, None)))
+
+    # Pojedyncza temperatura bez nawiasow: '5 °C, (37 °C, 35 %rh); (37 °C, 65 %rh)'
+    # (zlecenie 232). Szukana tylko PRZED opisem niepewnosci ('z niepewnoscia ...
+    # Ut (0,2 ÷ 0,4) °C') i poza zapisami juz rozpoznanymi wyzej.
+    zajete = [(m.start(), m.end()) for wz in (_RE_PUNKT_T_LISTA_RH, _RE_PUNKT_TRH, _RE_PUNKT_T,
+                                              _RE_PUNKT_T_JEDN_W_NAWIASIE)
+              for m in wz.finditer(frag)]
+    mn = _RE_KONIEC_LISTY_PUNKTOW.search(frag)
+    lista = frag[:mn.start()] if mn else frag
+    for m in _RE_PUNKT_T_POJEDYNCZY.finditer(lista):
+        if any(a <= m.start() < b for a, b in zajete):
+            continue
+        t = _do_float(m.group(1))
+        if t is not None:
+            znalezione.append((m.start(), 0, (t, None)))
 
     znalezione.sort(key=lambda x: (x[0], x[1]))
     return [punkt for _poz, _i, punkt in znalezione]
