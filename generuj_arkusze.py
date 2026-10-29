@@ -198,6 +198,8 @@ SZABLON_WORD_Z_RH       = C.tekst("GEN_WORD_RH", "xxx_yyy_LA_TH_2026 - zakres.do
 # szablon Word, gdy CZESC zakladek ma wilgotnosc, a czesc nie (dwie tabele)
 SZABLON_WORD_MIESZANY   = C.tekst("GEN_WORD_MIX", "xxx_yyy_LA_TH_2026 - zakres + temp.docx")
 NR_SW_POCZATKOWY    = C.calk("GEN_NR_SW", 1047)   # numer świadectwa pierwszej kopii (rosnaco dla kolejnych)
+# numery swiadectw w kolejnosci nr ewidencyjnego zamiast kolejnosci kopii (nr fabrycznego)
+NR_SW_WG_EWID       = C.flaga("GEN_NR_SW_WG_EWID", False)
 
 NR_POMIESZCZENIA = C.calk("GEN_NR_POM", 9)                  # numer pomieszczenia środowiskowego
 MODEL_CZUJNIKA   = C.tekst("GEN_MODEL_CZUJ", "MX1101-02")   # model czujnika środowiskowego
@@ -2672,14 +2674,48 @@ def _wariant_uzytkownik(nazwa_szablonu):
     return f"{baza} (uzytkownik){ext}"
 
 
+def _klucz_naturalny(tekst):
+    """'U90337-9' < 'U90337-18' < 'U90337-100' — liczby porownywane jako liczby."""
+    return [(0, int(c), "") if c.isdigit() else (1, 0, c.casefold())
+            for c in re.findall(r'\d+|\D+', tekst)]
+
+
+def numery_swiadectw(nr_ewid_kopii, nr_sw_poczatkowy, wg_ewid=False):
+    """
+    Numer swiadectwa dla kazdej kopii (w kolejnosci kopii).
+    wg_ewid=False: rosnaco w kolejnosci kopii (jak dotad).
+    wg_ewid=True:  rosnaco wg nr ewidencyjnego (naturalnie: -18, -36, -41 ...);
+                   kopie bez nr ewidencyjnego na koncu, w kolejnosci kopii.
+    """
+    n = len(nr_ewid_kopii)
+    if not wg_ewid:
+        return [nr_sw_poczatkowy + j for j in range(n)]
+    ewid = [str(e or "").strip() for e in nr_ewid_kopii]
+    kolejnosc = sorted(range(n), key=lambda j: (not ewid[j], _klucz_naturalny(ewid[j]), j))
+    numery = [0] * n
+    for k, j in enumerate(kolejnosc):
+        numery[j] = nr_sw_poczatkowy + k
+    return numery
+
+
+def _nr_ewid_kopii(rekord, nazwa_xlsx):
+    """Nr ewidencyjny kopii: Strona 2 kol. F, a gdy pusta — z PZ (po nr fabrycznym)."""
+    nr_ewid = _cell_to_str(rekord.get("F"))
+    if nr_ewid:
+        return nr_ewid
+    _pzdev = _pz_mapa_arkusze().get(pz_dane.normalizuj_serial(_parsuj_nazwe_pliku(nazwa_xlsx)[2]))
+    return (_pzdev.nr_ewid if _pzdev else "") or ""
+
+
 def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablon_word_mieszany, dane_s2, kopie_excel,
                       dane_zakladek, dane_kalibracji, nr_sw_poczatkowy,
                       dane_zakladek_per_kopia=None, klasa_wilg_per_kopia=None,
-                      warunki_per_kopia=None):
+                      warunki_per_kopia=None, wg_ewid=False):
     """
     Dla kazdej kopii Excel tworzy kopie dokumentu Word i wypelnia placeholdery:
       [data]             aktualna data ('DD miesiaca YYYY r.')
-      [nr_sw]            numer swiadectwa (nr_sw_poczatkowy + j)
+      [nr_sw]            numer swiadectwa (nr_sw_poczatkowy + j; przy wg_ewid —
+                         kolejnosc wg nr ewidencyjnego, patrz numery_swiadectw)
       [nr_zl]            nr zamowienia (z rekordu Strona 2 kol. D → E6 kopii)
       [nr_fabr]          nr fabryczny  (z nazwy pliku → G6 kopii)
       [nr_ewid]          nr ewidencyjny (z rekordu Strona 2 kol. F)
@@ -2707,8 +2743,13 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
     dzis = datetime.datetime.now()
     data_str = _formatuj_date(dzis)
 
-    for j, (rekord, nowa_nazwa_xlsx) in enumerate(zip(dane_s2, kopie_excel)):
-        nr_sw = nr_sw_poczatkowy + j
+    pary = list(zip(dane_s2, kopie_excel))
+    numery_sw = numery_swiadectw([_nr_ewid_kopii(r, x) for r, x in pary], nr_sw_poczatkowy, wg_ewid)
+    if wg_ewid:
+        print("  [Word] Numery swiadectw wg nr ewidencyjnego.")
+
+    for j, (rekord, nowa_nazwa_xlsx) in enumerate(pary):
+        nr_sw = numery_sw[j]
         _przetw = rekord.get("PRZETWORNIK")
         prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
 
@@ -4307,6 +4348,7 @@ def _main_impl():
             dane_zakladek_per_kopia=dane_zakladek_per_kopia,
             klasa_wilg_per_kopia=klasa_wilg_per_kopia,
             warunki_per_kopia=zakresy_per_kopia,
+            wg_ewid=NR_SW_WG_EWID,
         )
         print(SEP)
         print(f"Zakończono Etap 7. Utworzono {len(nazwy_word)} dokumentów Word.")

@@ -119,6 +119,7 @@ KONTRAKT = {
          "S8000-07", "S8000"),
         ("GEN_K18_DOM",    "m.HIGROMETR_K18_DOMYSLNY", "BRAK", "BRAK", "S8000"),
         ("GEN_NR_SW",      "m.NR_SW_POCZATKOWY", "2500", "2500", "1047"),
+        ("GEN_NR_SW_WG_EWID", "m.NR_SW_WG_EWID", "1", "True", "False"),
         ("GEN_NR_POM",     "m.NR_POMIESZCZENIA", "12", "12", "9"),
         ("GEN_MODEL_CZUJ", "m.MODEL_CZUJNIKA", "MX1102", "MX1102", "MX1101-02"),
         # --- szablony Word ---

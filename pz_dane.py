@@ -245,6 +245,19 @@ def _numer_ewidencyjny(part):
 _RE_DOPISEK_WYTWORCY = re.compile(r'\s+([–—-]\s+.+)$')
 
 
+def sklej_numer(numer):
+    """
+    Numer rozerwany przez warstwe tekstowa PDF (tekst wyjustowany): '371 72104' ->
+    '37172104', 'U90337 -18' -> 'U90337-18' (PZ 233). Spacja miedzy cyframi albo
+    przy myslniku nigdy nie nalezy do numeru fabrycznego / ewidencyjnego.
+    """
+    if not numer:
+        return numer
+    # Wyjatek: data produkcji za numerem — '524000646 04/2025' zostaje rozdzielone.
+    n = re.sub(r'(?<=\d)\s+(?=\d)(?!\d{1,2}[/.]\d{4}\b)', '', str(numer))
+    return re.sub(r'\s*-\s*', '-', n)
+
+
 def rozdziel_wytworce(wytworca):
     """'Testo – wzorcowanie czujnika' -> ('Testo', '– wzorcowanie czujnika')."""
     w = wytworca or ""
@@ -1007,6 +1020,26 @@ def parsuj_pdf(path):
     return parsuj_tekst(text)
 
 
+def _podziel_na_wpisy(sekcja):
+    """
+    re.split sekcji po '1) ', '2) ' ... -> [prefix, '1', tekst1, '2', tekst2, ...].
+
+    Numer jednocyfrowy dzieli zawsze (jak dotad). Dwucyfrowy tylko jako NASTEPNY
+    w kolejnosci (9 -> 10 -> 11 ...): wczesniej '10) ' i dalsze sklejaly sie z
+    pozycja 9 i przepadaly (PZ 233: 28 rejestratorow, w protokole 9).
+    """
+    czesci = re.split(r'(?<!\d)([1-9]\d?)\)\s', sekcja)
+    wynik, poprzedni = [czesci[0]], None
+    for i in range(1, len(czesci), 2):
+        nr, tekst = czesci[i], czesci[i + 1] if i + 1 < len(czesci) else ""
+        if len(nr) == 1 or (poprzedni is not None and int(nr) == poprzedni + 1):
+            wynik += [nr, tekst]
+            poprzedni = int(nr)
+        else:
+            wynik[-1] += f"{nr}) {tekst}"
+    return wynik
+
+
 def parsuj_tekst(text):
     """
     Parsuje TEKST wyciagniety z PZ -> lista PZPrzyrzad.
@@ -1022,7 +1055,8 @@ def parsuj_tekst(text):
     m = re.search(
         # 'Obiekt' w liczbie pojedynczej, gdy zlecenie obejmuje JEDEN przyrzad —
         # bez tego cala sekcja nie byla znajdowana i Strona 2 zostawala pusta.
-        r'(?:Obiekt(?:y)?\s+wzorcowania|Calibration\s+objects?)\s*:(.*?)'
+        # Dwukropek bywa pominiety: 'Obiekty wzorcowania' + nowa linia (PZ 233).
+        r'(?:Obiekt(?:y)?\s+wzorcowania|Calibration\s+objects?)\s*:?(.*?)'
         r'(?:(?:Metoda\s+wzorcowania|Calibration\s+methods?)\s*:|$)', text, re.I | re.S)
     if not m:
         return []
@@ -1038,7 +1072,7 @@ def parsuj_tekst(text):
     komora_poz = _pozycje_komory(text)
 
     # podzial na wpisy numerowane '1) ... 2) ...'; brak numeracji => jeden wpis
-    wpisy = re.split(r'(?<!\d)([1-9])\)\s', sekcja)
+    wpisy = _podziel_na_wpisy(sekcja)
     przyrzady = []
     if len(wpisy) > 1 and _numeracja_to_podpunkty(wpisy):
         # Numeracja opisuje SZTUKI jednej pozycji, nie osobne pozycje — oddajemy
@@ -1065,6 +1099,9 @@ def parsuj_tekst(text):
             p.komora = True
             przyrzady.append(p)
     for p in przyrzady:
+        p.nr_fabr = sklej_numer(p.nr_fabr)
+        p.nr_ewid = sklej_numer(p.nr_ewid)
+        p.czuj_nr_fabr = sklej_numer(p.czuj_nr_fabr)
         p.wytworca, uw = rozdziel_wytworce(p.wytworca)
         p.czuj_wytworca, uw_cz = rozdziel_wytworce(p.czuj_wytworca)
         p.uwagi = uw or uw_cz

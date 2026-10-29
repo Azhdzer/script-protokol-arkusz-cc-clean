@@ -369,6 +369,11 @@ _ARKUSZE = [
     _U("GEN_NR_SW", "Numer pierwszego swiadectwa", "calk", 1047, "ark",
        grupa="Naglowki", minimum=1, maksimum=99999,
        opis="Kolejne kopie dostaja numery rosnaco (1047, 1048, ...)."),
+    _U("GEN_NR_SW_WG_EWID", "Numeruj swiadectwa wg nr ewidencyjnego", "flaga", False, "ark",
+       grupa="Naglowki",
+       opis="Wlaczone = kolejnosc numerow swiadectw wg nr ewidencyjnego (U90337-18, "
+            "U90337-36, U90337-41, ...), a nie wg nr fabrycznego. Przyrzady bez nr "
+            "ewidencyjnego dostaja numery na koncu."),
     _U("GEN_K18_CC", "Higrometr K18 — komora CC", "tekst", "S8000-02", "ark",
        grupa="Naglowki",
        opis="Higrometr punktu rosy wpisywany do K18 kazdej zakladki. Dla punktow "

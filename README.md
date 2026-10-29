@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 709 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 747 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -312,7 +312,7 @@ uruchomienie `python generuj_obserwacje.py` bez panelu działa jak dawniej.
 | `CC_*` | wspólne | `CC_FOLDER`, `CC_PROTOKOL`, `CC_SZABLON`, `CC_PZ_FOLDER`, `CC_ZESTAWIENIE` |
 | `ANL_*` | krok 1 — analiza | `ANL_PLIKI`, `ANL_INPUT`, `ANL_OUTPUT`, `ANL_DEBUG` |
 | `OBS_*` | krok 2 — obserwacja | `OBS_TXT_FILES`, `OBS_PODPIS`, `OBS_STAB_PO_RH`, `OBS_PROG_T`, `OBS_KOREKTA_ZEGARA`, `OBS_FOTO`, `OBS_FOTO_ZRODLO`, `OBS_FOTO_CEL`, … |
-| `GEN_*` | krok 3 — arkusze/Word | `GEN_EXCEL`, `GEN_WORD`, `GEN_POMIJAJ_PUSTE`, `GEN_NR_SW`, `GEN_K18_CC`, `GEN_PODPIS_1`, `GEN_MAP_CC04`, `GEN_KOLOR_AKT`, … |
+| `GEN_*` | krok 3 — arkusze/Word | `GEN_EXCEL`, `GEN_WORD`, `GEN_POMIJAJ_PUSTE`, `GEN_NR_SW`, `GEN_NR_SW_WG_EWID`, `GEN_K18_CC`, `GEN_PODPIS_1`, `GEN_MAP_CC04`, `GEN_KOLOR_AKT`, … |
 
 Konwersję typów robią helpery `cc_config.flaga / liczba / calk / tekst / minuty /
 lista / tabela / sciezka` — niepoprawna wartość cofa się do domyślnej zamiast wywalać skrypt.
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**709 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**747 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,17 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Numeracja świadectw wg nr ewidencyjnego** (przełącznik w kroku 3, `GEN_NR_SW_WG_EWID`):
+  świadectwo o numerze początkowym dostaje przyrząd z najmniejszym nr ewidencyjnym (U90337-18,
+  potem -36, -41 …, liczby porównywane jak liczby), a nie z najmniejszym nr fabrycznym. Nr ewid.
+  ze Strony 2 (kol. F), a gdy pusty — z PZ; przyrządy bez nr ewid. dostają numery na końcu.
+  Domyślnie wyłączone — numeracja jak dotąd.
+- **PZ 233 — przyrządy z PZ nie trafiały na Stronę 2:** nagłówek `Obiekty wzorcowania` bez
+  dwukropka, numery rozerwane przez tekst PDF (`371 72104`, `U90337 -18` → `37172104`, `U90337-18`;
+  `524000646 04/2025` — numer i data — zostaje rozdzielone) oraz **pozycje od 10)** wzwyż, które
+  sklejały się z pozycją 9 i przepadały (PZ 07, 29, 48, 68, 99, 117 … — np. 68: 40 przyrządów zamiast 9).
+  Dwucyfrowy numer otwiera pozycję tylko jako następny w kolejności. Sprawdzone na PZ z serwera —
+  pozycje 1–8 bez zmian.
 - **Excel użytkownika nie jest zamykany:** skrypty uruchamiają i zamykają WYŁĄCZNIE własne
   instancje Excela (`cc_excel.py`). Krok 2 przy usuwaniu bloków protokołu podpinał się pod
   otwartego Excela (`Dispatch`) i zamykał go bez pytania o niezapisane zmiany. Zawieszona
