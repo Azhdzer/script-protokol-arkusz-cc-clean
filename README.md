@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 764 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 787 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**764 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**787 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Zakładki dla wszystkich punktów z PZ** (`GEN_PUNKTY_PZ`, domyślnie włączone): punkt zamówiony dla przyrządu,
+  bez pomiarów w protokole (brak odczytów albo szare komórki), dostaje pustą zakładkę we właściwym miejscu
+  i wiersz w *Wynikach* — wg nominału z nazwy, do domierzenia. Zakładka jest całkiem pusta: bez odczytów komory
+  i daty z tego wsadu. Do świadectwa punkt wchodzi dopiero po uzupełnieniu (krok 3 z wyłączonym „Generuj arkusze
+  Excel”), także z datą K4 zakładki; nie wpływa na wybór szablonu Word. Warunków środowiskowych domierzonego
+  punktu skrypt nie liczy — zakres w świadectwie obejmuje tylko bloki protokołu.
 - **Wiersze przyrządów dobierane do pełnych minut punktu:** obserwacja wybiera 5 kolejnych pełnych minut
   (18:19:47 → 18:20, 18:20:46 → 18:21, 18:22:14 → 18:22 …), a logger szukany był po sekundach wiersza multimetru —
   przy zapisie na :25 wychodziło 19:25, 20:25, 22:25 (minuta 21 wypadała). Teraz 20:25, 21:25, 22:25, 23:25, 24:25;

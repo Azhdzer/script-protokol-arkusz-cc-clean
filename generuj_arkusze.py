@@ -336,6 +336,10 @@ BIERZ_INNE_KOLORY_S3  = C.flaga("GEN_INNE_KOLORY", False)
 # Jesli True, kopia dostaje tylko te zakladki, ktore maja dane E/F
 # (po filtracji kolorow) dla konkretnej kopii.
 USUWAJ_PUSTE_BLOKI_KOPII_S3 = C.flaga("GEN_PUSTE", True)
+# Kazdy punkt z PZ przyrzadu dostaje zakladke, takze bez pomiarow w protokole —
+# operator domierza go pozniej i nie musi recznie kopiowac zakladek.
+ZAKLADKI_WSZYSTKICH_PUNKTOW_PZ = C.flaga("GEN_PUNKTY_PZ", True)
+_PZ_PUNKTY_PRZYRZADOW_CACHE = None
 
 # Przyrzad wyszarzony w CALOSCI na Stronie 3 (zaden blok E/F nie jest aktywny)
 # nie dostaje ani kopii Excel, ani swiadectwa Word. Bez tego powstawal plik z
@@ -493,6 +497,8 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model, _cache_f
     Returns: {"temp_min":..., "temp_max":..., "wilg_min":..., "wilg_max":...} or None.
     Wzory.xls is reverted to its original state after calculation (not saved).
     """
+    # Pusta zakladka punktu z PZ nie ma bloku w protokole ani daty pomiaru.
+    dane_zakladek = [zd for zd in dane_zakladek if not zd.get("bez_pomiarow")]
     # Warunki srodowiskowe (pomieszczenie) sa IDENTYCZNE dla wszystkich kopii — zaleza od
     # daty/godziny punktu, a nie od przyrzadu. Gdy komplet F/G jest juz w cache z pierwszej
     # kopii, nie ma po co otwierac protokolu ani pliku czujnika (16 MB) po raz kolejny.
@@ -894,6 +900,97 @@ def _wybierz_aktywne_bloki_kopii(dane_zakladek, dane_ef_kopia):
     return aktywne_idx, dane_zakladek_kopia, dane_ef_kopia_aktywne
 
 
+def _punkty_pz_przyrzadu(rekord):
+    """Punkty zamowione w PZ dla przyrzadu (po nr fabrycznym albo ewidencyjnym); [] gdy brak."""
+    global _PZ_PUNKTY_PRZYRZADOW_CACHE
+    if _PZ_PUNKTY_PRZYRZADOW_CACHE is None:
+        _PZ_PUNKTY_PRZYRZADOW_CACHE = pz_dane.wczytaj_punkty_przyrzadow(PZ_FOLDER_ARK)
+    for numer in (rekord.get("E"), rekord.get("F")):
+        numer = _cell_to_str(numer)
+        for klucz in (numer, numer.split()[0] if numer.split() else ""):
+            punkty = _PZ_PUNKTY_PRZYRZADOW_CACHE.get(pz_dane.normalizuj_serial(klucz))
+            if punkty:
+                return punkty
+    return []
+
+
+def _punkty_bez_zakladki(punkty, nazwy):
+    """
+    Punkty z PZ, ktorych nie pokrywa zadna z zakladek `nazwy`.
+
+    Najpierw zgodnosc dokladna (zakladki maja nazwy z nominalow PZ), potem w tolerancji
+    (zakladka nazwana od nastawy komory). Kazda zakladka pokrywa jeden punkt. Punkt samej
+    temperatury pokrywa takze zakladka z wilgotnoscia: '30' zamowione, a komora szla 30/50.
+    """
+    wolne = [(_t_z_nazwy_zakladki(n), _rh_z_nazwy_zakladki(n)) for n in nazwy]
+
+    def _pasuje(t, rh, zakladka, tol_t, tol_rh):
+        t_z, rh_z = zakladka
+        if t_z is None or abs(t - t_z) > tol_t:
+            return False
+        if rh is None:
+            return True
+        return rh_z is not None and abs(rh - rh_z) <= tol_rh
+
+    brak = list(punkty)
+    for tol_t, tol_rh in ((1e-6, 1e-6), (TOL_NAZWA_T, TOL_NAZWA_RH)):
+        reszta = []
+        for t, rh in brak:
+            trafienia = [z for z in wolne if _pasuje(t, rh, z, tol_t, tol_rh)]
+            if trafienia:
+                wolne.remove(min(trafienia, key=lambda z: abs(t - z[0])))
+            else:
+                reszta.append((t, rh))
+        brak = reszta
+    return brak
+
+
+def _pusta_zakladka(t, rh):
+    """
+    Zakladka punktu z PZ bez pomiarow tego przyrzadu — sama nazwa, reszta do domierzenia.
+    Bez odczytow komory i daty z tego wsadu: po domierzeniu stary wzorzec i data
+    falszowalyby wynik, gdyby operator nadpisal tylko odczyty przyrzadu.
+    """
+    nazwa = f"{_cell_to_sheet_name_part(t)}, {_cell_to_sheet_name_part(rh) if rh is not None else '-'}"
+    ZAKLADKI_Z_PZ.add(nazwa)
+    return {
+        "nazwa": nazwa, "bez_pomiarow": True,
+        "L_dane": [None] * BLOK_S3, "L_fmt": [], "M_dane": [None] * BLOK_S3, "M_fmt": [],
+        "K4_val": None, "czas_start": None, "czas_koniec": None,
+        # Jak przy pustej komorce protokolu; punkt z wilgotnoscia zostaje z szablonem.
+        "o25_val": "N/A" if rh is None else None,
+        "nast_t": t, "nast_rh": rh,
+    }
+
+
+def _indeks_wg_temperatury(temperatury, t):
+    """Gdzie wstawic t, zeby zachowac kierunek zakladek (domyslnie malejaco); zaburzony -> koniec."""
+    pary = list(zip(temperatury, temperatury[1:]))
+    if any(a is None for a in temperatury):
+        return len(temperatury)
+    if all(a >= b for a, b in pary):
+        return next((i for i, x in enumerate(temperatury) if x < t), len(temperatury))
+    if all(a <= b for a, b in pary):
+        return next((i for i, x in enumerate(temperatury) if x > t), len(temperatury))
+    return len(temperatury)
+
+
+def _dolacz_punkty_z_pz(zakladki, ef, punkty):
+    """
+    Dokleja puste zakladki dla punktow z PZ, ktorych przyrzad nie ma w protokole
+    (brak odczytow albo szare), w kolejnosci zakladek.
+    Zwraca (zakladki, ef, nazwy_dodanych).
+    """
+    zakladki, ef, dodane = list(zakladki), list(ef), []
+    for t, rh in _punkty_bez_zakladki(punkty, [zd["nazwa"] for zd in zakladki]):
+        zd = _pusta_zakladka(t, rh)
+        i = _indeks_wg_temperatury([_t_z_nazwy_zakladki(z["nazwa"]) for z in zakladki], t)
+        zakladki.insert(i, zd)
+        ef.insert(i, {"E_dane": [None] * BLOK_S3, "F_dane": [None] * BLOK_S3})
+        dodane.append(zd["nazwa"])
+    return zakladki, ef, dodane
+
+
 def _odfiltruj_przyrzady_bez_danych(dane_s2, dane_ef, f24_per_kopia):
     """
     Usuwa z obiegu przyrzady, ktore nie maja ANI JEDNEGO aktywnego bloku pomiarow.
@@ -923,15 +1020,18 @@ def _odfiltruj_przyrzady_bez_danych(dane_s2, dane_ef, f24_per_kopia):
     return zachowane_s2, zachowane_ef, zachowane_f24, pominiete
 
 
-def _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef):
+def _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef, dane_s2=None):
     """Buduje liste zakladek roboczych osobno dla kazdej kopii."""
     wynik = []
-    for dane_ef_kopia_surowe in dane_ef:
+    for j, dane_ef_kopia_surowe in enumerate(dane_ef):
         if USUWAJ_PUSTE_BLOKI_KOPII_S3:
-            _, dane_zakladek_kopia, _ = _wybierz_aktywne_bloki_kopii(
+            _, dane_zakladek_kopia, ef_kopia = _wybierz_aktywne_bloki_kopii(
                 dane_zakladek,
                 dane_ef_kopia_surowe,
             )
+            if ZAKLADKI_WSZYSTKICH_PUNKTOW_PZ and dane_s2 and j < len(dane_s2):
+                dane_zakladek_kopia, _, _ = _dolacz_punkty_z_pz(
+                    dane_zakladek_kopia, ef_kopia, _punkty_pz_przyrzadu(dane_s2[j]))
         else:
             dane_zakladek_kopia = list(dane_zakladek)
         wynik.append(dane_zakladek_kopia)
@@ -1714,6 +1814,13 @@ def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domys
 
 KOMORKI_PRZETWORNIKA = ("K10", "L10", "K14", "K15", "K16",
                         "M22", "O22", "L27", "O27", "L28", "O28")
+
+
+def _zakladka_bez_pomiarow(ws):
+    """Zakladka bez odczytow przyrzadu (E15:H19 puste) — punkt z PZ jeszcze nie domierzony."""
+    wiersze = ws.range("E15:H19").value
+    return all(v is None or (isinstance(v, str) and not v.strip())
+               for wiersz in wiersze for v in wiersz)
 
 
 def _zakres_rh_zakladki(ws):
@@ -2798,6 +2905,11 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
         else:
             zakladki_do_daty = dane_zakladek
         daty_k4 = [zd.get("K4_val") for zd in zakladki_do_daty]
+        # Punkt domierzony recznie: data z jego zakladki (w protokole jej nie ma).
+        _domierzone = {nazwa for nazwa, zd in zip(_unikalne_nazwy_zakladek(zakladki_do_daty), zakladki_do_daty)
+                       if zd.get("bez_pomiarow")}
+        daty_k4 += [p.get("K4_zakladki") for p in (dane_kalibracji[j] if j < len(dane_kalibracji) else [])
+                    if p.get("nazwa") in _domierzone]
         data_wzorcowania = _formatuj_daty_wzorcowania(daty_k4)
 
         shutil.copy2(szablon_path, sciezka_docx)
@@ -3371,7 +3483,12 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
     for w in valid:
         arkusz = _arkusz_wiersza(w["f"])
         w["arkusz"] = arkusz
-        if arkusz and arkusz in sheet_names:
+        if arkusz and arkusz in sheet_names and _zakladka_bez_pomiarow(wb.sheets[arkusz]):
+            # Punkt z PZ do domierzenia: wiersz jak dla zwyklego punktu, wg nominalu z nazwy.
+            w["val_b"] = _t_z_nazwy_zakladki(arkusz)
+            w["rh_ref"] = _rh_z_nazwy_zakladki(arkusz)
+            w["ma_rh"] = w["rh_ref"] is not None
+        elif arkusz and arkusz in sheet_names:
             _adres_rh, rhm_vals = _zakres_rh_zakladki(wb.sheets[arkusz])
             non_puste = [v for v in rhm_vals if not _brak_wartosci(v)]
             w["ma_rh"] = bool(non_puste)
@@ -3955,6 +4072,15 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
 
         working_final_list = [s.name for s in wb.sheets if s.name not in wykluczone]
 
+        # Punkty z PZ jeszcze nie domierzone: bez wartosci w swiadectwie i bez wplywu na
+        # wybor szablonu Word. Po uzupelnieniu zakladki wejda przy generowaniu samego Worda.
+        _bez_pomiarow = [n for n in working_final_list if _zakladka_bez_pomiarow(wb.sheets[n])]
+        if _bez_pomiarow:
+            _warn(f"Zakladki bez pomiarow — punkty NIE trafia do swiadectwa: "
+                  f"{', '.join(_bez_pomiarow)}. Po uzupelnieniu uruchom krok 3 z wylaczonym "
+                  f"'Generuj arkusze Excel'.", indent="    ")
+            working_final_list = [n for n in working_final_list if n not in _bez_pomiarow]
+
         # --- Wykryj obecnosc aktywnych danych wilgotnosci (RHm, F15:F19) per zakladka ---
         wilgotnosc_per_zakladka = {}
         for ws_name in working_final_list:
@@ -4067,6 +4193,9 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
                     "poprawka":    f,
                     "niepewnosc":  g,
                 })
+        # Data z zakladki — dla punktu domierzonego recznie nie ma jej w protokole.
+        for _p in kalibracja:
+            _p["K4_zakladki"] = wb.sheets[_p["nazwa"]].range("K4").value
     finally:
         wb.close()
         try:
@@ -4153,6 +4282,12 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki,
                     print(f"    Aktywne bloki Strona 3 (wiersze): {zakresy}")
                 else:
                     print("    [UWAGA] Brak aktywnych blokow Strona 3 dla tej kopii — zostanie tylko arkusz Wyniki.")
+                if ZAKLADKI_WSZYSTKICH_PUNKTOW_PZ:
+                    dane_zakladek_kopia, dane_ef_kopia, _dodane = _dolacz_punkty_z_pz(
+                        dane_zakladek_kopia, dane_ef_kopia, _punkty_pz_przyrzadu(rekord))
+                    if _dodane:
+                        _warn(f"Punkty z PZ bez pomiarow tego przyrzadu — puste zakladki do "
+                              f"uzupelnienia: {', '.join(_dodane)}", indent="    ")
             else:
                 dane_zakladek_kopia = list(dane_zakladek)
                 dane_ef_kopia = list(dane_ef_kopia_surowe)
@@ -4275,7 +4410,7 @@ def _main_impl():
     print(f"  Wczytano dane E/F: {len(dane_ef)} kopii × {len(dane_zakladek)} zakładek.")
     print(f"  Wczytano dane F24 (Wyniki): {len(f24_per_kopia)} wartości.")
 
-    dane_zakladek_per_kopia = _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef)
+    dane_zakladek_per_kopia = _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef, dane_s2)
     nazwy = []
     dane_kalibracji = []
     klasa_wilg_per_kopia = []

@@ -134,6 +134,7 @@ KONTRAKT = {
         ("GEN_WORD",  "m.GENERUJ_WORD",  "0", "False", "True"),
         ("GEN_PUSTE", "m.USUWAJ_PUSTE_BLOKI_KOPII_S3", "0", "False", "True"),
         ("GEN_POMIJAJ_PUSTE", "m.POMIJAJ_PRZYRZADY_BEZ_DANYCH", "0", "False", "True"),
+        ("GEN_PUNKTY_PZ", "m.ZAKLADKI_WSZYSTKICH_PUNKTOW_PZ", "0", "False", "True"),
         # --- pliki linkowane ---
         ("GEN_LINKOWANE", "m.PLIKI_LINKOWANE", "A.xls;B.xls",
          "['A.xls', 'B.xls']", "['Obliczenia tdp, RH, C.xls', 'Wzory.xls']"),

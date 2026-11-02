@@ -361,6 +361,11 @@ _ARKUSZE = [
     _U("GEN_PUSTE", "Usuwaj puste bloki Strony 3", "flaga", True, "ark",
        grupa="Etapy",
        opis="Kopia dostaje tylko te zakladki, dla ktorych sa dane E/F."),
+    _U("GEN_PUNKTY_PZ", "Zakladki dla wszystkich punktow z PZ", "flaga", True, "ark",
+       grupa="Etapy",
+       opis="Punkt z PZ przyrzadu bez pomiarow w protokole (brak odczytow albo szare) "
+            "dostaje pusta zakladke i wiersz w Wynikach — do domierzenia. Do swiadectwa "
+            "wchodzi dopiero po uzupelnieniu."),
     _U("GEN_POMIJAJ_PUSTE", "Pomijaj przyrzady bez pomiarow", "flaga", True, "ark",
        grupa="Etapy",
        opis="Przyrzad wyszarzony w calosci na Stronie 3 nie dostaje ani kopii "
