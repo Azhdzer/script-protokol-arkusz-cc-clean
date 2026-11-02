@@ -2346,7 +2346,7 @@ def _policz_potrzebne_przyrzady(rep_groups, rows_obs):
     punkty = []
     nastawy = []
     for rep_indices, _powod, *_ in rep_groups:
-        tts = [_s_to_dt(rows_obs[i][0]) for i in rep_indices]
+        tts = _minuty_punktu([_s_to_dt(rows_obs[i][0]) for i in rep_indices])
         punkty.append(None if any(t is None for t in tts) else tts)
         r0 = rows_obs[rep_indices[0]]
         nastawy.append(_s_to_float(r0[1]) if len(r0) > 1 else None)
@@ -2564,6 +2564,24 @@ def _format_rozdz(res):
     return '0' if dec == 0 else '0.' + '0' * dec
 
 
+def _minuty_punktu(czasy):
+    """
+    Pelne minuty punktu — cele doboru wierszy przyrzadow.
+
+    Obserwacja wybiera 5 kolejnych PELNYCH minut, a kazda reprezentuje wiersz
+    multimetru najblizszy :00 (18:19:47 -> 18:20, 18:20:46 -> 18:21, 18:22:14 -> 18:22).
+    Szukajac loggera po sekundach tego wiersza, przy zapisie na :25 trafialo sie
+    19:25, 20:25, 22:25 — minuta 21 wypadala, a 18:19 nie nalezala do punktu.
+
+    Gdy minuty sie powtarzaja (awaryjny wybor wierszy) albo brak czasu — czasy bez zmian.
+    """
+    if any(t is None for t in czasy):
+        return czasy
+    pol_minuty = datetime.timedelta(seconds=30)
+    pelne = [(t + pol_minuty).replace(second=0, microsecond=0) for t in czasy]
+    return pelne if len(set(pelne)) == len(pelne) else czasy
+
+
 def _znajdz_5_wierszy(wyniki_rows, target_times):
     """
     Dla listy 5 docelowych dat/czasow zwraca liste 5 najblizszych wpisow
@@ -2708,7 +2726,7 @@ def _wypelnij_wyniki_srodowiskowe(proto_ws, rep_groups, rows_obs, obs_type):
     punkty = []
     nastawy = []
     for rep_indices, _powod, *_ in rep_groups:
-        tts = [_s_to_dt(rows_obs[i][0]) for i in rep_indices]
+        tts = _minuty_punktu([_s_to_dt(rows_obs[i][0]) for i in rep_indices])
         punkty.append(None if any(t is None for t in tts) else tts)
         r0 = rows_obs[rep_indices[0]]
         nastawy.append(_s_to_float(r0[1]) if len(r0) > 1 else None)
@@ -3989,8 +4007,7 @@ def oznacz_zestawienie_punkty(rep_groups, rows, prefiks=None):
         # (Dopasowanie „po zakresie czasu" dawalo mniej wierszy niz 5, bo siatka czasu
         # zestawienia jest przesunieta wzgledem probek multimetru.)
         matched = []
-        for idx_r in rep_idx:
-            cel = _s_to_dt(rows[idx_r][0])
+        for cel in _minuty_punktu([_s_to_dt(rows[idx_r][0]) for idx_r in rep_idx]):
             if cel is None:
                 continue
             poz = bisect.bisect_left(czasy_zest, cel)
