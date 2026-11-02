@@ -33,6 +33,7 @@ import statistics
 from copy import copy as _copy_obj
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Border
+from openpyxl.styles.numbers import is_date_format
 from openpyxl.utils import get_column_letter, column_index_from_string
 
 import pz_dane   # wspolny modul: dane przyrzadow z PZ + Zestawienie
@@ -958,6 +959,39 @@ def _styl_komorki(c):
 def _nadaj_styl(c, styl):
     c.font, c.border, c.fill, c.number_format, c.alignment = (
         _copy_obj(styl[0]), _copy_obj(styl[1]), _copy_obj(styl[2]), styl[3], _copy_obj(styl[4]))
+
+
+def _styl_podpisow_cc04(ws):
+    """Wyglad i szerokosc bloku podpisow szablonu CC-04 (X92:Y93) — czytane PRZED zapisem danych."""
+    return (_styl_komorki(ws.cell(row=92, column=24)), _styl_komorki(ws.cell(row=92, column=25)),
+            [ws.column_dimensions[get_column_letter(c)].width for c in (24, 25)])
+
+
+def _przenies_podpisy_cc04(ws, nazwiska, data, kol_podpisu, styl):
+    """
+    Blok podpisow CC-04 na prawo od danych: nazwisko w kol_podpisu, data obok.
+
+    Stare komorki (X92:Y93) dostaja wyglad wiersza danych nad nimi, ale NAJPIERW:
+    przy 21 kolumnach danych blok trafia dokladnie w X:Y i czyszczenie po zapisie
+    zdzieralo z daty format i ramke (w obserwacji '46328' zamiast daty).
+    """
+    styl_nazwiska, styl_daty, szerokosci = styl
+    for wiersz in (92, 93):
+        for kol in (24, 25):
+            _nadaj_styl(ws.cell(row=wiersz, column=kol), _styl_komorki(ws.cell(row=90, column=kol)))
+    for i, nazwisko in enumerate(nazwiska):
+        cn = ws.cell(row=92 + i, column=kol_podpisu)
+        _nadaj_styl(cn, styl_nazwiska)
+        cn.number_format = "General"
+        cn.value = nazwisko
+        cd = ws.cell(row=92 + i, column=kol_podpisu + 1)
+        _nadaj_styl(cd, styl_daty)
+        if not is_date_format(cd.number_format):
+            cd.number_format = "dd.mm.yyyy"
+        cd.value = data
+    for i, szerokosc in enumerate(szerokosci):
+        if szerokosc:
+            ws.column_dimensions[get_column_letter(kol_podpisu + i)].width = szerokosc
 
 
 def _naglowki_przetwornikow(przetworniki):
@@ -4213,8 +4247,7 @@ def main():
         # zostaje pusta ramka i data pokazuje np. „19.02.1900" na miejscu danych).
         sig1 = ws.cell(row=92, column=24).value
         sig2 = ws.cell(row=93, column=24).value
-        sig_border = _copy_obj(ws.cell(row=92, column=24).border)
-        date_nf    = ws.cell(row=92, column=25).number_format or 'yyyy-mm-dd'
+        sig_styl = _styl_podpisow_cc04(ws)
 
         # Kolumny nieuzytych kanalow (pomiar np. na 2 czujnikach zamiast 4) nie
         # trafiaja do arkusza — inaczej zostawaly puste, z samym naglowkiem.
@@ -4256,23 +4289,7 @@ def main():
 
         # Podpisy + data PRZENIESIONE na prawo od danych (z ramka jak w oryginale)
         SIG_COL = len(kolumny) + 3
-        for i, nazwisko in enumerate((sig1, sig2)):
-            cn = ws.cell(row=92 + i, column=SIG_COL)
-            cn.value  = nazwisko
-            cn.border = _copy_obj(sig_border)
-            cd = ws.cell(row=92 + i, column=SIG_COL + 1)
-            cd.value  = today
-            cd.border = _copy_obj(sig_border)
-            cd.number_format = date_nf
-
-        # Wyczysc STARE komorki podpisow (kol 24-25, w. 92-93) — teraz to zwykle dane:
-        # bez ramki i bez formatu daty.
-        _pusta_ramka = Border()
-        for _r in (92, 93):
-            for _col in (24, 25):
-                _oc = ws.cell(row=_r, column=_col)
-                _oc.border = _pusta_ramka
-                _oc.number_format = 'General'
+        _przenies_podpisy_cc04(ws, (sig1, sig2), today, SIG_COL, sig_styl)
 
         print("\nAnaliza stabilnosci...")
         rep_groups = analyze_and_highlight(ws, rows, file_type='CC04', punkty_pz=punkty_pz)
