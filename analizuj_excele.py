@@ -754,6 +754,59 @@ def parse_almemo(filepath, output_dir):
     save_result(times, temps, hums, filepath.name, output_dir)
 
 
+def _wiersz_tabeli_tempmate(df_raw):
+    """
+    Indeks wiersza naglowka 'No. | Time | Temperature°C' w raporcie Tempmate M1 (.xls)
+    albo None, gdy to nie ten format. Przed tabela sa metadane i blok 'Summary', w ktorym
+    'Start Time ... Mean Kinetic Temperature' wyglada jak naglowek — szukamy wiersza 'No.'.
+    """
+    kol0 = df_raw.iloc[:, 0].astype(str).str.strip()
+    if not kol0.eq('Device Information').any() or not kol0.eq('Summary').any():
+        return None
+    for i in kol0.index[kol0.str.lower().isin(('no.', 'no'))]:
+        wiersz = ' '.join(str(v) for v in df_raw.loc[i] if pd.notna(v))
+        if TIME_KW.search(wiersz) and TEMP_KW.search(wiersz):
+            return i
+    return None
+
+
+def _parse_tempmate_sheet(df_raw, header_idx, filepath, output_dir, sheet_tag=''):
+    """Raport Tempmate M1: nazwa wyniku z 'Serial Number', jak dla innych loggerow."""
+    hdr  = df_raw.loc[header_idx]
+    data = df_raw.loc[header_idx + 1:]
+    data = data[data.iloc[:, 0].astype(str).str.strip().str.fullmatch(r'\d+(\.0)?')]
+
+    t_idx    = next(i for i, v in enumerate(hdr) if pd.notna(v) and TIME_KW.search(str(v)))
+    temp_idx = next(i for i, v in enumerate(hdr) if pd.notna(v) and TEMP_KW.search(str(v)))
+    hum_idx  = next((i for i, v in enumerate(hdr) if pd.notna(v) and HUM_KW.search(str(v))), None)
+    if re.search(r'°\s*F', str(hdr.iloc[temp_idx]), re.I):
+        raise ValueError(f"temperatura w stopniach Fahrenheita ({hdr.iloc[temp_idx]})")
+
+    times = data.iloc[:, t_idx].apply(parse_dt)
+    temps = data.iloc[:, temp_idx].apply(clean_num)
+    hums  = data.iloc[:, hum_idx].apply(clean_num).tolist() if hum_idx is not None else None
+
+    # Zdarzenia zamiast pomiaru ('Low Voltage') i dziury w zapisie — logger tracil zasilanie;
+    # operator musi to zobaczyc, zanim punkt protokolu wypadnie w takim miejscu.
+    zdarzenia = data.iloc[:, t_idx][times.isna()].astype(str).str.strip().value_counts()
+    for tekst, ile in zdarzenia.items():
+        print(f"    ⚠  {ile} wierszy bez pomiaru: '{tekst}'")
+    czasy = times.dropna()
+    odstepy = czasy.diff()
+    typowy = odstepy.mode()
+    if len(typowy):
+        for koniec, odstep in odstepy[odstepy > typowy.iloc[0] * 5].items():
+            print(f"    ⚠  Dziura w zapisie: {czasy[koniec] - odstep} → {czasy[koniec]} ({odstep})")
+
+    kol0 = df_raw.iloc[:, 0].astype(str).str.strip()
+    wiersze_sn = kol0.index[kol0.str.lower() == 'serial number']
+    serial = str(df_raw.loc[wiersze_sn[0]].iloc[1]).strip() if len(wiersze_sn) else ''
+    if serial and serial.lower() != 'nan':
+        save_result(times.tolist(), temps.tolist(), hums, serial, output_dir, '')
+    else:
+        save_result(times.tolist(), temps.tolist(), hums, filepath.name, output_dir, sheet_tag)
+
+
 def _parse_elogvis_sheet(df_raw, filepath, output_dir, sheet_tag=''):
     """Core ElogVis parser given a raw DataFrame."""
     header_idx = None
@@ -993,6 +1046,11 @@ def parse_excel_inspect(filepath, output_dir):
             print(f"      ✗ Nie można odczytać arkusza: {e}")
             continue
 
+        # Pusty arkusz (np. 'Graph' z samym wykresem): nie ma czego czytac
+        if df_raw.empty:
+            print(f"      → pusty arkusz — pomijam")
+            continue
+
         full_text = df_raw.to_string()
 
         # ── ALMEMO (Excel with repeated metadata blocks) ─────────────────────
@@ -1031,6 +1089,18 @@ def parse_excel_inspect(filepath, output_dir):
                 print(f"      ✗ Comet/TFA parse error: {e}")
                 if DEBUG:
                     traceback.print_exc()
+
+        # ── Tempmate M1 (metadane + 'Summary' przed tabela) ─────────────────
+        tempmate_idx = _wiersz_tabeli_tempmate(df_raw)
+        if tempmate_idx is not None:
+            print(f"      → Tempmate M1 (header @ row {tempmate_idx})")
+            try:
+                _parse_tempmate_sheet(df_raw, tempmate_idx, filepath, output_dir, tag)
+            except Exception as e:
+                print(f"      ✗ Tempmate parse error: {e}")
+                if DEBUG:
+                    traceback.print_exc()
+            continue
 
         # ── Generic tabular Excel — search for a proper header row ──────────
         header_idx = None

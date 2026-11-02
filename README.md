@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 747 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 754 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**747 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**754 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Raport Tempmate M1 w `.xls` (zlecenie 234):** krok 1 szuka tabeli po wierszu `No. | Time | Temperature°C`
+  (blok `Summary` uchodził za nagłówek), nazwa wyniku z `Serial Number`. Pusty arkusz (`Graph`) jest pomijany
+  zamiast kończyć się błędem. Wiersze zdarzeń (`Low Voltage`) i dziury w zapisie → ostrzeżenie w logu,
+  temperatura w °F → błąd zamiast cichego przepisania.
+- **Dopisek `_LOG 66` w nazwie pliku** (nr ewid. `Q/LOG/66`) nie psuje już dopasowania do PZ:
+  `40125624_LOG 66.xls` → serial `40125624`. Typ z PZ bez końcowego dwukropka (`typ: Tempmate M1:`).
 - **Numeracja świadectw wg nr ewidencyjnego** (przełącznik w kroku 3, `GEN_NR_SW_WG_EWID`):
   świadectwo o numerze początkowym dostaje przyrząd z najmniejszym nr ewidencyjnym (U90337-18,
   potem -36, -41 …, liczby porównywane jak liczby), a nie z najmniejszym nr fabrycznym. Nr ewid.

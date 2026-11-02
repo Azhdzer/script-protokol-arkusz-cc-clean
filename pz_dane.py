@@ -122,6 +122,8 @@ def serial_z_nazwy_pliku(fname):
     bez_przedrostka = _RE_TS_NA_POCZATKU.sub('', base).strip()
     if bez_przedrostka:
         base = bez_przedrostka
+    # Dopisek operatora z nr ewidencyjnym: '40125624_LOG 66' (Q/LOG/66) nie jest czescia numeru.
+    base = re.sub(r'[\s_-]+LOG[\s_-]*\d+$', '', base, flags=re.I) or base
     bez_powtorki = re.sub(r'_\d{1,2}$', '', base)
     return bez_powtorki or base
 
@@ -1099,6 +1101,8 @@ def parsuj_tekst(text):
             p.komora = True
             przyrzady.append(p)
     for p in przyrzady:
+        # 'typ: Tempmate M1:' + wypunktowane sztuki — dwukropek nie jest czescia typu.
+        p.typ = (p.typ or "").rstrip(" :")
         p.nr_fabr = sklej_numer(p.nr_fabr)
         p.nr_ewid = sklej_numer(p.nr_ewid)
         p.czuj_nr_fabr = sklej_numer(p.czuj_nr_fabr)
