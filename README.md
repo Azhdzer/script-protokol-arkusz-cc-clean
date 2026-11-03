@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 793 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 802 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**793 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**802 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,11 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Zapas ponad najlepsze okno** (`OBS_ZAPAS_KRYT`, domyślnie 0,05): z okien spełniających kryterium, których
+  średni rozrzut (K, dla punktu temperatury L) jest najwyżej o zapas większy od najlepszego, brane jest
+  NAJPÓŹNIEJSZE — przyrząd ma więcej czasu, by dojść do nastaw. Najlepsze okno zostaje jasno zaznaczone
+  (bez pogrubienia, nie do protokołu) z dopiskiem „Alternatywa…”. Zlecenie 232, 37 °C / 65 %: 13:53–13:57
+  (K śr. 0,11) zamiast 12:15–12:19 (0,06). 0 = zachowanie sprzed zmiany.
 - **Korekta nastawy T to nadal ten sam punkt** (`OBS_KOREKTA_T`, domyślnie 0,5 °C): operator podciąga nastawę
   (37 → 37,3 → 37,5 → 37,4), żeby lepiej trafić w punkt — wcześniej każda taka zmiana kończyła punkt i okno
   wypadało przed korektą (zlecenie 232: 07:23 zamiast 09:49). Tolerancja liczona od nastawy na początku punktu;

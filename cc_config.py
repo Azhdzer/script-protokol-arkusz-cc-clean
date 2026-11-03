@@ -253,6 +253,12 @@ _OBSERWACJA = [
        opis="Zmiana nastawy temperatury w trakcie punktu (np. 37 -> 37,4, zeby lepiej "
             "trafic w punkt) do tej wartosci to nadal ten sam punkt. Zmiana nastawy RH "
             "zawsze zaczyna nowy punkt. 0 = kazda zmiana nastawy to nowy punkt."),
+    _U("OBS_ZAPAS_KRYT", "Zapas sredniej ponad najlepsze okno", "liczba", 0.05, "obs",
+       grupa="Okno analizy", przyrostek=" °C", minimum=0.0, maksimum=1.0, krok_wart=0.01,
+       opis="Z okien spelniajacych kryterium, ktorych srednia rozrzutu (K, a dla punktu "
+            "temperatury L) jest najwyzej o tyle wieksza od najlepszej, bierzemy "
+            "NAJPOZNIEJSZE — przyrzad ma wiecej czasu, by dojsc do nastaw. Najlepsze "
+            "okno zostaje jasno zaznaczone jako alternatywa. 0 = najlepsza srednia."),
     _U("OBS_PROG_RH", "Widelki wejscia — wilgotnosc", "liczba", 3.0, "obs",
        poziom=ZAAWANSOWANY, grupa="Okno analizy", przyrostek=" %",
        minimum=0.0, maksimum=100.0,

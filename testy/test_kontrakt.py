@@ -69,6 +69,7 @@ KONTRAKT = {
         ("OBS_MIN_OKNO",   "m.MIN_OKNO_ANALIZY",   "25", "0:25:00", "0:15:00"),
         ("OBS_ODSTEP_KONIEC", "m.ODSTEP_OD_KONCA_PUNKTU", "5", "0:05:00", "0:02:00"),
         ("OBS_KOREKTA_T",  "m.TOL_KOREKTY_NASTAWY_T", "0.3", "0.3", "0.5"),
+        ("OBS_ZAPAS_KRYT", "m.ZAPAS_KRYTERIUM", "0.1", "0.1", "0.05"),
         # --- suszenie ---
         ("OBS_SUSZ_T_MIN",  "m.SUSZENIE_T_ZAKRES[0]", "18.5", "18.5", "21.0"),
         ("OBS_SUSZ_T_MAX",  "m.SUSZENIE_T_ZAKRES[1]", "31.5", "31.5", "27.0"),

@@ -85,6 +85,9 @@ ODSTEP_OD_KONCA_PUNKTU = C.minuty("OBS_ODSTEP_KONIEC", datetime.timedelta(minute
 # Korekta nastawy T w trakcie punktu (37 -> 37,4, by lepiej trafic w punkt) nie zaczyna
 # nowego punktu, gdy miesci sie w tej tolerancji od nastawy poczatkowej. 0 = kazda zmiana.
 TOL_KOREKTY_NASTAWY_T = C.liczba("OBS_KOREKTA_T", 0.5)
+# Zapas sredniej K/L ponad najlepsze okno: z okien w zapasie bierzemy NAJPOZNIEJSZE —
+# przyrzad mial wiecej czasu, zeby dojsc do nastaw. 0 = najlepsza srednia.
+ZAPAS_KRYTERIUM = C.liczba("OBS_ZAPAS_KRYT", 0.05)
 # zakres T [°C] charakterystyczny dla suszenia
 SUSZENIE_T_ZAKRES = (C.liczba("OBS_SUSZ_T_MIN", 21.0), C.liczba("OBS_SUSZ_T_MAX", 27.0))
 SUSZENIE_RH_MAX   = C.liczba("OBS_SUSZ_RH_MAX", 50.0)  # max RH [%] — ponizej tej wartosci punkt moze byc suszeniem
@@ -1481,7 +1484,26 @@ def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
     return windows
 
 
-def _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn):
+def _wybierz_okno(kandydaci, zapas, alternatywa=None):
+    """
+    kandydaci: [(srednia, [5 indeksow]), ...] w kolejnosci czasu.
+
+    Najpozniejsze okno ze srednia <= najlepsza + zapas: przyrzady dochodza do nastaw
+    wolniej niz komora, a wszystkie kandydaty i tak spelniaja kryterium. Zapas 0 =
+    najlepsza srednia (remis -> pozniejsze okno). Gdy wybrane okno nie jest
+    najlepszym — najlepsze trafia do `alternatywa` jako (srednia_najl, okno, srednia_wybr).
+    """
+    if not kandydaci:
+        return None
+    najlepsza = min(s for s, _o in kandydaci)
+    najlepsze = [o for s, o in kandydaci if s == najlepsza][-1]
+    wybrana, wybrane = [(s, o) for s, o in kandydaci if s <= najlepsza + zapas + 1e-9][-1]
+    if alternatywa is not None and wybrane != najlepsze:
+        alternatywa.append((najlepsza, najlepsze, wybrana))
+    return wybrane
+
+
+def _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn, alternatywa=None):
     """
     Bezposrednia optymalizacja po wyniku score_fn.
 
@@ -1493,8 +1515,8 @@ def _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn):
       CC-04 temp-only: lambda i: max(data[i][4:8])    (max 4xL)
 
     1. Dla kazdej pelnej minuty szuka najblizszego waznego wiersza (max 30s od :00).
-    2. Wybiera 5 kolejnych minut z minimalna srednia score_fn — przy rownym wyniku
-       preferuje pozniejsze okno (porownanie <=).
+    2. Wybiera 5 kolejnych minut: najpozniejsze okno ze srednia score_fn nie wieksza
+       niz najlepsza + ZAPAS_KRYTERIUM (patrz _wybierz_okno).
 
     Zwraca liste 5 indeksow (0-based do `data`) lub None.
     """
@@ -1541,38 +1563,28 @@ def _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn):
     # granicy — odczyty wychodza "rozmazane". Cofamy dozwolony koniec okna.
     granica = dt_end - ODSTEP_OD_KONCA_PUNKTU
 
-    best_mean = float('inf')
-    best_5    = None
+    def _kandydaci(z_odstepem):
+        wynik = []
+        for pos in range(len(all_minutes) - 4):
+            group = [all_minutes[pos + j] for j in range(5)]
+            if any(group[j + 1] - group[j] != ONE_MIN for j in range(4)):
+                continue
+            if z_odstepem and group[4] > granica:
+                continue          # okno siega zbyt blisko zmiany nastawy
+            wynik.append((sum(minute_reps[m][0] for m in group) / 5,
+                          [minute_reps[m][1] for m in group]))
+        return wynik
 
-    for pos in range(len(all_minutes) - 4):
-        group = [all_minutes[pos + j] for j in range(5)]
-        if any(group[j + 1] - group[j] != ONE_MIN for j in range(4)):
-            continue
-        if group[4] > granica:
-            continue          # okno siega zbyt blisko zmiany nastawy
-        vals = [minute_reps[m][0] for m in group]
-        mean_val = sum(vals) / 5
-        if mean_val <= best_mean:
-            best_mean = mean_val
-            best_5    = [minute_reps[m][1] for m in group]
-
-    if best_5 is None and ODSTEP_OD_KONCA_PUNKTU:
+    kandydaci = _kandydaci(True)
+    if not kandydaci and ODSTEP_OD_KONCA_PUNKTU:
         # Punkt za krotki, by zachowac odstep — bierzemy najlepsze okno mimo
         # wszystko, ale glosno o tym mowimy (odczyty moga byc z okolic styku).
         print(f"      [UWAGA] Punkt jest za krotki na odstep "
               f"{int(ODSTEP_OD_KONCA_PUNKTU.total_seconds() // 60)} min od zmiany "
               f"nastawy — reprezentanci wybrani az do konca punktu.")
-        for pos in range(len(all_minutes) - 4):
-            group = [all_minutes[pos + j] for j in range(5)]
-            if any(group[j + 1] - group[j] != ONE_MIN for j in range(4)):
-                continue
-            vals = [minute_reps[m][0] for m in group]
-            mean_val = sum(vals) / 5
-            if mean_val <= best_mean:
-                best_mean = mean_val
-                best_5    = [minute_reps[m][1] for m in group]
+        kandydaci = _kandydaci(False)
 
-    return best_5
+    return _wybierz_okno(kandydaci, ZAPAS_KRYTERIUM, alternatywa)
 
 
 def _szerokosc_danych(ws, domyslna):
@@ -1700,6 +1712,23 @@ def _oznacz_blok(ws, data, start_idx, end_idx, rep_indices, n_cols,
     return blok
 
 
+def _oznacz_alternatywe(ws, alternatywa, n_cols):
+    """
+    Najlepsze wg kryterium okno, gdy wybrano pozniejsze: jasna zielen, bez pogrubienia,
+    z dopiskiem obok — do recznej zamiany. Nie idzie do protokolu.
+    """
+    najlepsza, okno, wybrana = alternatywa
+    for i in okno:
+        _apply_fill(ws, 2 + i, FILL_LIGHT, n_cols)
+    kom = ws.cell(row=2 + okno[0], column=n_cols + 2)
+    kom.value = (f"Alternatywa: najlepsza srednia {najlepsza:.3f} (wybrano pozniejsze okno, "
+                 f"srednia {wybrana:.3f} — w zapasie {ZAPAS_KRYTERIUM:g})")
+    fo = kom.font
+    kom.font = Font(name=fo.name, size=fo.size, italic=True, color='548235')
+    print(f"    Alternatywa (najlepsza srednia {najlepsza:.3f}): wiersze Excel "
+          f"{2 + okno[0]}–{2 + okno[-1]}; wybrano pozniejsze okno (srednia {wybrana:.3f}).")
+
+
 def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC',
                      punkt_z_pz=False):
     """
@@ -1781,6 +1810,7 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC',
 
     powod       = None    # None => zielony (OK); tekst => pomaranczowy (przyczyna)
     rep_indices = None
+    alternatywa = []      # najlepsze okno, gdy wybrano pozniejsze w granicach zapasu
 
     # 1) Czy komora w ogole osiagnela nastawe? Jesli NIE — to nie jest punkt pomiarowy,
     #    tylko przejscie/suszenie (np. wielogodzinne schladzanie) → POMIJAMY segment.
@@ -1840,7 +1870,8 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC',
         elif not valid_indices:
             powod = f"punkt niestabilny — w zadnym momencie nie spelniono warunku: {warunek_txt}"
         else:
-            rep_indices = _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn)
+            rep_indices = _find_best_minute_reps(data, valid_indices, start_idx, end_idx, score_fn,
+                                                 alternatywa=alternatywa)
             if rep_indices is None:
                 powod = f"komora za malo stabilna — brak 5 kolejnych minut, gdzie {warunek_txt}"
 
@@ -1861,6 +1892,8 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC',
             rep_l = [round(data[i][4], 4) for i in rep_indices]
             print(f"    L (roztemp) : {rep_l}  srednia={round(sum(rep_l)/5, 4)}")
 
+        if alternatywa:
+            _oznacz_alternatywe(ws, alternatywa[0], n_cols)
         blok = _oznacz_blok(ws, data, start_idx, end_idx, rep_indices, n_cols,
                             FILL_LIGHT, FILL_DARK, powod=None)
         if blok:
