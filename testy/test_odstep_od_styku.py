@@ -96,6 +96,18 @@ class TestOdstepOdZmianyNastawy(unittest.TestCase):
             self.wybierz(dane, valid)
         self.assertEqual(bufor.getvalue(), "")
 
+    def test_zmiana_o_1413_ostatni_reprezentant_najpozniej_1408(self):
+        """Zlecenie 232, punkt 37/65: wiersze co ~50 s, zmiana nastawy po 14:13:04.
+        Zegary przyrzadow spoznialy sie ~2 min — okno do 14:10 lapalo ich przejscie."""
+        t0 = datetime.datetime(2026, 10, 30, 13, 40, 0)
+        dane = []
+        t = t0
+        while t <= datetime.datetime(2026, 10, 30, 14, 13, 4):
+            dane.append((t, 37.4, 65.0, 0.02, 0.02))
+            t += datetime.timedelta(seconds=49)
+        wybor = self.wybierz(dane, list(range(len(dane))))
+        self.assertLessEqual(dane[wybor[-1]][0], datetime.datetime(2026, 10, 30, 14, 8, 30))
+
     def test_zbyt_malo_danych_zwraca_none(self):
         dane, valid = punkt(3)
         self.assertIsNone(self.wybierz(dane, valid))
@@ -107,8 +119,8 @@ class TestUstawienieOdstepu(unittest.TestCase):
         import cc_config as C
         self.ust = C.WG_ENV["OBS_ODSTEP_KONIEC"]
 
-    def test_domyslnie_dwie_minuty(self):
-        self.assertEqual(self.ust.domyslna, 2)
+    def test_domyslnie_piec_minut(self):
+        self.assertEqual(self.ust.domyslna, 5)
 
     def test_da_sie_wylaczyc(self):
         self.assertEqual(self.ust.minimum, 0)

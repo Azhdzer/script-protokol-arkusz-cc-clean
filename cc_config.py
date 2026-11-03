@@ -265,12 +265,14 @@ _OBSERWACJA = [
        poziom=ZAAWANSOWANY, grupa="Okno analizy", przyrostek=" %",
        minimum=0.0, maksimum=100.0,
        opis="Wzgledna roznica RH odczytanej od zadanej."),
-    _U("OBS_ODSTEP_KONIEC", "Odstep reprezentantow od zmiany nastawy", "minuty", 2, "obs",
+    _U("OBS_ODSTEP_KONIEC", "Odstep reprezentantow od zmiany nastawy", "minuty", 5, "obs",
        grupa="Okno analizy", minimum=0, maksimum=60,
        opis="5 wierszy reprezentacyjnych nie moze konczyc sie tuz przed zmiana "
             "nastawy. Na takim styku komora zaczyna juz przechodzic do kolejnego "
             "punktu, a 15-minutowe rozrzuty lapia probki zza granicy — odczyty "
-            "wychodza rozmazane. 0 = bez odstepu (zachowanie sprzed poprawki)."),
+            "wychodza rozmazane, a zegary przyrzadow spozniaja sie czasem o ~2 min. "
+            "Przy 5 min i zmianie o 14:13 ostatni reprezentant to najpozniej 14:08. "
+            "0 = bez odstepu (zachowanie sprzed poprawki)."),
     _U("OBS_MIN_OKNO", "Gwarantowany ogon pomiarowy", "minuty", 15, "obs",
        poziom=ZAAWANSOWANY, grupa="Okno analizy", minimum=1, maksimum=600,
        opis="Gdy punkt trzymany jest krotko, start okna jest cofany tak, by na "

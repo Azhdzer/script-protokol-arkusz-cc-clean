@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 842 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 843 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**842 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**843 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,9 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Odstęp reprezentantów od zmiany nastawy: 5 min** (było 2, `OBS_ODSTEP_KONIEC`): zegary przyrządów
+  spóźniają się czasem o ~2 min względem komory, więc okno kończące się 2 min przed zmianą łapało u nich
+  już przejście do kolejnego punktu. Zmiana nastawy o 14:13 → ostatni reprezentant najpóźniej 14:08.
 - **Krok 5 · Świadectwa z arkuszy** (`generuj_swiadectwa.py`, folder `Etap_5_ark_obl_to_word`): gotowe arkusze
   obliczeniowe (zrobione bez Worda, uzupełnione po kolejnych pomiarach) → świadectwa Word tak samo jak w kroku 3
   (te same funkcje). Wyniki z arkusza, producent/typ/serial z arkusza, nr ewid./użytkownik/zasilanie z PZ (folder PZ

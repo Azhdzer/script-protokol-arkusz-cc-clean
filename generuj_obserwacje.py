@@ -80,8 +80,9 @@ PROG_WEJSCIA_RH_PROC  = C.liczba("OBS_PROG_RH", 3.0)  # +-3% (wzglednie) od RHza
 MIN_OKNO_ANALIZY      = C.minuty("OBS_MIN_OKNO", datetime.timedelta(minutes=15))
 # Odstep 5 reprezentantow od KONCA punktu (zmiany nastawy). Na styku komora
 # zaczyna juz przechodzic do kolejnego punktu, a 15-minutowe rozrzuty lapia
-# probki zza granicy — odczyty wychodza rozmazane.
-ODSTEP_OD_KONCA_PUNKTU = C.minuty("OBS_ODSTEP_KONIEC", datetime.timedelta(minutes=2))
+# probki zza granicy — odczyty wychodza rozmazane. 5 min, bo zegary przyrzadow potrafia
+# spozniac sie o ~2 min wzgledem komory (ich "14:10" to juz przejscie z 14:12).
+ODSTEP_OD_KONCA_PUNKTU = C.minuty("OBS_ODSTEP_KONIEC", datetime.timedelta(minutes=5))
 # Korekta nastawy T w trakcie punktu (37 -> 37,4, by lepiej trafic w punkt) nie zaczyna
 # nowego punktu, gdy miesci sie w tej tolerancji od nastawy poczatkowej. 0 = kazda zmiana.
 TOL_KOREKTY_NASTAWY_T = C.liczba("OBS_KOREKTA_T", 0.5)
