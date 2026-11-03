@@ -45,6 +45,15 @@ class TestNumerySwiadectw(unittest.TestCase):
         self.assertEqual(A.numery_swiadectw(["", "B-2", None, "B-1"], 10, wg_ewid=True),
                          [12, 11, 13, 10])
 
+    def test_wylaczone_wg_nr_fabrycznego(self):
+        fabr = ["37192", "9", "37191", "10"]
+        self.assertEqual(A.numery_swiadectw(["U-1", "U-2", "U-3", "U-4"], 1047, False, fabr),
+                         [1050, 1047, 1049, 1048])
+
+    def test_wg_ewid_bez_ewid_wg_fabrycznego(self):
+        self.assertEqual(A.numery_swiadectw(["", "B-1", ""], 10, True, ["Z2", "Z9", "Z1"]),
+                         [12, 10, 11])
+
     def test_ewid_z_pz_gdy_strona2_pusta(self):
         with mock.patch.object(A, "_pz_mapa_arkusze", return_value={"371": _PZ("U-5")}):
             self.assertEqual(A._nr_ewid_kopii({"F": None}, "233_LA_TH_2026 - testo 174T - 371.xlsx"),

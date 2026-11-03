@@ -761,9 +761,11 @@ class Okno(QMainWindow):
                          and not n.startswith("~$")]
                 if not any("protok" not in n.lower() for n in pliki):
                     p.append(f"Folder z arkuszami (krok 5) nie zawiera arkuszy: {pelny}")
-                elif not any("protok" in n.lower() for n in pliki):
-                    p.append("W folderze kroku 5 nie ma protokolu — swiadectwa beda BEZ "
-                             "warunkow srodowiskowych.")
+                elif not any("protok" in n.lower() and n.lower().endswith((".xlsx", ".xlsm"))
+                             and not n.startswith("~$")
+                             for n in pliki + os.listdir(self.folder)):
+                    p.append("Ani w folderze kroku 5, ani w folderze glownym nie ma protokolu — "
+                             "swiadectwa beda BEZ warunkow srodowiskowych.")
                 if any(n.startswith("~$") for n in os.listdir(pelny)):
                     p.append("Ktorys plik w folderze kroku 5 jest otwarty w Excelu — zamknij go.")
         if "srod" in kroki:

@@ -11,8 +11,9 @@ swiadectwa tak samo jak krok 3 (te same funkcje z generuj_arkusze):
   * producent / typ / nr fabryczny / zlecenie — z arkusza (E5, E6, nazwa pliku),
   * nr ewidencyjny, uzytkownik, zleceniodawca, zasilanie — z PZ (folder PZ albo ten folder),
   * data wzorcowania — z K4 zakladek,
-  * warunki srodowiskowe — z protokolow lezacych w tym folderze: zakladka trafia na blok
-    Strony 3 o tej samej dacie i nastawie, a t/RH pomieszczenia sa brane z F/G protokolu
+  * warunki srodowiskowe — z protokolow z tego folderu i z folderu glownego (tego samego
+    zlecenia): zakladka trafia na blok Strony 3 o tej samej dacie i nastawie, najpierw
+    z protokolu, w ktorym jest przyrzad, a t/RH pomieszczenia sa brane z F/G protokolu
     albo z pliku czujnika (jak w kroku 3/4). Kilka protokolow = kilka sesji pomiarowych.
 
 Swiadectwa zapisywane sa obok arkuszy. Arkusze nie sa zmieniane (linki zewnetrzne wracaja
@@ -83,6 +84,27 @@ def protokoly_w_folderze(folder):
                   if not n.startswith("~$") and n.lower().endswith((".xlsx", ".xlsm"))
                   and "protok" in n.lower()
                   and A.ARKUSZ_STRONA3 in _nazwy_arkuszy(os.path.join(folder, n)))
+
+
+_RE_ZLECENIA_PROTOKOLU = re.compile(r'^\s*(\d+(?:\s*,\s*\d+)*)\s*_LA_TH_', re.I)
+
+
+def sciezki_protokolow(nazwy_arkuszy):
+    """
+    Protokoly do warunkow srodowiskowych: wszystkie z folderu arkuszy oraz z folderu
+    glownego te, ktorych zlecenie ('232_LA_TH_...', '232, 234_LA_TH_...') ma ktorys
+    arkusz — tam leza protokoly kolejnych czesci zlecenia (protokol_2, protokol_3...).
+    """
+    sciezki = [os.path.join(FOLDER_ARKUSZY, n) for n in protokoly_w_folderze(FOLDER_ARKUSZY)]
+    if os.path.normcase(os.path.abspath(FOLDER)) == os.path.normcase(os.path.abspath(FOLDER_ARKUSZY)):
+        return sciezki
+    zlecenia = {A._parsuj_nazwe_pliku(n)[0].strip() for n in nazwy_arkuszy} - {""}
+    juz = {os.path.basename(s).lower() for s in sciezki}
+    for n in protokoly_w_folderze(FOLDER):
+        m = _RE_ZLECENIA_PROTOKOLU.match(n)
+        if m and n.lower() not in juz and zlecenia & set(re.split(r'\s*,\s*', m.group(1))):
+            sciezki.append(os.path.join(FOLDER, n))
+    return sciezki
 
 
 def odczytaj_arkusz(sciezka):
@@ -252,15 +274,21 @@ def main():
         return 1
     print(f"  Arkuszy: {len(nazwy)}")
 
-    protokoly = protokoly_w_folderze(FOLDER_ARKUSZY)
+    protokoly = sciezki_protokolow(nazwy)
+    otwarte = [p for p in protokoly if os.path.exists(os.path.join(
+        os.path.dirname(p), "~$" + os.path.basename(p)))]
+    if otwarte:
+        A._warn("Protokol otwarty w Excelu — czytam ostatnio ZAPISANA wersje: "
+                + ", ".join(os.path.basename(p) for p in otwarte))
     bloki = []
     for p in protokoly:
-        bloki += bloki_protokolu(os.path.join(FOLDER_ARKUSZY, p))
-    if protokoly:
-        print(f"  Protokoly (godziny punktow): {', '.join(protokoly)} — blokow: {len(bloki)}")
-    else:
-        A._warn("Brak protokolu w folderze — swiadectwa BEZ warunkow srodowiskowych. "
-                "Wloz do folderu protokol(y) z pomiarow, zeby je policzyc.")
+        b = bloki_protokolu(p)
+        bloki += b
+        print(f"  Protokol: {os.path.relpath(p, FOLDER)} — punktow: {len(b)}, "
+              f"przyrzadow: {len(b[0]['seriale']) if b else 0}")
+    if not protokoly:
+        A._warn("Brak protokolu (w folderze arkuszy ani w glownym) — swiadectwa BEZ warunkow "
+                "srodowiskowych. Wloz protokol(y) z pomiarow, zeby je policzyc.")
 
     pz = mapa_pz()
     dane_arkuszy = [odczytaj_arkusz(os.path.join(FOLDER_ARKUSZY, n)) for n in nazwy]

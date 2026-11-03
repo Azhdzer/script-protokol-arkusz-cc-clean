@@ -386,12 +386,13 @@ _ARKUSZE = [
             "wyszarz pomiary pozostalych."),
     _U("GEN_NR_SW", "Numer pierwszego swiadectwa", "calk", 1047, "ark",
        grupa="Naglowki", minimum=1, maksimum=99999,
-       opis="Kolejne kopie dostaja numery rosnaco (1047, 1048, ...)."),
+       opis="Kolejne swiadectwa dostaja numery rosnaco (1047, 1048, ...) — wg nr "
+            "fabrycznego albo nr ewidencyjnego (przelacznik ponizej)."),
     _U("GEN_NR_SW_WG_EWID", "Numeruj swiadectwa wg nr ewidencyjnego", "flaga", False, "ark",
        grupa="Naglowki",
-       opis="Wlaczone = kolejnosc numerow swiadectw wg nr ewidencyjnego (U90337-18, "
-            "U90337-36, U90337-41, ...), a nie wg nr fabrycznego. Przyrzady bez nr "
-            "ewidencyjnego dostaja numery na koncu."),
+       opis="Wlaczone = numery swiadectw rosnaco wg nr ewidencyjnego (U90337-18, "
+            "U90337-36, U90337-41, ...). Wylaczone = rosnaco wg nr fabrycznego. Przyrzady "
+            "bez nr ewidencyjnego dostaja numery na koncu."),
     _U("GEN_K18_CC", "Higrometr K18 — komora CC", "tekst", "S8000-02", "ark",
        grupa="Naglowki",
        opis="Higrometr punktu rosy wpisywany do K18 kazdej zakladki. Dla punktow "
@@ -541,16 +542,18 @@ _WARUNKI = [
 _SWIADECTWA = [
     _U("SW_FOLDER", "Folder z arkuszami obliczeniowymi", "folder", "Etap_5_ark_obl_to_word",
        "swiad", grupa="Dane wejsciowe",
-       opis="Tu wkladasz gotowe arkusze obliczeniowe (kopie z kroku 3, uzupelnione), "
-            "a do warunkow srodowiskowych — takze protokol(y) z pomiarow i ewentualnie PZ. "
+       opis="Tu wkladasz gotowe arkusze obliczeniowe (kopie z kroku 3, uzupelnione). "
+            "Protokoly z pomiarow (do warunkow srodowiskowych) — w tym folderze albo w folderze "
+            "glownym (tam brane tylko protokoly tego samego zlecenia, np. 232_...). "
             "Swiadectwa powstaja w tym samym folderze."),
     _U("SW_NR_SW", "Numer pierwszego swiadectwa", "calk", 1047, "swiad",
        grupa="Numeracja", minimum=1, maksimum=99999,
-       opis="Kolejne arkusze (wg zlecenia i numeru przyrzadu z nazwy pliku) dostaja "
-            "numery rosnaco."),
+       opis="Kolejne swiadectwa dostaja numery rosnaco (1047, 1048, ...) — kolejnosc "
+            "wg przelacznika ponizej."),
     _U("SW_NR_SW_WG_EWID", "Numeruj swiadectwa wg nr ewidencyjnego", "flaga", False, "swiad",
        grupa="Numeracja",
-       opis="Kolejnosc numerow wg nr ewidencyjnego z PZ (jak w kroku 3)."),
+       opis="Wlaczone = numery swiadectw rosnaco wg nr ewidencyjnego z PZ. Wylaczone = "
+            "rosnaco wg nr fabrycznego (jak w kroku 3)."),
 ]
 
 USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE + _WARUNKI + _SWIADECTWA

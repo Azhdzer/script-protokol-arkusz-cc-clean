@@ -12,6 +12,7 @@ import datetime
 import os
 import sys
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -145,6 +146,29 @@ class TestZlecenieRozbiteNaProtokoly(unittest.TestCase):
         bloki[1]["t"] = 10.0                       # cz2 nie ma punktu 30
         b = S.dopasuj_blok({"nazwa": "30, -", "K4_val": "30.10.2026"}, bloki, "TMM3")
         self.assertIsNotNone(b)
+
+
+class TestProtokolyZFolderuGlownego(unittest.TestCase):
+    """Protokoly czesci zlecenia leza w folderze glownym, arkusze w folderze kroku 5."""
+
+    def test_tylko_protokoly_tego_zlecenia(self):
+        glowny = nowa_piaskownica("swiadectwa_glowny")
+        ark = os.path.join(glowny, "Etap_5")
+        os.makedirs(ark)
+        arkusz(os.path.join(ark, "232_LA_TH_2026 - ILAJ - Wzór - 1 - TMM1.xlsx"))
+        for n in ("232_LA_TH_2026 - protokół CC.xlsx", "232_LA_TH_2026 - protokół_2 CC-04.xlsx",
+                  "231, 232_LA_TH_2026 - protokół CC.xlsx", "230_LA_TH_2026 - protokół CC.xlsx",
+                  "2232_LA_TH_2026 - protokół CC.xlsx"):
+            protokol(os.path.join(glowny, n), [])
+        protokol(os.path.join(ark, "232_LA_TH_2026 - protokół_3 CC-04.xlsx"), [])
+        with unittest.mock.patch.object(S, "FOLDER", glowny), \
+                unittest.mock.patch.object(S, "FOLDER_ARKUSZY", ark):
+            wynik = S.sciezki_protokolow(S.arkusze_w_folderze(ark))
+        self.assertEqual([os.path.relpath(p, glowny) for p in wynik],
+                         [os.path.join("Etap_5", "232_LA_TH_2026 - protokół_3 CC-04.xlsx"),
+                          "231, 232_LA_TH_2026 - protokół CC.xlsx",
+                          "232_LA_TH_2026 - protokół CC.xlsx",
+                          "232_LA_TH_2026 - protokół_2 CC-04.xlsx"])
 
 
 class TestWarunkiBloku(unittest.TestCase):

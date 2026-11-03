@@ -2796,18 +2796,19 @@ def _klucz_naturalny(tekst):
             for c in re.findall(r'\d+|\D+', tekst)]
 
 
-def numery_swiadectw(nr_ewid_kopii, nr_sw_poczatkowy, wg_ewid=False):
+def numery_swiadectw(nr_ewid_kopii, nr_sw_poczatkowy, wg_ewid=False, nr_fabr_kopii=None):
     """
     Numer swiadectwa dla kazdej kopii (w kolejnosci kopii).
-    wg_ewid=False: rosnaco w kolejnosci kopii (jak dotad).
+    wg_ewid=False: rosnaco wg nr fabrycznego (naturalnie: 9 < 10), gdy podano
+                   nr_fabr_kopii; bez nich — w kolejnosci kopii.
     wg_ewid=True:  rosnaco wg nr ewidencyjnego (naturalnie: -18, -36, -41 ...);
-                   kopie bez nr ewidencyjnego na koncu, w kolejnosci kopii.
+                   kopie bez nr ewidencyjnego na koncu, wg nr fabrycznego.
     """
     n = len(nr_ewid_kopii)
-    if not wg_ewid:
-        return [nr_sw_poczatkowy + j for j in range(n)]
-    ewid = [str(e or "").strip() for e in nr_ewid_kopii]
-    kolejnosc = sorted(range(n), key=lambda j: (not ewid[j], _klucz_naturalny(ewid[j]), j))
+    fabr = [str(f or "").strip() for f in (nr_fabr_kopii or [""] * n)]
+    ewid = [str(e or "").strip() for e in nr_ewid_kopii] if wg_ewid else [""] * n
+    kolejnosc = sorted(range(n), key=lambda j: (not ewid[j], _klucz_naturalny(ewid[j]),
+                                                _klucz_naturalny(fabr[j]), j))
     numery = [0] * n
     for k, j in enumerate(kolejnosc):
         numery[j] = nr_sw_poczatkowy + k
@@ -2860,9 +2861,11 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
     data_str = _formatuj_date(dzis)
 
     pary = list(zip(dane_s2, kopie_excel))
-    numery_sw = numery_swiadectw([_nr_ewid_kopii(r, x) for r, x in pary], nr_sw_poczatkowy, wg_ewid)
-    if wg_ewid:
-        print("  [Word] Numery swiadectw wg nr ewidencyjnego.")
+    numery_sw = numery_swiadectw(
+        [_nr_ewid_kopii(r, x) for r, x in pary], nr_sw_poczatkowy, wg_ewid,
+        [_parsuj_nazwe_pliku(x)[2] or _cell_to_str(r.get("E")) for r, x in pary])
+    print("  [Word] Numery swiadectw rosnaco wg nr "
+          + ("ewidencyjnego." if wg_ewid else "fabrycznego."))
 
     for j, (rekord, nowa_nazwa_xlsx) in enumerate(pary):
         nr_sw = numery_sw[j]

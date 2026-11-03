@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 839 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 842 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**839 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**842 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -415,7 +415,8 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 - **Krok 5 · Świadectwa z arkuszy** (`generuj_swiadectwa.py`, folder `Etap_5_ark_obl_to_word`): gotowe arkusze
   obliczeniowe (zrobione bez Worda, uzupełnione po kolejnych pomiarach) → świadectwa Word tak samo jak w kroku 3
   (te same funkcje). Wyniki z arkusza, producent/typ/serial z arkusza, nr ewid./użytkownik/zasilanie z PZ (folder PZ
-  albo ten folder), data z K4 zakładek. Warunki środowiskowe — z protokołów włożonych do folderu: zakładka trafia
+  albo ten folder), data z K4 zakładek. Warunki środowiskowe — z protokołów z tego folderu oraz z folderu głównego
+  (tam tylko protokoły tego samego zlecenia, np. `232_LA_TH_2026 - protokół_2 CC-04`): zakładka trafia
   na blok Strony 3 o tej samej dacie i nastawie — najpierw z protokołu, w którego Stronie 2 jest ten przyrząd
   (zlecenie rozbite na kilka protokołów z tymi samymi punktami jednego dnia), potem z dowolnego
   (kilka protokołów = kilka sesji, np. domiar; nazwy plików dowolne, byle z „protok”), t/RH z F/G albo
@@ -468,7 +469,8 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   świadectwo o numerze początkowym dostaje przyrząd z najmniejszym nr ewidencyjnym (U90337-18,
   potem -36, -41 …, liczby porównywane jak liczby), a nie z najmniejszym nr fabrycznym. Nr ewid.
   ze Strony 2 (kol. F), a gdy pusty — z PZ; przyrządy bez nr ewid. dostają numery na końcu.
-  Domyślnie wyłączone — numeracja jak dotąd.
+  Wyłączone — numery rosnąco wg nr fabrycznego (liczby jak liczby: 9 < 10). Ten sam przełącznik
+  jest w kroku 5 (`SW_NR_SW_WG_EWID`).
 - **PZ 233 — przyrządy z PZ nie trafiały na Stronę 2:** nagłówek `Obiekty wzorcowania` bez
   dwukropka, numery rozerwane przez tekst PDF (`371 72104`, `U90337 -18` → `37172104`, `U90337-18`;
   `524000646 04/2025` — numer i data — zostaje rozdzielone) oraz **pozycje od 10)** wzwyż, które
