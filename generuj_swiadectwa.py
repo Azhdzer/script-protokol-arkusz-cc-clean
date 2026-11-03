@@ -115,6 +115,7 @@ def bloki_protokolu(sciezka):
     """
     wb = openpyxl.load_workbook(sciezka, read_only=True, data_only=True)
     try:
+        seriale = _seriale_strony2(wb)
         ws = wb[A.ARKUSZ_STRONA3]
         wynik, nr = [], 0
         while True:
@@ -122,7 +123,7 @@ def bloki_protokolu(sciezka):
             if ws.cell(row=r0, column=1).value in (None, ""):
                 return wynik
             wynik.append({
-                "protokol": os.path.basename(sciezka), "nr": nr + 1,
+                "protokol": os.path.basename(sciezka), "nr": nr + 1, "seriale": seriale,
                 "t": pz_dane._do_float(ws.cell(row=r0, column=2).value),
                 "rh": pz_dane._do_float(ws.cell(row=r0, column=3).value),
                 "data": A._parse_date_s3(ws.cell(row=r0 + 1, column=5).value),
@@ -136,11 +137,37 @@ def bloki_protokolu(sciezka):
         wb.close()
 
 
-def dopasuj_blok(zakladka, bloki):
+def _klucz_seriala(serial):
+    """Nr fabryczny do porownan: 'Q/4' z protokolu = 'Q_4' z nazwy pliku arkusza."""
+    return pz_dane.normalizuj_serial(A._bezpieczna_nazwa_pliku(str(serial)))
+
+
+def _seriale_strony2(wb):
+    """Znormalizowane nr fabryczne przyrzadow ze Strony 2 (kolumna E) — kto byl w protokole."""
+    if A.ARKUSZ_STRONA2 not in wb.sheetnames:
+        return frozenset()
+    ws, wynik, row = wb[A.ARKUSZ_STRONA2], set(), A.START_ROW_S2
+    while ws.cell(row=row, column=1).value not in (None, ""):
+        serial = A._cell_to_str(ws.cell(row=row, column=5).value)
+        if serial:
+            wynik.add(_klucz_seriala(serial))
+        row += 1
+    return frozenset(wynik)
+
+
+def dopasuj_blok(zakladka, bloki, serial=None):
     """
     Blok protokolu tej zakladki: ta sama data (K4) i nastawa w tolerancji nazw zakladek
     kroku 3 (punkt tylko-temperatura <-> blok bez wilgotnosci). Najblizszy albo None.
+    Z podanym nr fabrycznym najpierw protokoly, w ktorych przyrzad jest na Stronie 2
+    (zlecenie rozbite na kilka protokolow z tymi samymi punktami tego samego dnia);
+    gdy go nie ma w zadnym — dowolny protokol z tym punktem.
     """
+    if serial:
+        klucz = _klucz_seriala(serial)
+        swoje = [b for b in bloki if klucz in b.get("seriale", ())]
+        if swoje:
+            return dopasuj_blok(zakladka, swoje) or dopasuj_blok(zakladka, bloki)
     data = A._parse_date_s3(zakladka.get("K4_val"))
     t = A._t_z_nazwy_zakladki(zakladka["nazwa"])
     rh = A._rh_z_nazwy_zakladki(zakladka["nazwa"])
@@ -267,7 +294,7 @@ def main():
             for zd in dane["zakladki"]:
                 if zd["nazwa"] not in {p["nazwa"] for p in (kal or [])}:
                     continue                      # zakladka bez pomiarow — poza swiadectwem
-                blok = dopasuj_blok(zd, bloki)
+                blok = dopasuj_blok(zd, bloki, rekordy[j]["E"])
                 if blok is None:
                     bez_bloku.append(zd["nazwa"])
                     continue

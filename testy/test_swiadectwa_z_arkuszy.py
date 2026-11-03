@@ -36,12 +36,14 @@ def arkusz(sciezka, zakladki=("30, -", "0, -"), przetwornik=False):
     wb.save(sciezka)
 
 
-def protokol(sciezka, bloki):
+def protokol(sciezka, bloki, seriale=()):
     """bloki: [(T, RH, 'dd.mm.rrrr', start, koniec, (t1, rh1), (t2, rh2))]"""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Strona 3"
-    wb.create_sheet("Strona 2")
+    ws2 = wb.create_sheet("Strona 2")
+    for i, s in enumerate(seriale):
+        ws2.cell(11 + i, 1).value, ws2.cell(11 + i, 5).value = i + 1, s
     for i, (t, rh, data, st, kon, fg1, fg2) in enumerate(bloki):
         r0 = 20 + i * 5
         ws.cell(r0, 1).value = i + 1
@@ -105,6 +107,44 @@ class TestDopasowanieBloku(unittest.TestCase):
     def test_inna_data_albo_bez_daty(self):
         self.assertIsNone(self.nr("30, -", "31.10.2026"))
         self.assertIsNone(self.nr("30, -", None))
+
+
+class TestZlecenieRozbiteNaProtokoly(unittest.TestCase):
+    """Jedno zlecenie mierzone w 3 czesciach: te same punkty tego samego dnia w 3 protokolach."""
+
+    @classmethod
+    def setUpClass(cls):
+        f = nowa_piaskownica("swiadectwa_czesci")
+        for i, (st, seriale) in enumerate((("08:00", ["TMM1", "TMM2"]),
+                                           ("11:00", ["TMM3"]),
+                                           ("14:00", ["Q/4"])), start=1):
+            protokol(os.path.join(f, f"233_LA_TH_2026 - protokol cz{i}.xlsx"),
+                     [(30.2, 0, "30.10.2026", st, st[:3] + "05", (22.0 + i, 40), (22.0 + i, 40))],
+                     seriale)
+        cls.bloki = []
+        for p in S.protokoly_w_folderze(f):
+            cls.bloki += S.bloki_protokolu(os.path.join(f, p))
+
+    def protokol_przyrzadu(self, serial):
+        return S.dopasuj_blok({"nazwa": "30, -", "K4_val": "30.10.2026"}, self.bloki, serial)["protokol"]
+
+    def test_seriale_ze_strony2(self):
+        self.assertEqual(self.bloki[0]["seriale"], {"TMM1", "TMM2"})
+        self.assertEqual(self.bloki[2]["seriale"], {"Q_4"})
+
+    def test_blok_z_protokolu_przyrzadu(self):
+        self.assertEqual(self.protokol_przyrzadu("TMM2"), "233_LA_TH_2026 - protokol cz1.xlsx")
+        self.assertEqual(self.protokol_przyrzadu("TMM3"), "233_LA_TH_2026 - protokol cz2.xlsx")
+        self.assertEqual(self.protokol_przyrzadu("Q_4"), "233_LA_TH_2026 - protokol cz3.xlsx")
+
+    def test_przyrzad_spoza_protokolow_bierze_punkt_po_dacie(self):
+        self.assertEqual(self.protokol_przyrzadu("INNY"), "233_LA_TH_2026 - protokol cz1.xlsx")
+
+    def test_punktu_brak_w_jego_protokole_domiar_z_innego(self):
+        bloki = [dict(b) for b in self.bloki]
+        bloki[1]["t"] = 10.0                       # cz2 nie ma punktu 30
+        b = S.dopasuj_blok({"nazwa": "30, -", "K4_val": "30.10.2026"}, bloki, "TMM3")
+        self.assertIsNotNone(b)
 
 
 class TestWarunkiBloku(unittest.TestCase):

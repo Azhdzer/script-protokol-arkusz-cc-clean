@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 835 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 839 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**835 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**839 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -416,7 +416,9 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   obliczeniowe (zrobione bez Worda, uzupełnione po kolejnych pomiarach) → świadectwa Word tak samo jak w kroku 3
   (te same funkcje). Wyniki z arkusza, producent/typ/serial z arkusza, nr ewid./użytkownik/zasilanie z PZ (folder PZ
   albo ten folder), data z K4 zakładek. Warunki środowiskowe — z protokołów włożonych do folderu: zakładka trafia
-  na blok Strony 3 o tej samej dacie i nastawie (kilka protokołów = kilka sesji, np. domiar), t/RH z F/G albo
+  na blok Strony 3 o tej samej dacie i nastawie — najpierw z protokołu, w którego Stronie 2 jest ten przyrząd
+  (zlecenie rozbite na kilka protokołów z tymi samymi punktami jednego dnia), potem z dowolnego
+  (kilka protokołów = kilka sesji, np. domiar; nazwy plików dowolne, byle z „protok”), t/RH z F/G albo
   z pliku czujnika. Własny numer początkowy i numeracja wg nr ewid. Świadectwa obok arkuszy; linki arkuszy wracają
   na serwer, poprzednia wersja w `kopie_zapasowe`. Zlecenie 234: 8/8 świadectw identycznych z krokiem 3.
 - **Kopia zapasowa świadectwa** robiona teraz PRZED nadpisaniem — wcześniej po skopiowaniu szablonu, więc
