@@ -42,6 +42,7 @@ hiddenimports += [
     # moduly aplikacji zaladowane leniwie w app_entry:
     "app_gui", "cc_config", "cc_widgets", "cc_widok", "cc_excel", "cc_kopia", "cc_szablon_przetwornika", "pz_dane",
     "analizuj_excele", "generuj_arkusze", "generuj_obserwacje", "wypelnij_warunki",
+    "generuj_swiadectwa",
 ]
 
 excludes = ["tkinter", "unittest", "pydoc", "test", "pytest", "PyQt5", "PyQt6"]

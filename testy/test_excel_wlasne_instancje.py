@@ -73,7 +73,7 @@ class TestZadenSkryptNiePodpinaSiePodExcelaUzytkownika(unittest.TestCase):
     """
 
     SKRYPTY = ("generuj_obserwacje.py", "generuj_arkusze.py", "wypelnij_warunki.py",
-               "analizuj_excele.py")
+               "analizuj_excele.py", "generuj_swiadectwa.py")
 
     def zrodlo(self, plik):
         with open(os.path.join(KORZEN, plik), encoding="utf-8") as f:

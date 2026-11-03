@@ -55,6 +55,15 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 # wzgledem biezacego katalogu, dokladnie jak wczesniej.
 import cc_config as _C
 
+# xlrd wypisuje na stdout 'WARNING *** file size (...) not 512 + multiple of sector size'
+# dla .xls z programow loggerow (niestandardowy rozmiar pliku OLE) — przy KAZDYM otwarciu,
+# czyli kilka razy na plik. Dane czyta poprawnie, wiec ten komunikat tylko zasmieca log.
+_XLRD_LOG = open(os.devnull, 'w')
+
+
+def _ek(engine):
+    return {'logfile': _XLRD_LOG} if engine == 'xlrd' else {}
+
 _BAZA          = os.environ.get("CC_FOLDER") or os.getcwd()
 DEFAULT_INPUT  = Path(_C.sciezka("ANL_INPUT", "excel_do_analizy", _BAZA))
 DEFAULT_OUTPUT = Path(_C.sciezka("ANL_OUTPUT", "wyniki", _BAZA))
@@ -712,7 +721,7 @@ def parse_rotronic_hw4(filepath, output_dir):
 
 def parse_almemo(filepath, output_dir):
     """ALMEMO - Excel with repeated metadata blocks; filter rows by datetime in col 0."""
-    df_raw = pd.read_excel(filepath, header=None, engine='xlrd')
+    df_raw = pd.read_excel(filepath, header=None, engine='xlrd', engine_kwargs=_ek('xlrd'))
 
     # Find column mapping from DATE:/TIME: header rows
     header_rows = df_raw[df_raw.iloc[:, 0].astype(str).str.contains('DATE:', na=False)].index
@@ -1030,7 +1039,7 @@ def parse_excel_inspect(filepath, output_dir):
     engine = 'openpyxl' if ext == '.xlsx' else 'xlrd'
 
     try:
-        xl = pd.ExcelFile(filepath, engine=engine)
+        xl = pd.ExcelFile(filepath, engine=engine, engine_kwargs=_ek(engine))
     except Exception as e:
         raise ValueError(f"Cannot open Excel: {e}")
 
@@ -1041,7 +1050,8 @@ def parse_excel_inspect(filepath, output_dir):
         print(f"    sheet: '{sheet}'")
 
         try:
-            df_raw = pd.read_excel(filepath, header=None, engine=engine, sheet_name=sheet)
+            df_raw = pd.read_excel(filepath, header=None, engine=engine, sheet_name=sheet,
+                                   engine_kwargs=_ek(engine))
         except Exception as e:
             print(f"      ✗ Nie można odczytać arkusza: {e}")
             continue
@@ -1114,7 +1124,8 @@ def parse_excel_inspect(filepath, output_dir):
             print(f"      → Generic tabular Excel (header @ row {header_idx})")
             try:
                 df = pd.read_excel(
-                    filepath, header=int(header_idx), engine=engine, sheet_name=sheet
+                    filepath, header=int(header_idx), engine=engine, sheet_name=sheet,
+                    engine_kwargs=_ek(engine)
                 )
                 t_cols    = find_cols(df.columns, TIME_KW)
                 temp_cols = find_cols(df.columns, TEMP_KW)

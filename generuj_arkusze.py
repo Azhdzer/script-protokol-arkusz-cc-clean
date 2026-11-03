@@ -622,6 +622,15 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model, _cache_f
         print("    [UWAGA] Brak danych T/H ze srodowiska — pomijam obliczenie zakresow.")
         return None
 
+    return _zakresy_z_wzorow(app, dane_th, nr_pom, model, wb)
+
+
+def _zakresy_z_wzorow(app, dane_th, nr_pom, model, wb=None):
+    """
+    Zakresy warunkow srodowiskowych z par (T, RH) przez Wzory.xls (otwarty w `app`).
+    Wspolne dla kroku 3 i kroku 5 (swiadectwa z gotowych arkuszy). Wzory.xls wraca
+    do stanu sprzed obliczen (bez zapisu).
+    """
     # Find Wzory.xls in the currently open books
     wzory_wb = None
     for bk in app.books:
@@ -658,7 +667,7 @@ def _oblicz_warunki_srodowiskowe(app, wb, dane_zakladek, nr_pom, model, _cache_f
         app.api.DisplayAlerts = False
         app.api.AskToUpdateLinks = False
         app.api.EnableEvents = False
-        for _ws in wb.sheets:
+        for _ws in (wb or wzory_wb).sheets:
             _ws.api.Calculate()
         app.api.EnableEvents = True
         temp_min = ws_env.range("L137").value
@@ -2817,7 +2826,7 @@ def _nr_ewid_kopii(rekord, nazwa_xlsx):
 def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablon_word_mieszany, dane_s2, kopie_excel,
                       dane_zakladek, dane_kalibracji, nr_sw_poczatkowy,
                       dane_zakladek_per_kopia=None, klasa_wilg_per_kopia=None,
-                      warunki_per_kopia=None, wg_ewid=False):
+                      warunki_per_kopia=None, wg_ewid=False, folder_wyj=None):
     """
     Dla kazdej kopii Excel tworzy kopie dokumentu Word i wypelnia placeholdery:
       [data]             aktualna data ('DD miesiaca YYYY r.')
@@ -2898,7 +2907,7 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             continue
 
         nowa_nazwa_docx = generuj_nazwe_word(nr_sw, prefiks, rok)
-        sciezka_docx = os.path.join(folder, nowa_nazwa_docx)
+        sciezka_docx = os.path.join(folder_wyj or folder, nowa_nazwa_docx)   # krok 5: obok arkuszy
 
         if dane_zakladek_per_kopia is not None and j < len(dane_zakladek_per_kopia):
             zakladki_do_daty = dane_zakladek_per_kopia[j]
@@ -2912,6 +2921,9 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
                     if p.get("nazwa") in _domierzone]
         data_wzorcowania = _formatuj_daty_wzorcowania(daty_k4)
 
+        # Kopia zapasowa POPRZEDNIEGO swiadectwa — przed nadpisaniem go szablonem
+        # (wczesniej robiona po skopiowaniu, wiec zachowywala pusty szablon).
+        cc_kopia.kopia_przed_nadpisaniem(sciezka_docx)
         shutil.copy2(szablon_path, sciezka_docx)
         doc = DocxDocument(sciezka_docx)
 
@@ -2954,7 +2966,6 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             _zastap_tekst_w_dok(doc, placeholder,
                                 _formatuj_zakres_srodowiskowy(zakresy.get(klucz), miejsca))
 
-        cc_kopia.kopia_przed_nadpisaniem(sciezka_docx)
         doc.save(sciezka_docx)
         nazwy_word.append(nowa_nazwa_docx)
         print(f"  [Word {j + 1:>{len(str(n))}}/{n}] {nowa_nazwa_docx}")

@@ -190,6 +190,12 @@ KONTRAKT = {
         ("SR_PROTOKOL", "m.PROTOKOL", "prot_X.xlsx", "prot_X.xlsx", ""),
         ("SR_NADPISUJ", "m.NADPISUJ", "1", "True", "False"),
     ],
+    "generuj_swiadectwa": [
+        ("SW_FOLDER", "m.FOLDER_ARKUSZY", "Swiad_X",
+         os.path.join(BAZA, "Swiad_X"), os.path.join(BAZA, "Etap_5_ark_obl_to_word")),
+        ("SW_NR_SW", "m.NR_SW_POCZATKOWY", "2600", "2600", "1047"),
+        ("SW_NR_SW_WG_EWID", "m.NR_SW_WG_EWID", "1", "True", "False"),
+    ],
 }
 
 # Ustawienia, ktorych nie da sie sprawdzic przez stala modulu — dzialaja dopiero
@@ -217,7 +223,7 @@ class TestPokrycie(unittest.TestCase):
         """Kazda nazwa zmiennej musi pojawic sie w kodzie ktoregos ze skryptow."""
         zrodla = ""
         for plik in ("analizuj_excele.py", "generuj_obserwacje.py",
-                     "generuj_arkusze.py", "wypelnij_warunki.py", "app_gui.py"):
+                     "generuj_arkusze.py", "wypelnij_warunki.py", "generuj_swiadectwa.py", "app_gui.py"):
             with open(os.path.join(KORZEN, plik), encoding="utf-8") as f:
                 zrodla += f.read()
         for env in C.WG_ENV:

@@ -57,10 +57,10 @@ class TestBudowaOkna(BazaOkna):
 
     def test_ma_wszystkie_strony(self):
         # Przygotowanie, 1-3, 4 (warunki srodowiskowe), Zaawansowane
-        self.assertEqual(self.okno.stos.count(), 6)
+        self.assertEqual(self.okno.stos.count(), 7)
 
     def test_kroki_uruchamialne_maja_status(self):
-        self.assertEqual(set(self.okno.statusy), {"analiza", "obs", "ark", "srod"})
+        self.assertEqual(set(self.okno.statusy), {"analiza", "obs", "ark", "srod", "swiad"})
 
     def test_pola_pokrywaja_caly_rejestr(self):
         # CC_FOLDER ma wlasne miejsce w naglowku; OBS_TXT_FILES i ANL_PLIKI to
@@ -115,7 +115,7 @@ class TestBudowaOkna(BazaOkna):
         na tym potknely sie ustawienia zdjec, ktore trafily nie tam, gdzie
         podejmuje sie decyzje o ich zbieraniu.
         """
-        strony = {"przygotowanie": 0, "analiza": 1, "obs": 2, "ark": 3, "srod": 4}
+        strony = {"przygotowanie": 0, "analiza": 1, "obs": 2, "ark": 3, "srod": 4, "swiad": 5}
         # CC_FOLDER ma wlasne miejsce w naglowku, listy plikow to osobne widgety.
         bez_pola = {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI"}
         for u in C.USTAWIENIA:

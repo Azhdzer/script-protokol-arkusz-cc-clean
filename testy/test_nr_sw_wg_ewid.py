@@ -77,5 +77,28 @@ class TestSwiadectwaWgEwid(unittest.TestCase):
                                  "1049": "Swiadectwo 1049 dla U90337-41"})
 
 
+@unittest.skipIf(Document is None, "brak python-docx")
+class TestKopiaPoprzedniegoSwiadectwa(unittest.TestCase):
+
+    def test_kopia_ma_poprzednia_tresc_a_nie_szablon(self):
+        """Kopia robiona byla PO nadpisaniu szablonem — zachowywala pusty szablon."""
+        folder = nowa_piaskownica("kopia_swiadectwa")
+        szablon = Document()
+        szablon.add_paragraph("Swiadectwo [nr_sw]")
+        szablon.save(os.path.join(folder, "W.docx"))
+        stare = Document()
+        stare.add_paragraph("POPRZEDNIE SWIADECTWO")
+        stare.save(os.path.join(folder, "1047_233_LA_TH_2026.docx"))
+        with mock.patch.object(A, "_pz_mapa_arkusze", return_value={}), \
+                redirect_stdout(io.StringIO()):
+            A.utworz_kopie_word(folder, "W.docx", "W.docx", "W.docx", [{"F": "X"}],
+                                ["233_LA_TH_2026 - testo - 1"], [], [[]], 1047)
+        kopie = os.listdir(os.path.join(folder, "kopie_zapasowe"))
+        self.assertEqual(len(kopie), 1)
+        tekst = " ".join(p.text for p in Document(
+            os.path.join(folder, "kopie_zapasowe", kopie[0])).paragraphs)
+        self.assertIn("POPRZEDNIE SWIADECTWO", tekst)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -43,6 +43,8 @@ KROKI = [
     ("ark",           "3 · Arkusze i Word",  "Protokol  ->  kopie arkuszy Excel + swiadectwa Word"),
     ("srod",          "4 · Warunki środowiskowe",
      "Pom. nr 9  ->  Strona 3 protokolu: t i RH pomieszczenia dla kazdego punktu"),
+    ("swiad",         "5 · Świadectwa z arkuszy",
+     "Gotowe arkusze obliczeniowe z folderu  ->  swiadectwa Word (jak w kroku 3)"),
 ]
 
 PODSTAWOWY  = "podstawowy"
@@ -534,7 +536,24 @@ _WARUNKI = [
             "i chcesz przeliczyc wszystko od nowa."),
 ]
 
-USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE + _WARUNKI
+# ── KROK 5 — generuj_swiadectwa.py ───────────────────────────────────────────
+# Szablony Word, podpisy i czujnik pomieszczenia — wspolne z krokiem 3/4.
+_SWIADECTWA = [
+    _U("SW_FOLDER", "Folder z arkuszami obliczeniowymi", "folder", "Etap_5_ark_obl_to_word",
+       "swiad", grupa="Dane wejsciowe",
+       opis="Tu wkladasz gotowe arkusze obliczeniowe (kopie z kroku 3, uzupelnione), "
+            "a do warunkow srodowiskowych — takze protokol(y) z pomiarow i ewentualnie PZ. "
+            "Swiadectwa powstaja w tym samym folderze."),
+    _U("SW_NR_SW", "Numer pierwszego swiadectwa", "calk", 1047, "swiad",
+       grupa="Numeracja", minimum=1, maksimum=99999,
+       opis="Kolejne arkusze (wg zlecenia i numeru przyrzadu z nazwy pliku) dostaja "
+            "numery rosnaco."),
+    _U("SW_NR_SW_WG_EWID", "Numeruj swiadectwa wg nr ewidencyjnego", "flaga", False, "swiad",
+       grupa="Numeracja",
+       opis="Kolejnosc numerow wg nr ewidencyjnego z PZ (jak w kroku 3)."),
+]
+
+USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE + _WARUNKI + _SWIADECTWA
 WG_ENV = {u.env: u for u in USTAWIENIA}
 
 

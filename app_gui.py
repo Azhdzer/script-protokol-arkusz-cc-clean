@@ -60,6 +60,8 @@ URUCHAMIALNE = {
     # Osobny krok, uruchamiany wlasnym przyciskiem
     # na swojej stronie, gdy trzeba dopisac warunki do gotowego protokolu.
     "srod":    ("4 · Warunki środowiskowe", "warunki", "wypelnij_warunki.py"),
+    # Konczy obieg dla arkuszy zrobionych bez Worda i uzupelnionych pozniej.
+    "swiad":   ("5 · Świadectwa z arkuszy", "swiadectwa", "generuj_swiadectwa.py"),
 }
 
 # Ustawienia kroku 2 pokazywane WEWNATRZ karty "Dane wejsciowe", tuz pod lista
@@ -270,6 +272,7 @@ class Okno(QMainWindow):
         self.stos.addWidget(self._strona_obserwacja())
         self.stos.addWidget(self._strona_arkusze())
         self.stos.addWidget(self._strona_warunki())
+        self.stos.addWidget(self._strona_swiadectwa())
         self.stos.addWidget(self._strona_zaawansowane())
         return self.stos
 
@@ -564,6 +567,13 @@ class Okno(QMainWindow):
         lay.addStretch(1)
         return strona
 
+    # ── strona: swiadectwa z gotowych arkuszy ────────────────────────────
+    def _strona_swiadectwa(self):
+        strona, lay = self._strona_kroku("swiad")
+        self._dodaj_pola(lay, C.dla_kroku("swiad", C.PODSTAWOWY))
+        lay.addStretch(1)
+        return strona
+
     # ── strona: zaawansowane ─────────────────────────────────────────────
     def _strona_zaawansowane(self):
         scroll, lay = self._przewijalna()
@@ -741,6 +751,21 @@ class Okno(QMainWindow):
                 if nazwa and not os.path.exists(os.path.join(self.folder, nazwa)):
                     p.append(f"Brak pliku linkowanego w folderze roboczym: {nazwa} "
                              f"(formuly kalibracyjne moga sie nie policzyc)")
+        if "swiad" in kroki:
+            fold = str(self.wartosci.get("SW_FOLDER", "Etap_5_ark_obl_to_word"))
+            pelny = fold if os.path.isabs(fold) else os.path.join(self.folder, fold)
+            if not os.path.isdir(pelny):
+                p.append(f"Brak folderu z arkuszami (krok 5): {pelny}")
+            else:
+                pliki = [n for n in os.listdir(pelny) if n.lower().endswith((".xlsx", ".xlsm"))
+                         and not n.startswith("~$")]
+                if not any("protok" not in n.lower() for n in pliki):
+                    p.append(f"Folder z arkuszami (krok 5) nie zawiera arkuszy: {pelny}")
+                elif not any("protok" in n.lower() for n in pliki):
+                    p.append("W folderze kroku 5 nie ma protokolu — swiadectwa beda BEZ "
+                             "warunkow srodowiskowych.")
+                if any(n.startswith("~$") for n in os.listdir(pelny)):
+                    p.append("Ktorys plik w folderze kroku 5 jest otwarty w Excelu — zamknij go.")
         if "srod" in kroki:
             pole = self.pola.get("SR_PROTOKOL")
             if pole and pole.brak_pliku():
