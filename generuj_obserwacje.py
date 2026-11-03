@@ -3528,6 +3528,15 @@ def _serial_przetwornika(pz_lista):
     return seriale.pop() if len(seriale) == 1 else ''
 
 
+def _uwagi_bez_tresci(ws2, n_przyrzadow, fill_grey):
+    """Puste 'Uwagi' (kol. P) przyrzadu -> '-' na szarym tle, jak inne pola bez danych."""
+    for w in range(WIERSZ_1_PRZYRZADU_S2, WIERSZ_1_PRZYRZADU_S2 + n_przyrzadow):
+        kom = ws2.cell(row=w, column=16)
+        if kom.value is None or not str(kom.value).strip():
+            kom.value = '-'
+            kom.fill = fill_grey
+
+
 def _wypelnij_przetworniki_strona2(ws2, uzyte, tabela=None):
     """
     Wiersz przetwornika na Stronie 2: dane przyrzadu jak zwykle (z PZ), ale
@@ -3726,11 +3735,20 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
             for src_ci, dst_col in zip(src_indices, dst_cols):
                 raw  = r[src_ci] if src_ci < len(r) else ''
                 cell = ws3.cell(row=r0 + row_off, column=dst_col)
-                if str(raw).strip().lower() == 'brak':
+                if str(raw).strip().lower() in ('brak', ''):
+                    # Czujnik bez danych (np. multimetr bez podlaczonego czujnika,
+                    # higrometr bez t) — szare jak w recznie robionych protokolach.
                     cell.value = None
                     cell.fill  = FILL_GREY
                 else:
-                    cell.value = to_value(raw) if raw else None
+                    cell.value = to_value(raw)
+        # Cala strefa czujnikow wzorcowych (multimetry + higrometr: K:P w CC-04, K:N w CC) —
+        # takze kolumny, do ktorych nic nie piszemy (np. t higrometru): puste -> szare.
+        for kol in range(11, 17 if obs_type == 'CC04' else 15):
+            for row_off in range(BLOCK_SIZE):
+                cell = ws3.cell(row=r0 + row_off, column=kol)
+                if cell.value is None:
+                    cell.fill = FILL_GREY
 
         # D i E z pierwszego wiersza punktu → I(r0) i J(r0)
         ws3.cell(row=r0, column=9).value  = (to_value(row_first[3])
@@ -3765,12 +3783,16 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
                 _col_rh = _start_col + _k * 2 + 1
                 for row_off in range(BLOCK_SIZE):
                     ws3.cell(row=r0 + row_off, column=_col_rh).fill = FILL_GREY
-            if obs_type == 'CC04':
-                ws3.cell(row=r0, column=17).value = '-'   # Q
-                ws3.cell(row=r0, column=18).value = '-'   # R
-            else:
-                ws3.cell(row=r0, column=15).value = '-'   # O  (CC)
-                ws3.cell(row=r0, column=16).value = '-'   # P  (CC)
+
+        # Dl. rurki i forma kondensacji (Q/R w CC-04, O/P w CC) dotycza higrometru S8000:
+        # punkt tylko-temperatura albo higrometr bez odczytow tdp -> '-' na szarym tle.
+        kol_rurka, kol_tdp = (17, 15) if obs_type == 'CC04' else (15, 13)
+        if rh_zero or all(ws3.cell(row=r0 + k, column=kol_tdp).value is None
+                          for k in range(BLOCK_SIZE)):
+            for kol in (kol_rurka, kol_rurka + 1):
+                ws3.cell(row=r0, column=kol).value = '-'
+                for row_off in range(BLOCK_SIZE):
+                    ws3.cell(row=r0 + row_off, column=kol).fill = FILL_GREY
 
         # Data i czasy z kolumny A obserwacji
         start_dt = _s_to_dt(row_first[0])
@@ -3925,6 +3947,7 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
                               nr_zlecenia=measurement_id)
         _wypelnij_przetworniki_strona2(
             proto_wb['Strona 2'], uzyte, pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW))
+        _uwagi_bez_tresci(proto_wb['Strona 2'], len(uzyte), FILL_GREY)
         # Data pomiaru = dzien OSTATNIEGO punktu (wtedy pomiary zostaly zakonczone).
         _dt_ost = _s_to_dt(rows[rep_groups[-1][0][-1]][0]) if rep_groups else None
         wypelnij_podpisy_strona2(proto_wb['Strona 2'],

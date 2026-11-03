@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 818 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 824 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**818 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**824 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Puste pola protokołu na szaro:** Strona 2 — „Uwagi” bez treści dostają `-` na szarym tle; Strona 3 — puste
+  komórki czujników wzorcowych (multimetry, t higrometru: K:P w CC-04, K:N w CC) szare, a „Dł. rurki tefl.”
+  i „Forma kondensacji” w punkcie tylko-temperatura albo bez odczytów tdp (S8000 wyłączony) → `-` na szarym tle.
+- **Nr ewidencyjne w nawiasach w PZ:** `nr fabr.: 36668832 (H1), 36679283 (H2), …` (PZ 232, 80 szt.) → nr ewid.
+  H1, H2… Krótki kod z cyfrą bez spacji; dopisek `(kanał pomiarowy nr: 1)` zostaje dopiskiem, etykieta
+  `nr ewid.:` ma pierwszeństwo. Sprawdzone na 272 PZ z serwera — zmienił się tylko PZ 232.
 - **Ponad 10 przyrządów na Stronie 3:** nowa para kolumn to kopia przedostatniej pary wstawiana PRZED ostatnią
   (jak ręcznie), a nie za nią. Excel sam rozciąga scalone nagłówki „Wskazania” / „Przyrządy wzorcowane”
   (wiersze 8–9), obszar wydruku i podział strony (niebieska linia); ostatnia para z grubą ramką zostaje na końcu,

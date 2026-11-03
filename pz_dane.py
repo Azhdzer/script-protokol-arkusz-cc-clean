@@ -211,6 +211,25 @@ _RE_CZUJNIK_SPLIT = re.compile(
 _RE_DOPISEK = re.compile(r'\s*\([^)]*\)\s*$')
 
 
+# Krotki kod w nawiasie za numerem = nr ewidencyjny: 'nr fabr.: 36668832 (H1), 36679283 (H2)'
+# (PZ 232). Musi miec cyfre i byc bez spacji — '(kanal pomiarowy nr: 1)' zostaje dopiskiem.
+_RE_EWID_W_NAWIASIE = re.compile(r'\(\s*([A-Za-z0-9][\w./-]{0,19})\s*\)\s*$')
+
+
+def _ewidencyjne_z_nawiasow(part):
+    """Nr ewidencyjne z nawiasow za numerami fabrycznymi, rownolegle do _wytnij_serial_liste."""
+    m = _RE_FABR.search(part) or _RE_NR.search(part)
+    if not m:
+        return []
+    wynik = []
+    for s in m.group(1).split(','):
+        if not _RE_DOPISEK.sub('', s).strip():
+            continue
+        e = _RE_EWID_W_NAWIASIE.search(s)
+        wynik.append(e.group(1) if e and re.search(r'\d', e.group(1)) else "")
+    return wynik
+
+
 def _wytnij_serial_liste(part):
     """Zwraca liste serial-i z czesci 'obiekt' (obsluguje kilka po przecinku)."""
     m = _RE_FABR.search(part) or _RE_NR.search(part)
@@ -325,6 +344,10 @@ def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia, serial_z_naglowka=False
         if m:
             serials = [m.group(1)]
     nr_ewid = _numer_ewidencyjny(obiekt)
+    # Bez etykiety 'nr ewid.' — nr ewidencyjne w nawiasach za numerami fabrycznymi.
+    z_nawiasow = _ewidencyjne_z_nawiasow(obiekt) if not nr_ewid else []
+    if len(z_nawiasow) != len(serials):
+        z_nawiasow = []
 
     czuj_typ, czuj_wytworca = _parsuj_pole(czujnik) if czujnik else ("", "")
     czuj_serials = _wytnij_serial_liste(czujnik) if czujnik else []
@@ -332,9 +355,9 @@ def _parsuj_bullet(fragment, typ, wytworca, nr_zlecenia, serial_z_naglowka=False
 
     return [PZPrzyrzad(
         nr_zlecenia=nr_zlecenia, wytworca=wytworca, typ=typ,
-        nr_fabr=_oczysc(s), nr_ewid=nr_ewid,
+        nr_fabr=_oczysc(s), nr_ewid=(z_nawiasow[i] if z_nawiasow else "") or nr_ewid,
         czuj_wytworca=czuj_wytworca, czuj_typ=czuj_typ, czuj_nr_fabr=czuj_serial,
-    ) for s in (serials or [""])]
+    ) for i, s in enumerate(serials or [""])]
 
 
 # Wskaznik dopisany PO obiekcie:
@@ -497,6 +520,10 @@ def _parsuj_wpis(wpis, nr_zlecenia):
 
     nr_ewid = _numer_ewidencyjny(obiekt)
     serials = _wytnij_serial_liste(obiekt)
+    # Bez etykiety 'nr ewid.' — nr ewidencyjne w nawiasach za numerami fabrycznymi.
+    z_nawiasow = _ewidencyjne_z_nawiasow(obiekt) if not nr_ewid else []
+    if len(z_nawiasow) != len(serials):
+        z_nawiasow = []
 
     czuj_typ, czuj_wytworca = _parsuj_pole(czujnik) if czujnik else ("", "")
     czuj_serials = _wytnij_serial_liste(czujnik) if czujnik else []
@@ -509,9 +536,9 @@ def _parsuj_wpis(wpis, nr_zlecenia):
 
     return [PZPrzyrzad(
         nr_zlecenia=nr_zlecenia, wytworca=wytworca, typ=typ,
-        nr_fabr=_oczysc(s), nr_ewid=nr_ewid,
+        nr_fabr=_oczysc(s), nr_ewid=(z_nawiasow[i] if z_nawiasow else "") or nr_ewid,
         czuj_wytworca=czuj_wytworca, czuj_typ=czuj_typ, czuj_nr_fabr=czuj_serial,
-    ) for s in (serials or [""])]
+    ) for i, s in enumerate(serials or [""])]
 
 
 # Pole UZYTKOWNIK / USER (opcjonalne) — blok adresowy do '[użytkownik]' w Word.
