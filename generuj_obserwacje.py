@@ -82,6 +82,9 @@ MIN_OKNO_ANALIZY      = C.minuty("OBS_MIN_OKNO", datetime.timedelta(minutes=15))
 # zaczyna juz przechodzic do kolejnego punktu, a 15-minutowe rozrzuty lapia
 # probki zza granicy — odczyty wychodza rozmazane.
 ODSTEP_OD_KONCA_PUNKTU = C.minuty("OBS_ODSTEP_KONIEC", datetime.timedelta(minutes=2))
+# Korekta nastawy T w trakcie punktu (37 -> 37,4, by lepiej trafic w punkt) nie zaczyna
+# nowego punktu, gdy miesci sie w tej tolerancji od nastawy poczatkowej. 0 = kazda zmiana.
+TOL_KOREKTY_NASTAWY_T = C.liczba("OBS_KOREKTA_T", 0.5)
 # zakres T [°C] charakterystyczny dla suszenia
 SUSZENIE_T_ZAKRES = (C.liczba("OBS_SUSZ_T_MIN", 21.0), C.liczba("OBS_SUSZ_T_MAX", 27.0))
 SUSZENIE_RH_MAX   = C.liczba("OBS_SUSZ_RH_MAX", 50.0)  # max RH [%] — ponizej tej wartosci punkt moze byc suszeniem
@@ -1376,7 +1379,8 @@ def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
 
     def _w_widelkach(ki):
         t_odcz = data[ki][idx_t_odcz]
-        if seg_t is None or t_odcz is None or abs(seg_t - t_odcz) > prog_temp:
+        t_zad = data[ki][1]                   # nastawa w TEJ chwili (po korekcie operatora)
+        if t_zad is None or t_odcz is None or abs(t_zad - t_odcz) > prog_temp:
             return False
         if temp_only:
             return True
@@ -1398,7 +1402,8 @@ def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
     entry_dt = None
     for ki in range(i, j):
         t_odcz = data[ki][idx_t_odcz]         # Todczytana (odczyt komory)
-        if seg_t is None or t_odcz is None or abs(seg_t - t_odcz) > prog_temp:
+        t_zad = data[ki][1]                   # nastawa w tej chwili
+        if t_zad is None or t_odcz is None or abs(t_zad - t_odcz) > prog_temp:
             continue                          # temperatura poza widelkami
         if temp_only:
             entry_dt = data[ki][0]            # sama temperatura w widelkach
@@ -1454,11 +1459,13 @@ def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
             i += 1
             continue
 
-        # Koniec bieżącego segmentu stabilnego (stałe B i C)
+        # Koniec bieżącego segmentu stabilnego (stałe B i C). Korekta nastawy T o kilka
+        # dziesiatych (37 -> 37,3 -> 37,4, zeby lepiej trafic w punkt) to nadal ten sam
+        # punkt — liczona od nastawy na poczatku punktu. Zmiana RH zawsze konczy punkt.
         j = i + 1
         while j < n:
             b, c = data[j][1], data[j][2]
-            if b != seg_b or c != seg_c:
+            if c != seg_c or b is None or abs(b - seg_b) > TOL_KOREKTY_NASTAWY_T + 1e-9:
                 break
             j += 1
 
@@ -1714,7 +1721,8 @@ def _process_segment(ws, data, start_idx, end_idx, seg_num, file_type='CC',
     """
     t0 = data[start_idx][0]
     t1 = data[end_idx - 1][0]
-    b  = data[start_idx][1]
+    # Nastawa z konca punktu — po ewentualnej korekcie operatora (37 -> 37,4).
+    b  = data[end_idx - 1][1]
     c  = data[start_idx][2]
     print(f"  Segment {seg_num}: Excel row {2+start_idx}–{2+end_idx-1}  "
           f"T={b} RH={c}  ({t0} – {t1})")

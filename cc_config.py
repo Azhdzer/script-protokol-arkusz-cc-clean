@@ -248,6 +248,11 @@ _OBSERWACJA = [
        poziom=ZAAWANSOWANY, grupa="Okno analizy", przyrostek=" °C",
        minimum=0.0, maksimum=20.0, krok_wart=0.1,
        opis="|T odczytana - T zadana| ponizej tej wartosci = komora weszla w nastawe."),
+    _U("OBS_KOREKTA_T", "Korekta nastawy T w punkcie", "liczba", 0.5, "obs",
+       grupa="Okno analizy", przyrostek=" °C", minimum=0.0, maksimum=5.0, krok_wart=0.1,
+       opis="Zmiana nastawy temperatury w trakcie punktu (np. 37 -> 37,4, zeby lepiej "
+            "trafic w punkt) do tej wartosci to nadal ten sam punkt. Zmiana nastawy RH "
+            "zawsze zaczyna nowy punkt. 0 = kazda zmiana nastawy to nowy punkt."),
     _U("OBS_PROG_RH", "Widelki wejscia — wilgotnosc", "liczba", 3.0, "obs",
        poziom=ZAAWANSOWANY, grupa="Okno analizy", przyrostek=" %",
        minimum=0.0, maksimum=100.0,
