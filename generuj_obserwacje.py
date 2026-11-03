@@ -3225,12 +3225,14 @@ def _insert_blocks_via_excel(filepath, sheet_name, block_start, block_size, n_ex
 def _rozszerz_kolumny_przyrzadow(filepath, sheet_name, start_col, potrzebne):
     """
     Dokłada PARY kolumn przyrzadow w Stronie 3, gdy przyrzadow jest wiecej niz w szablonie
-    (szablon CC ma 10 par: Q/R … AI/AJ). Kopiuje OSTATNIA pare (np. AI:AJ) i wstawia ja
-    z przesunieciem w PRAWO — tak jak robi to operator recznie, wiec zachowane sa scalenia,
-    formatowanie, obramowania i naglowek 'Przyrzady wzorcowane' (rozciaga sie automatycznie).
+    (szablon CC ma 10 par: Q/R … AI/AJ). Kopiuje PRZEDOSTATNIA pare i wstawia ja PRZED
+    ostatnia — tak jak operator recznie. Wstawka lezy wewnatrz tabeli, wiec Excel sam
+    rozciaga scalone naglowki 'Wskazania' / 'Przyrzady wzorcowane' (wiersze 8-9), obszar
+    wydruku i podzial strony (niebieska linia), a ostatnia para z gruba ramka zostaje na
+    koncu. Wstawianie ZA ostatnia para zostawialo naglowki i obszar wydruku na 10. parze.
 
-    Po wstawieniu ustawia w kazdej nowej parze:
-      - wiersz 10: numer przyrzadu (11, 12, ...),
+    Po wstawieniu ustawia:
+      - wiersz 10: numery przyrzadow 1..N (kopie maja numer wzoru),
       - wiersz 12: formule ='Strona 2'!$E$<kolejny wiersz przyrzadu> (wzor z ostatniej pary).
     Formuly w wierszu 18 (=CONCATENATE("t",AI10)) sa relatywne — przeliczaja sie same.
 
@@ -3282,19 +3284,21 @@ def _rozszerz_kolumny_przyrzadow(filepath, sheet_name, start_col, potrzebne):
             print('  [Excel COM] Nie rozpoznano par kolumn przyrzadow — nie dokladam.')
             return 0
 
-        # 1) Dokladanie brakujacych par: kopiuj OSTATNIA pare i wstaw w prawo.
+        # 1) Dokladanie brakujacych par: kopia PRZEDOSTATNIEJ pary wstawiana przed ostatnia.
         dodane = 0
         c_last = start_col + (obecne - 1) * 2
         for nr in range(obecne + 1, potrzebne + 1):
-            src = f"{get_column_letter(c_last)}:{get_column_letter(c_last + 1)}"
-            dst = f"{get_column_letter(c_last + 2)}:{get_column_letter(c_last + 3)}"
+            c_wzor = c_last - 2 if obecne > 1 else c_last
+            src = f"{get_column_letter(c_wzor)}:{get_column_letter(c_wzor + 1)}"
+            dst = f"{get_column_letter(c_last)}:{get_column_letter(c_last + 1)}"
             ws.Columns(src).Copy()
             ws.Columns(dst).Insert(Shift=-4161)      # xlShiftToRight
             xl.CutCopyMode = False
-            c_new = c_last + 2
-            ws.Cells(10, c_new).Value = nr           # numer przyrzadu w naglowku
-            c_last = c_new
+            c_last += 2                              # ostatnia para przesunela sie w prawo
             dodane += 1
+        if dodane:
+            for nr in range(1, potrzebne + 1):       # numery przyrzadow w naglowku
+                ws.Cells(10, start_col + (nr - 1) * 2).Value = nr
 
         # 2) Naglowek pary (wiersz 12) = nr fabryczny przyrzadu z tabeli na Stronie 2.
         #    Szablon ma te komorki puste, wiec wpisujemy je dla WSZYSTKICH uzywanych par
