@@ -96,6 +96,24 @@ class TestNazwy(unittest.TestCase):
     def test_serial_ze_swiezego_pliku_bez_zmian(self):
         self.assertEqual(G._serial_z_wyniku("10705098_wynik.xlsx"), "10705098")
 
+    def test_slowo_pomiar_przed_numerem(self):
+        """Eksport Lascar: 'pomiar_000007263.xlsx' — numer bez slowa (inaczej brak w PZ)."""
+        self.assertEqual(G._serial_z_wyniku("pomiar_000007263_wynik.xlsx"), "000007263")
+        self.assertEqual(G._serial_z_wyniku("pomiar_2.xlsx"), "2")
+        self.assertEqual(G._serial_z_wyniku("pomiarowka.xlsx"), "pomiarowka")
+
+    def test_prefiks_kilku_zlecen(self):
+        """Przyrzad spoza PZ dostaje numer pomiaru '233, 240' — dalej rozpoznawany."""
+        n = "233, 240_LA_TH_2026_000007263_opracowanie danych.xlsx"
+        self.assertTrue(G._RE_PLIK_OPRACOWANIA.match(n))
+        self.assertEqual(G._serial_z_wyniku(n), "000007263")
+
+    def test_plik_opracowany_dwa_razy(self):
+        """Stary blad: ponowny krok 2 doklejal prefiks drugi raz."""
+        self.assertEqual(G._serial_z_wyniku(
+            "233, 240_LA_TH_2026_233, 240_LA_TH_2026_pomiar_000007263_opracowanie danych"
+            "_opracowanie danych.xlsx"), "000007263")
+
     def test_zestawienie_rozpoznawane_w_obu_postaciach(self):
         for n in ("zestawienie_pomiarow.xlsx", "221_LA_TH_2026_zestawienie_pomiarow.xlsx"):
             with self.subTest(nazwa=n):

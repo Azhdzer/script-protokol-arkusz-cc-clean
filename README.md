@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 843 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 846 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**843 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**846 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,10 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Nr fabryczny z nazwy `pomiar_000007263.xlsx`** (eksport Lascar EasyLog): słowo opisowe na początku nazwy
+  (`pomiar_`, `dane_`, `eksport_`…) jest odcinane — wcześniej numer nie pasował do PZ i Strona 2 zostawała pusta.
+  Plik opracowania z prefiksem kilku zleceń (`233, 240_LA_TH_2026_…`) jest rozpoznawany, więc ponowny krok 2
+  nie dokleja już prefiksu drugi raz (a plik nazwany tak podwójnie wraca do właściwej nazwy).
 - **Odstęp reprezentantów od zmiany nastawy: 5 min** (było 2, `OBS_ODSTEP_KONIEC`): zegary przyrządów
   spóźniają się czasem o ~2 min względem komory, więc okno kończące się 2 min przed zmianą łapało u nich
   już przejście do kolejnego punktu. Zmiana nastawy o 14:13 → ostatni reprezentant najpóźniej 14:08.

@@ -85,8 +85,13 @@ def normalizuj_serial(s):
 
 # Plik wynikow po opracowaniu: '221_LA_TH_2026_10705098_opracowanie danych.xlsx'.
 PRZYROSTEK_OPRACOWANIA = "_opracowanie danych"
+# Prefiks bywa wielozleceniowy ('233, 240_LA_TH_2026') — gdy przyrzadu nie ma w PZ,
+# plik dostaje numer pomiaru. Bez tego plik nie byl rozpoznawany jako opracowany
+# i kolejny przebieg kroku 2 doklejal prefiks drugi raz.
 _RE_PLIK_OPRACOWANIA = re.compile(
-    r'^(?P<prefiks>\d+_LA_TH_\d{4})_(?P<serial>.+?)_opracowanie danych\.xlsx$', re.I)
+    r'^(?P<prefiks>\d+(?:\s*,\s*\d+)*_LA_TH_\d{4})_(?P<serial>.+?)_opracowanie danych\.xlsx$',
+    re.I)
+_RE_PREFIKS_ZLECENIA = re.compile(r'^\d+(?:\s*,\s*\d+)*_LA_TH_\d{4}_', re.I)
 
 # Data/godzina doklejona do nazwy pliku przez program logujacy — na KONCU (LogSoft):
 #   '1970325 2026-07-31 12.19.00_wynik.xlsx'  ->  serial '1970325'
@@ -96,6 +101,10 @@ _RE_TS_W_NAZWIE = re.compile(
 #   '2026-09-30-07-15-08 85517778_wynik.xlsx'  -> '85517778'
 _RE_TS_NA_POCZATKU = re.compile(
     r'^\d{4}-\d{2}-\d{2}(?:[\s_T-]+\d{1,2}[.:_-]\d{2}(?:[.:_-]\d{2})?)?[\s_-]*')
+# ...albo slowo opisowe na POCZATKU (eksport Lascar EasyLog i podobne):
+#   'pomiar_000007263.xlsx' -> '000007263'. Tylko gdy dalej stoi cos z cyfra.
+_RE_SLOWO_NA_POCZATKU = re.compile(
+    r'^(?:pomiary?|dane|eksport|export|measurement|data)[\s_-]+(?=\S*\d)', re.I)
 
 
 def serial_z_nazwy_pliku(fname):
@@ -107,13 +116,24 @@ def serial_z_nazwy_pliku(fname):
       '2026-09-30-07-15-08 85517778.csv'                 -> '85517778'
       '221_LA_TH_2026_10705098_opracowanie danych.xlsx'  -> '10705098'
       '37025105_2_wynik.xlsx'                            -> '37025105'
+      'pomiar_000007263.xlsx'                            -> '000007263'
+      '233, 240_LA_TH_2026_000007263_opracowanie danych.xlsx' -> '000007263'
     Data/godzine programy loggerow dokleja w roznych miejscach — LogSoft na
     KONCU, eksport Testo na POCZATKU. Koncowka '_2', '_3' to numer KOLEJNEGO
     pomiaru tego samego przyrzadu, a nie czesc numeru fabrycznego.
     """
     m_opr = _RE_PLIK_OPRACOWANIA.match(os.path.basename(str(fname)))
     if m_opr:
-        return m_opr.group('serial')
+        # Plik opracowany drugi raz (stary blad prefiksu wielozleceniowego):
+        # '233, 240_LA_TH_2026_233, 240_LA_TH_2026_pomiar_X_opracowanie danych_opracowanie danych'
+        serial = m_opr.group('serial')
+        while True:
+            krotszy = re.sub(r'(?:_opracowanie danych)+$', '',
+                             _RE_PREFIKS_ZLECENIA.sub('', serial), flags=re.I)
+            if krotszy == serial or not krotszy:
+                break
+            serial = krotszy
+        return _RE_SLOWO_NA_POCZATKU.sub('', serial).strip() or serial
     base = os.path.splitext(os.path.basename(str(fname)))[0]
     base = re.sub(r'_wynik$', '', base, flags=re.I).strip()
     base = _RE_TS_W_NAZWIE.sub('', base).strip()
@@ -122,6 +142,7 @@ def serial_z_nazwy_pliku(fname):
     bez_przedrostka = _RE_TS_NA_POCZATKU.sub('', base).strip()
     if bez_przedrostka:
         base = bez_przedrostka
+    base = _RE_SLOWO_NA_POCZATKU.sub('', base).strip() or base
     # Dopisek operatora z nr ewidencyjnym: '40125624_LOG 66' (Q/LOG/66) nie jest czescia numeru.
     base = re.sub(r'[\s_-]+LOG[\s_-]*\d+$', '', base, flags=re.I) or base
     bez_powtorki = re.sub(r'_\d{1,2}$', '', base)
