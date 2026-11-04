@@ -2167,6 +2167,15 @@ def _formatuj_daty_wzorcowania(daty_raw):
     return ", ".join(czesci)
 
 
+_FRAGMENTY_NR_EWID = (", nr ewid.: [nr_ewid]", ", nr ewid.:\xa0[nr_ewid]",
+                      ",\xa0nr ewid.: [nr_ewid]", ", nr ewid.:[nr_ewid]")
+
+
+def _bez_nr_ewid(nr_ewid):
+    """Pusty nr ewidencyjny — '-' to szara kreska pustego pola Strony 2."""
+    return str(nr_ewid or "").strip() in ("", "-", "–", "—")
+
+
 def _zastap_tekst_w_dok(doc, placeholder, value):
     """
     Zamienia placeholder we wszystkich paragrafach, tabelach i naglowkach/stopkach
@@ -2929,6 +2938,12 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
         cc_kopia.kopia_przed_nadpisaniem(sciezka_docx)
         shutil.copy2(szablon_path, sciezka_docx)
         doc = DocxDocument(sciezka_docx)
+
+        # Brak nr ewidencyjnego (pusty albo '-' ze Strony 2): caly fragment
+        # ', nr ewid.: [nr_ewid]' znika, jak [nr_ewid_tekst] w szablonach przetwornikow.
+        if _bez_nr_ewid(nr_ewid_v):
+            for fragment in _FRAGMENTY_NR_EWID:
+                _zastap_tekst_w_dok(doc, fragment, "")
 
         for placeholder, wartosc in {
             "[data]":             data_str,

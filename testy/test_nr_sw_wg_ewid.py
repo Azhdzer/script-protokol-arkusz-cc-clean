@@ -87,6 +87,38 @@ class TestSwiadectwaWgEwid(unittest.TestCase):
 
 
 @unittest.skipIf(Document is None, "brak python-docx")
+class TestBezNrEwid(unittest.TestCase):
+    """Brak nr ewid. w PZ -> w opisie obiektu nie ma ', nr ewid.: -'."""
+
+    def swiadectwo(self, ewid):
+        folder = nowa_piaskownica("bez_nr_ewid")
+        doc = Document()
+        p = doc.add_paragraph()
+        # podzial na runy jak w prawdziwym szablonie 'zakres.docx'
+        for t in ("Termohigrometr (rejestrator) typ: ", "[typ]", ", nr fabr.: ", "[nr_fabr]",
+                  ",", " nr ewid.:", " [nr_ewid],", " ", "wytwórca: ", "[wytworca]", "."):
+            p.add_run(t)
+        doc.save(os.path.join(folder, "W.docx"))
+        with mock.patch.object(A, "_pz_mapa_arkusze", return_value={}), \
+                redirect_stdout(io.StringIO()):
+            nazwy = A.utworz_kopie_word(folder, "W.docx", "W.docx", "W.docx",
+                                        [{"F": ewid, "B": "Lascar", "D": "EL-USB-2-LCD"}],
+                                        ["240_LA_TH_2026 - Wzór - 1 - 000007263.xlsx"], [], [[]], 1)
+        return Document(os.path.join(folder, nazwy[0])).paragraphs[0].text
+
+    def test_kreska_usuwa_fragment(self):
+        self.assertEqual(self.swiadectwo("-"),
+                         "Termohigrometr (rejestrator) typ: EL-USB-2-LCD, nr fabr.: 000007263, "
+                         "wytwórca: Lascar.")
+
+    def test_pusty_usuwa_fragment(self):
+        self.assertNotIn("ewid", self.swiadectwo(""))
+
+    def test_z_numerem_bez_zmian(self):
+        self.assertIn(", nr ewid.: U90337-18, wytwórca", self.swiadectwo("U90337-18"))
+
+
+@unittest.skipIf(Document is None, "brak python-docx")
 class TestKopiaPoprzedniegoSwiadectwa(unittest.TestCase):
 
     def test_kopia_ma_poprzednia_tresc_a_nie_szablon(self):
