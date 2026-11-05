@@ -2270,6 +2270,29 @@ def nazwa_pliku_zestawienia(prefiks):
     return f"{prefiks}_{ZESTAWIENIE_WYNIKI_NAZWA}"
 
 
+_ROZSZERZENIA_LOGOW = (".csv", ".xls", ".xlsx", ".txt", ".pdf", ".log")
+
+
+def logi_bez_wyniku(pz_mapa):
+    """
+    Logi z folderu kroku 1, ktorych przyrzad jest w PZ, a w 'wyniki' nie ma jego pliku.
+    Lista plikow kroku 1 pamieta poprzedni wybor, a nowe pliki sa niezaznaczone —
+    przyrzad wypadal z protokolu po cichu (zlecenie 232: 14 logow, 11 w protokole).
+    """
+    if not pz_mapa or not os.path.isdir(FOLDER_LOGOW):
+        return []
+    try:
+        wyniki = {pz_dane.normalizuj_serial(_serial_z_wyniku(f))
+                  for f in os.listdir(WYNIKI_FOLDER) if not f.startswith('~$')}
+    except OSError:
+        wyniki = set()
+    return sorted(
+        n for n in os.listdir(FOLDER_LOGOW)
+        if n.lower().endswith(_ROZSZERZENIA_LOGOW) and not n.startswith('~$')
+        and pz_dane.normalizuj_serial(pz_dane.serial_z_nazwy_pliku(n)) in pz_mapa
+        and pz_dane.normalizuj_serial(pz_dane.serial_z_nazwy_pliku(n)) not in wyniki)
+
+
 def _pliki_wynikow():
     """
     Pliki wynikow POJEDYNCZYCH przyrzadow z WYNIKI_FOLDER (posortowane).
@@ -4280,6 +4303,11 @@ def main():
     # trafia do protokolu (jeden wsad komory obsluguje czesto kilka zlecen).
     punkty_pz = pz_dane.wczytaj_punkty(PZ_FOLDER) if WYBIERAJ_PUNKTY_WG_PZ else []
     zest = pz_dane.wczytaj_zestawienie(ZESTAWIENIE_PLIK)
+    bez_wyniku = logi_bez_wyniku(pz_mapa)
+    if bez_wyniku:
+        print(f"  [UWAGA] {len(bez_wyniku)} log(i) przyrzadow z PZ nie ma wyniku w '{WYNIKI_FOLDER}' "
+              f"— nie przeszly przez krok 1 (niezaznaczone?) i NIE trafia do protokolu: "
+              f"{', '.join(bez_wyniku)}")
 
     print(f"Numer pomiaru : {measurement_id}")
     if len(txt_files) == 1:

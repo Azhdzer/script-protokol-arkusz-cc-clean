@@ -723,6 +723,13 @@ class Okno(QMainWindow):
                     if brak:
                         p.append("Zaznaczone pliki do analizy nie istnieja juz w "
                                  f"folderze: {', '.join(brak)}")
+                    # Nowe pliki w folderze pojawiaja sie NIEZAZNACZONE (lista pamieta
+                    # poprzedni wybor) — latwo przeoczyc kilka przyrzadow pomiaru.
+                    pominiete = sorted(n for n in obecne if n not in wybrane
+                                       and n.lower().endswith(tuple(C.WG_ENV["ANL_PLIKI"].wzorzec)))
+                    if wybrane and pominiete:
+                        p.append(f"{len(pominiete)} plik(i) w folderze NIE sa zaznaczone i nie "
+                                 f"wejda do analizy: {', '.join(pominiete)}")
 
         if "obs" in kroki:
             if not self.lista_txt.zaznaczone():

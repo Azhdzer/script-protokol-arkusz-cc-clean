@@ -212,6 +212,18 @@ class TestWalidacjaBrakow(BazaOkna):
         problemy = self.okno._problemy(["analiza"])
         self.assertTrue(any("jest pusty" in p for p in problemy))
 
+    def test_analiza_zglasza_niezaznaczone_pliki(self):
+        """Nowe logi w folderze sa niezaznaczone — zlecenie 232: 3 przyrzady wypadly."""
+        logi = os.path.join(self.folder, "excel_do_analizy")
+        os.makedirs(logi, exist_ok=True)
+        for n in ("A1.xls", "A2.xls", "NOWY.xls"):
+            open(os.path.join(logi, n), "wb").close()
+        self.okno.wartosci["ANL_PLIKI"] = ["A1.xls", "A2.xls"]
+        problemy = self.okno._problemy(["analiza"])
+        self.assertTrue(any("NIE sa zaznaczone" in p and "NOWY.xls" in p for p in problemy))
+        self.okno.wartosci["ANL_PLIKI"] = []          # nic = wszystkie pliki
+        self.assertFalse(any("NIE sa zaznaczone" in p for p in self.okno._problemy(["analiza"])))
+
     def test_obserwacja_zglasza_brak_txt(self):
         problemy = self.okno._problemy(["obs"])
         self.assertTrue(any("TXT" in p for p in problemy))
