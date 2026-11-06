@@ -2292,6 +2292,28 @@ def prefiks_zlecenia(nr_zlecenia, obs_type):
 nazwa_pliku_opracowania = pz_dane.nazwa_pliku_opracowania
 
 
+def _nadpisz_szablonem(szablon, cel):
+    """
+    Kopia zapasowa celu i nadpisanie go szablonem. Gdy cel (protokol / obserwacja
+    z poprzedniego przebiegu) jest otwarty w Excelu uzytkownika, ten skoroszyt jest
+    najpierw ZAPISYWANY i zamykany (Excel i inne skoroszyty zostaja) — wczesniej krok
+    padal PermissionError dopiero po calej analizie.
+    """
+    nazwa = os.path.basename(cel)
+    if cc_excel.plik_blokady(cel):
+        print(f"  [Excel] '{nazwa}' jest otwarty — zapisuje go i zamykam, zeby nadpisac.")
+        if not cc_excel.zapisz_i_zamknij_otwarty(cel):
+            print(f"  [UWAGA] Nie znalazlem '{nazwa}' w otwartym Excelu (otwarty na innym "
+                  f"komputerze albo stara blokada) — probuje nadpisac.")
+    cc_kopia.kopia_przed_nadpisaniem(cel)
+    try:
+        shutil.copy2(szablon, cel)
+    except PermissionError:
+        print(f"[BŁĄD] Nie moge nadpisac '{nazwa}' — plik jest uzywany przez inny proces. "
+              f"Zamknij go i uruchom krok ponownie.")
+        raise SystemExit(1)
+
+
 def nazwa_pliku_zestawienia(prefiks):
     return f"{prefiks}_{ZESTAWIENIE_WYNIKI_NAZWA}"
 
@@ -3697,8 +3719,7 @@ def generuj_protokol(rep_groups, rows, measurement_id, obs_type, sensor_names=No
         print("  PROTOKOL: Brak punktow pomiarowych — pomijam.")
         return
 
-    cc_kopia.kopia_przed_nadpisaniem(out_path)   # reczne poprawki nie moga przepasc
-    shutil.copy2(tmpl_path, out_path)
+    _nadpisz_szablonem(tmpl_path, out_path)   # kopia zapasowa: reczne poprawki nie moga przepasc
     print(f"\nSkopiowano szablon protokolu: {tmpl_name}")
 
     # ── Dopasowanie liczby bloków przez Excel COM (przed zaladowaniem openpyxl) ─
@@ -4358,8 +4379,7 @@ def main():
 
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Nie znaleziono szablonu: {template_path}")
-        cc_kopia.kopia_przed_nadpisaniem(output_path)
-        shutil.copy2(template_path, output_path)
+        _nadpisz_szablonem(template_path, output_path)
         print("Skopiowano szablon.")
 
         sensor_names, rows = combine_txt(txt_files, parse_txt_cc04)
@@ -4445,8 +4465,7 @@ def main():
 
         if not os.path.exists(template_path):
             raise FileNotFoundError(f"Nie znaleziono szablonu: {template_path}")
-        cc_kopia.kopia_przed_nadpisaniem(output_path)
-        shutil.copy2(template_path, output_path)
+        _nadpisz_szablonem(template_path, output_path)
         print("Skopiowano szablon.")
 
         sensor_name, rows = combine_txt(txt_files, parse_txt)

@@ -67,9 +67,11 @@ class TestKrokiRobiaKopie(unittest.TestCase):
 
     def test_krok2_protokol_i_obserwacja(self):
         s = self.zrodlo("generuj_obserwacje.py")
-        self.assertRegex(s, r"cc_kopia\.kopia_przed_nadpisaniem\(out_path\)[^\n]*\n"
-                            r"\s*shutil\.copy2\(tmpl_path, out_path\)")
-        self.assertEqual(s.count("cc_kopia.kopia_przed_nadpisaniem(output_path)"), 2)
+        # _nadpisz_szablonem: (zwolnienie otwartego pliku,) kopia, dopiero potem copy2
+        self.assertRegex(s, r"cc_kopia\.kopia_przed_nadpisaniem\(cel\)\s*\n\s*try:\s*\n"
+                            r"\s*shutil\.copy2\(szablon, cel\)")
+        self.assertIn("_nadpisz_szablonem(tmpl_path, out_path)", s)
+        self.assertEqual(s.count("_nadpisz_szablonem(template_path, output_path)"), 2)
 
     def test_krok3_kopie_i_swiadectwa(self):
         s = self.zrodlo("generuj_arkusze.py")

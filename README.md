@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 855 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 860 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**855 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**860 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,9 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Krok 2 nadpisuje otwarty protokół / obserwację**: gdy plik z poprzedniego przebiegu jest otwarty
+  w Excelu, ten jeden skoroszyt jest zapisywany i zamykany (Excel i inne skoroszyty zostają), a zapisana
+  wersja trafia do `kopie_zapasowe`. Wcześniej krok padał `PermissionError` dopiero po całej analizie.
 - **Rampa komory nie psuje tolerancji korekty nastawy**: nastawa odniesienia i korekta muszą być trzymane
   ≥ 5 min. Wcześniej krok rampy wejścia (−27,0) był nastawą odniesienia i korekta −27,3 → −27,6 rozcinała punkt;
   a pierwsze kroki rampy wyjścia (do 0,5 °C) doklejały się do końca punktu. Teraz punkt kończy się na początku rampy.

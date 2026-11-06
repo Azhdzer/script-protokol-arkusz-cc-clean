@@ -288,3 +288,72 @@ def zamknij_excel_xlwings(app, czekaj_s=CZEKAJ_NA_ZAMKNIECIE_S):
         print(f"    [Excel] app.quit() nie powiodlo sie (Excel prawdopodobnie juz padl): "
               f"{type(e).__name__}: {e}")
     dopilnuj_zamkniecia(pid, czekaj_s)
+
+
+# ── plik otwarty przez uzytkownika ───────────────────────────────────────────
+# Wyjatek od zasady "Excel uzytkownika jest nietykalny", na prosbe uzytkownika:
+# gdy skrypt ma NADPISAC plik, ktory jest otwarty w jego Excelu (protokol z
+# poprzedniego przebiegu), ten JEDEN skoroszyt jest zapisywany i zamykany.
+# Sam Excel i pozostale skoroszyty zostaja nietkniete (zadnego Quit/Visible).
+# Skoroszyt szukany jest w Running Object Table — tylko juz otwarty; GetObject(sciezka)
+# otworzylby plik w nowym, ukrytym Excelu, gdyby nikt go nie mial otwartego.
+
+def plik_blokady(sciezka):
+    """'~$nazwa' obok pliku (Excel) albo '~$' w miejsce 2 pierwszych znakow (Word)."""
+    folder, nazwa = os.path.split(os.path.abspath(sciezka))
+    for kandydat in ("~$" + nazwa, "~$" + nazwa[2:]):
+        p = os.path.join(folder, kandydat)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def _otwarty_skoroszyt(sciezka):
+    """Skoroszyt (COM) otwarty w dowolnym dzialajacym Excelu albo None."""
+    import pythoncom
+    import win32com.client
+    cel = os.path.normcase(os.path.abspath(sciezka))
+    rot = pythoncom.GetRunningObjectTable()
+    ctx = pythoncom.CreateBindCtx(0)
+    for moniker in rot:
+        try:
+            nazwa = moniker.GetDisplayName(ctx, None)
+        except Exception:
+            continue
+        if not os.path.isabs(nazwa) or os.path.normcase(os.path.abspath(nazwa)) != cel:
+            continue
+        try:
+            obj = rot.GetObject(moniker).QueryInterface(pythoncom.IID_IDispatch)
+            return win32com.client.Dispatch(obj)
+        except Exception:
+            continue
+    return None
+
+
+def zapisz_i_zamknij_otwarty(sciezka, czekaj_s=CZEKAJ_NA_ZAMKNIECIE_S):
+    """
+    Zapisuje i zamyka skoroszyt `sciezka`, jesli jest otwarty w Excelu uzytkownika.
+    Zwraca True, gdy plik nie jest juz zablokowany (zamkniety albo nie byl otwarty).
+    """
+    if plik_blokady(sciezka) is None:
+        return True
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+        wb = _otwarty_skoroszyt(sciezka)
+    except Exception as e:
+        print(f"    [Excel] Nie moge przeszukac otwartych Exceli: {type(e).__name__}: {e}")
+        wb = None
+    if wb is None:
+        return False
+    try:
+        wb.Save()
+        wb.Close(False)
+    except Exception as e:
+        print(f"    [Excel] Nie udalo sie zapisac/zamknac '{os.path.basename(sciezka)}': "
+              f"{type(e).__name__}: {e}")
+        return False
+    koniec = time.monotonic() + czekaj_s
+    while plik_blokady(sciezka) is not None and time.monotonic() < koniec:
+        time.sleep(0.2)
+    return plik_blokady(sciezka) is None
