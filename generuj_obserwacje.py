@@ -86,6 +86,10 @@ ODSTEP_OD_KONCA_PUNKTU = C.minuty("OBS_ODSTEP_KONIEC", datetime.timedelta(minute
 # Korekta nastawy T w trakcie punktu (37 -> 37,4, by lepiej trafic w punkt) nie zaczyna
 # nowego punktu, gdy miesci sie w tej tolerancji od nastawy poczatkowej. 0 = kazda zmiana.
 TOL_KOREKTY_NASTAWY_T = C.liczba("OBS_KOREKTA_T", 0.5)
+# Nastawa trzymana krocej to krok rampy komory (co ~35 s), a nie punkt — nie moze byc
+# nastawa odniesienia dla korekty (zlecenie 233/240: rampa -26,6 -> -27,0 -> -27,3, potem
+# korekta -27,6 liczona od -27,0 = 0,6 °C rozcinala punkt na dwa).
+MIN_CZAS_NASTAWY_ODNIESIENIA = datetime.timedelta(minutes=5)
 # Zapas sredniej K/L ponad najlepsze okno: z okien w zapasie bierzemy NAJPOZNIEJSZE —
 # przyrzad mial wiecej czasu, zeby dojsc do nastaw. 0 = najlepsza srednia.
 ZAPAS_KRYTERIUM = C.liczba("OBS_ZAPAS_KRYT", 0.05)
@@ -1435,6 +1439,22 @@ def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
     return None
 
 
+def _zmiana_trzymana(data, seg_dt0, j):
+    """
+    Zmiana nastawy T w wierszu j jest korekta (nie krokiem rampy), gdy nastawa
+    odniesienia stala od seg_dt0 i nowa nastawa stoi co najmniej
+    MIN_CZAS_NASTAWY_ODNIESIENIA (albo do konca pliku).
+    """
+    dt_j = data[j][0]
+    if dt_j is None or seg_dt0 is None or dt_j - seg_dt0 < MIN_CZAS_NASTAWY_ODNIESIENIA:
+        return False
+    b, c = data[j][1], data[j][2]
+    for k in range(j + 1, len(data)):
+        if data[k][1] != b or data[k][2] != c:
+            return data[k][0] is not None and data[k][0] - dt_j >= MIN_CZAS_NASTAWY_ODNIESIENIA
+    return True
+
+
 def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
                                min_po=None, prog_temp=None, prog_rh=None):
     """
@@ -1466,10 +1486,16 @@ def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
         # Koniec bieżącego segmentu stabilnego (stałe B i C). Korekta nastawy T o kilka
         # dziesiatych (37 -> 37,3 -> 37,4, zeby lepiej trafic w punkt) to nadal ten sam
         # punkt — liczona od nastawy na poczatku punktu. Zmiana RH zawsze konczy punkt.
+        # Korekta to zmiana TRZYMANA: nastawa przed nia i po niej stoi co najmniej
+        # MIN_CZAS_NASTAWY_ODNIESIENIA. Krok rampy (nastawa zmienia sie co kilkadziesiat
+        # sekund) konczy segment — inaczej rampa wejscia byla nastawa odniesienia,
+        # a poczatek rampy wyjscia doklejal sie do konca punktu.
         j = i + 1
         while j < n:
             b, c = data[j][1], data[j][2]
             if c != seg_c or b is None or abs(b - seg_b) > TOL_KOREKTY_NASTAWY_T + 1e-9:
+                break
+            if b != data[j - 1][1] and not _zmiana_trzymana(data, seg_dt0, j):
                 break
             j += 1
 
