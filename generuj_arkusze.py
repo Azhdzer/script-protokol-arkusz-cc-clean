@@ -1160,6 +1160,14 @@ def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe, cicho=False):
     if not linki_serwerowe:
         return
 
+    # Arkusz otwarty w Excelu (np. uzytkownik otworzyl go, gdy krok jeszcze konczyl):
+    # os.replace nie przejdzie, linki zostaja lokalne, a obok zostaje '._xltmp_'.
+    # Najpierw zapisujemy i zamykamy ten skoroszyt — jego zmiany wchodza do odczytu ponizej.
+    if cc_excel.plik_blokady(sciezka_pliku):
+        print(f"    [Excel] '{os.path.basename(sciezka_pliku)}' jest otwarty — zapisuje go i "
+              f"zamykam, zeby przywrocic linki.")
+        cc_excel.zapisz_i_zamknij_otwarty(sciezka_pliku)
+
     linki_po_nazwie = {k.lower(): v for k, v in linki_serwerowe.items()}
     sciezka_tmp = sciezka_pliku + "._xltmp_"
     zmienione_pliki = 0
@@ -1204,13 +1212,18 @@ def _przywroc_linki_w_xml(sciezka_pliku, linki_serwerowe, cicho=False):
             else:
                 print(f"    [XML] Brak linkow do zastapienia w: {os.path.basename(sciezka_pliku)}")
     except Exception as exc:
-        if os.path.exists(sciezka_tmp):
+        for _ in range(10):               # antywirus potrafi chwile trzymac swiezy plik
+            if not os.path.exists(sciezka_tmp):
+                break
             try:
                 os.remove(sciezka_tmp)
-            except Exception:
-                pass
-        _warn(f"Nie mozna zmienic linkow XML w '{os.path.basename(sciezka_pliku)}'\n"
-              f"      {type(exc).__name__}: {exc}", indent="    ")
+            except OSError:
+                time.sleep(0.5)
+        _warn(f"Nie mozna zmienic linkow XML w '{os.path.basename(sciezka_pliku)}' "
+              f"(plik otwarty?) — linki zostaja jak byly.\n"
+              f"      {type(exc).__name__}: {exc}"
+              + (f"\n      Zostal plik tymczasowy do usuniecia: {os.path.basename(sciezka_tmp)}"
+                 if os.path.exists(sciezka_tmp) else ""), indent="    ")
 
 
 def _odczytaj_kalibracje_dla_istniejacych_kopii(folder, nazwy_kopii, ark_wyniki):

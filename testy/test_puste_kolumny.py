@@ -295,6 +295,17 @@ class TestFormatyPoPrzesunieciu(unittest.TestCase):
         ws = self.arkusz(formaty)
         self.assertEqual(G._przenies_formaty_kolumn(ws, [2], formaty, 4), 0)
 
+    def test_wiersze_za_formatami_szablonu(self):
+        """Zlecenie 239: szablon ma format daty do wiersza 7421, nizej 'm/d/yy h:mm'."""
+        ws = self.arkusz(["yyyy/mm/dd\\ hh:mm:ss", "0.0000"])
+        for w in (4, 5):
+            ws.cell(row=w, column=1).number_format = "m/d/yy h:mm"
+            ws.cell(row=w, column=2).number_format = "General"
+        self.assertEqual(G._formaty_jak_pierwszy_wiersz(ws, 2, 4), 4)
+        self.assertEqual({ws.cell(row=w, column=1).number_format for w in range(2, 6)},
+                         {"yyyy/mm/dd\\ hh:mm:ss"})
+        self.assertEqual(ws.cell(row=5, column=2).number_format, "0.0000")
+
     def test_brak_wierszy_nic_nie_robi(self):
         ws = self.arkusz(["0.0000", "General"])
         self.assertEqual(G._przenies_formaty_kolumn(ws, [1], ["0.0000", "General"], 0), 0)

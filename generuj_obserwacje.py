@@ -620,6 +620,26 @@ def _przenies_formaty_kolumn(ws, kolumny, formaty, ile_wierszy):
     return przeniesione
 
 
+def _formaty_jak_pierwszy_wiersz(ws, n_kol, ile_wierszy):
+    """
+    Kazdy wiersz danych dostaje format liczbowy pierwszego wiersza swojej kolumny.
+
+    Szablon obserwacji ma formaty tylko do wiersza 7421; nizej Excel pokazywal date
+    domyslnie 'm/d/yy h:mm' — dlugi pomiar (zlecenie 239, 4 doby) gubil w widoku
+    sekundy ('08.11.2026 20:16' zamiast '2026/11/08 20:16:06'). Zwraca liczbe
+    poprawionych komorek.
+    """
+    poprawione = 0
+    for kol in range(1, n_kol + 1):
+        fmt = ws.cell(row=2, column=kol).number_format
+        for wiersz in range(3, ile_wierszy + 2):
+            c = ws.cell(row=wiersz, column=kol)
+            if c.number_format != fmt:
+                c.number_format = fmt
+                poprawione += 1
+    return poprawione
+
+
 def _raport_pominietych_kolumn(kolumny, naglowki, n_kol):
     """
     Wypisuje, ktore kolumny wypadly, i zwraca mape 'stary indeks -> nowy indeks'
@@ -4436,6 +4456,7 @@ def main():
                 ws.cell(row=1, column=1 + nowy).value = naglowki[stary]
         print(f"  Czujniki glowne : {sensor_names}")
         _przenies_formaty_kolumn(ws, kolumny, formaty_szablonu, len(rows))
+        _formaty_jak_pierwszy_wiersz(ws, len(kolumny), len(rows))
         print(f"  Czujniki zapasowe: {[kanal_pt.get(c) or c for c in CC04_KANALY_ZAPASOWE]}")
 
         # Osierocone naglowki i stary blok podpisow z szablonu — na prawo od danych.
@@ -4509,6 +4530,7 @@ def main():
                            for i in range(1, len(kolumny) + 1)]
         mapa_kolumn = _mapa_liter_wykresow(naglowki_cc, naglowki_wyniku)
         _przenies_formaty_kolumn(ws, kolumny, formaty_szablonu, len(rows))
+        _formaty_jak_pierwszy_wiersz(ws, len(kolumny), len(rows))
 
         # J1 – aktualizacja czujnika wzorcowego
         j1 = ws.cell(row=1, column=10)
