@@ -57,6 +57,17 @@ class TestPunktyBezZakladki(unittest.TestCase):
         # (20) dokladnie i (21) w tolerancji — zakladka '20, -' nalezy do punktu 20.
         self.assertEqual(A._punkty_bez_zakladki([(21.0, None), (20.0, None)], ["20, -"]), [(21.0, None)])
 
+    def test_punkt_temperatury_nie_zabiera_zakladki_punktowi_rh(self):
+        """Zlecenie 239: '20' (tylko t) bral '20, 15', a 20/15 dostawal pusta '20, 15 (2)'."""
+        nazwy = ["20, 15", "20, 30", "20, 45", "40, 15", "40, 45", "5, -"]
+        pz = [(5.0, None), (20.0, None), (40.0, None),
+              (20.0, 15.0), (20.0, 45.0), (40.0, 15.0), (40.0, 45.0)]
+        self.assertEqual(A._punkty_bez_zakladki(pz, nazwy), [])
+
+    def test_punkt_temperatury_bez_zadnej_zakladki_tej_temperatury(self):
+        self.assertEqual(A._punkty_bez_zakladki([(60.0, None), (40.0, 15.0)], ["40, 15"]),
+                         [(60.0, None)])
+
     def test_powtorka_histerezy_w_pz(self):
         self.assertEqual(A._punkty_bez_zakladki([(23.0, 60.0), (23.0, 60.0)], ["23, 60"]), [(23.0, 60.0)])
 

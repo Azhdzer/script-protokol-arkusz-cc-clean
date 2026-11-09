@@ -25,10 +25,12 @@ import os
 import re
 import time
 import shutil
+import sys
 import zipfile
 import datetime
 import math
 import urllib.parse
+from collections import Counter
 from copy import deepcopy
 from itertools import groupby
 import openpyxl
@@ -124,15 +126,58 @@ def _open_book_hidden(app, path, **kwargs):
     """
     Otwiera skoroszyt i przywraca ustawienia COM po evencie Workbook_Open.
     Makra moga resetowac Visible/DisplayAlerts — ustawiamy je z powrotem.
+
+    Arkusz obliczeniowy (z 'Wyniki') otwierany jest w trybie RECZNYM, a jego zakladki
+    bez pomiarow sa wylaczane z przeliczania, zanim tryb wroci (patrz
+    _przeliczanie_zakladek_wg_danych).
     """
-    wb = app.books.open(path, **kwargs)
     try:
-        app.api.Visible = False
-        app.api.DisplayAlerts = False
-        app.api.AskToUpdateLinks = False
+        tryb = app.api.Calculation
+        if tryb != -4135:
+            app.api.Calculation = -4135     # xlCalculationManual na czas Open()
     except Exception:
-        pass
+        tryb = None                     # bez otwartego skoroszytu Excel nie pozwala zmienic trybu
+    try:
+        wb = app.books.open(path, **kwargs)
+        try:
+            app.api.Visible = False
+            app.api.DisplayAlerts = False
+            app.api.AskToUpdateLinks = False
+        except Exception:
+            pass
+        try:
+            if ARKUSZ_WYNIKI in {s.name for s in wb.sheets}:
+                _przeliczanie_zakladek_wg_danych(wb)
+        except Exception:
+            pass
+    finally:
+        if tryb not in (None, -4135):
+            try:
+                app.api.Calculation = tryb
+            except Exception:
+                pass
     return wb
+
+
+def _przeliczanie_zakladek_wg_danych(wb):
+    """
+    Zakladki punktow BEZ pomiarow (E15:H19 puste — punkty z PZ do domierzenia)
+    nie sa przeliczane: ich formuly (UDF-y z Wzory/Obliczenia) na pustych odczytach
+    nie konczyly sie — zlecenie 239: krok 3 wisial >13 min na wlaczeniu trybu
+    automatycznego. Zakladki z danymi — przeliczane. EnableCalculation nie jest
+    zapisywane w pliku: po otwarciu i uzupelnieniu zakladka liczy sie normalnie.
+    Zwraca nazwy wylaczonych zakladek.
+    """
+    wylaczone = []
+    for ws in wb.sheets:
+        if ws.name == ARKUSZ_WYNIKI:
+            continue
+        pusta = _zakladka_bez_pomiarow(ws)
+        if ws.api.EnableCalculation == pusta:
+            ws.api.EnableCalculation = not pusta
+        if pusta:
+            wylaczone.append(ws.name)
+    return wylaczone
 
 def _info_serwer(nazwa_pliku):
     """Zwraca sciezke serwerowa dla danego pliku (do wyswietlenia w logach)."""
@@ -928,30 +973,50 @@ def _punkty_bez_zakladki(punkty, nazwy):
     Punkty z PZ, ktorych nie pokrywa zadna z zakladek `nazwy`.
 
     Najpierw zgodnosc dokladna (zakladki maja nazwy z nominalow PZ), potem w tolerancji
-    (zakladka nazwana od nastawy komory). Kazda zakladka pokrywa jeden punkt. Punkt samej
-    temperatury pokrywa takze zakladka z wilgotnoscia: '30' zamowione, a komora szla 30/50.
+    (zakladka nazwana od nastawy komory). Kazda zakladka pokrywa jeden punkt z RH i jeden
+    punkt samej temperatury. Punkt samej temperatury pokrywa takze zakladka z wilgotnoscia
+    ('30' zamowione, a komora szla 30/50) — i rozdzielany jest PO punktach z RH, inaczej
+    zabieral im zakladke (zlecenie 239: '20' wzial '20, 15', a 20/15 dostawal pusta
+    '20, 15 (2)').
     """
-    wolne = [(_t_z_nazwy_zakladki(n), _rh_z_nazwy_zakladki(n)) for n in nazwy]
+    zakladki = [(_t_z_nazwy_zakladki(n), _rh_z_nazwy_zakladki(n)) for n in nazwy]
 
-    def _pasuje(t, rh, zakladka, tol_t, tol_rh):
-        t_z, rh_z = zakladka
-        if t_z is None or abs(t - t_z) > tol_t:
-            return False
-        if rh is None:
-            return True
-        return rh_z is not None and abs(rh - rh_z) <= tol_rh
+    def _rozdziel(punkty_grupy, wolne, pasuje, klucz):
+        brak = list(punkty_grupy)
+        for tol_t, tol_rh in ((1e-6, 1e-6), (TOL_NAZWA_T, TOL_NAZWA_RH)):
+            reszta = []
+            for t, rh in brak:
+                trafienia = [i for i in wolne if pasuje(t, rh, zakladki[i], tol_t, tol_rh)]
+                if trafienia:
+                    wolne.remove(min(trafienia, key=lambda i: klucz(t, i)))
+                else:
+                    reszta.append((t, rh))
+            brak = reszta
+        return brak
 
-    brak = list(punkty)
-    for tol_t, tol_rh in ((1e-6, 1e-6), (TOL_NAZWA_T, TOL_NAZWA_RH)):
-        reszta = []
-        for t, rh in brak:
-            trafienia = [z for z in wolne if _pasuje(t, rh, z, tol_t, tol_rh)]
-            if trafienia:
-                wolne.remove(min(trafienia, key=lambda z: abs(t - z[0])))
-            else:
-                reszta.append((t, rh))
-        brak = reszta
-    return brak
+    def _pasuje_rh(t, rh, z, tol_t, tol_rh):
+        return (z[0] is not None and abs(t - z[0]) <= tol_t
+                and z[1] is not None and abs(rh - z[1]) <= tol_rh)
+
+    def _pasuje_t(t, _rh, z, tol_t, _tol_rh):
+        return z[0] is not None and abs(t - z[0]) <= tol_t
+
+    wolne_rh = list(range(len(zakladki)))
+    brak_rh = _rozdziel([p for p in punkty if p[1] is not None], wolne_rh, _pasuje_rh,
+                        lambda t, i: abs(t - zakladki[i][0]))
+    # Punkt samej temperatury: najpierw zakladka bez RH, potem wolna z RH, na koncu
+    # zakladka z RH juz uzyta przez punkt wilgotnosci (temperatura i tak jest w niej mierzona).
+    brak_t = _rozdziel([p for p in punkty if p[1] is None], list(range(len(zakladki))),
+                       _pasuje_t,
+                       lambda t, i: (zakladki[i][1] is not None, i not in wolne_rh,
+                                     abs(t - zakladki[i][0])))
+    brak = Counter(brak_rh) + Counter(brak_t)
+    wynik = []
+    for p in punkty:                  # kolejnosc i krotnosc jak w PZ
+        if brak[p] > 0:
+            wynik.append(p)
+            brak[p] -= 1
+    return wynik
 
 
 def _pusta_zakladka(t, rh):
@@ -3890,10 +3955,15 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
 
         # Faza STRUKTURALNA skonczona — wracamy do trybu automatycznego, zeby UDF-y
         # z Wzory.xls/Obliczenia liczyly sie tak jak dotad podczas Calculate() ponizej.
+        _wylaczone = _przeliczanie_zakladek_wg_danych(wb)
+        if _wylaczone:
+            _log_etap(f"zakladki bez pomiarow — bez przeliczania: {', '.join(_wylaczone)}", _t0)
+        _log_etap("tryb przeliczania: AUTOMATYCZNY (Excel przelicza caly skoroszyt)...", _t0)
         try:
             app.api.Calculation = -4105  # xlCalculationAutomatic
         except Exception:
             pass
+        _log_etap("tryb automatyczny wlaczony", _t0)
         app.api.DisplayAlerts = False
         app.api.AskToUpdateLinks = False
         app.api.EnableEvents = False
@@ -4380,10 +4450,10 @@ def _main_impl():
 
     if not os.path.exists(protokol):
         print(f"[BŁĄD] Plik protokołu nie istnieje:\n  {protokol}")
-        return
+        return 1
     if GENERUJ_EXCEL and not os.path.exists(szablon):
         print(f"[BŁĄD] Plik szablonu nie istnieje:\n  {szablon}")
-        return
+        return 1
 
     # --- Etapy 1-4: odczyt wszystkich danych przez xlwings (Excel COM) ---
     # xlwings uruchamia Excel i odczytuje prawdziwe wyliczone wartości formuł,
@@ -4406,12 +4476,12 @@ def _main_impl():
         )
     except Exception as e:
         print(f"[BŁĄD] Odczyt przez xlwings nie powiódł się: {e}")
-        return
+        return 1        # panel ma pokazac blad, a nie 'zakonczono OK'
 
     print(f"  Znaleziono kopii: {len(dane_s2)}")
     if not dane_s2:
         print("[BŁĄD] Brak danych w Strona 2 — skrypt kończy pracę.")
-        return
+        return 1
 
     # Przyrzady wyszarzone w calosci na Stronie 3 nie maja po co dostawac kopii
     # ani swiadectwa — wypadaja z obiegu tutaj, zanim ruszy Excel.
@@ -4657,11 +4727,11 @@ def main():
         cc_excel.sprzataj_zawieszone_excele()
 
     try:
-        _main_impl()
+        return _main_impl()
     finally:
         if _ar_user is not None:
             _ustaw_autorecover(_ar_user)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
