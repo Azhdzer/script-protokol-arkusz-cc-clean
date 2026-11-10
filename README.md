@@ -8,6 +8,9 @@ desktopowym panelem **PySide6** i spakowany w jeden plik `ProtokolCC.exe`.
 > 📘 **Instrukcja użytkownika** (19 rozdziałów, 13 schematów, wszystkie ustawienia):
 > [`DOKUMENTACJA/instrukcja-uzytkownika.html`](DOKUMENTACJA/instrukcja-uzytkownika.html) · [PDF](DOKUMENTACJA/instrukcja-uzytkownika.pdf)
 >
+> 🎞️ **Prezentacja** (19 slajdów A4, do pokazania zespołowi):
+> [`DOKUMENTACJA/prezentacja-skrypty.html`](DOKUMENTACJA/prezentacja-skrypty.html) · [PDF](DOKUMENTACJA/prezentacja-skrypty.pdf)
+>
 > 🛠️ **Dokumentacja techniczna** (architektura, kontrakty danych, Excel COM, spis funkcji):
 > [`DOKUMENTACJA/infografika-projektu.html`](DOKUMENTACJA/infografika-projektu.html)
 >
