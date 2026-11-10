@@ -165,6 +165,9 @@ KONTRAKT = {
         ("CC_SZABLON_PRZETW_RH", "m.SZABLON_PRZETWORNIKA_RH", "R.xlsx", "R.xlsx",
          "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - "
          "Przetwornik RH (CC).xlsx"),
+        ("CC_SZABLON_TH_PRZETW", "m.SZABLON_TH_PRZETWORNIKA", "TP.xlsx", "TP.xlsx",
+         "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - "
+         "TH + Przetwornik (CC).xlsx"),
         ("GEN_SPRZATAJ_EXCEL", "m.SPRZATAJ_ZAWIESZONE_EXCELE", "0", "False", "True"),
         ("GEN_AUTOREC_DNI", "m.CZYSC_AUTORECOVER_STARSZE_NIZ_DNI", "5", "5", "1"),
         ("GEN_PROG_OSTRZ",  "m.PROG_OSTRZEZENIA_KOPII", "25", "25", "10"),

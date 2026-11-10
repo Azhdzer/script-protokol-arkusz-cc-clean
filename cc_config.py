@@ -367,6 +367,15 @@ _ARKUSZE = [
             "przygotowanych (tabela z wiersza 253, kolumny temperatury '-'); krok 3 zmienia "
             "tylko formuly wg punktow. Z innego wzoru: "
             "python cc_szablon_przetwornika.py --rh <plik z 'Wynikami'>"),
+    _U("CC_SZABLON_TH_PRZETW", "Szablon arkusza obliczeniowego — wyswietlacz + wyjscie", "plik",
+       "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - "
+       "TH + Przetwornik (CC).xlsx", "ark",
+       grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"), podpowiedz="TH + Przetwornik",
+       opis="Przyrzad wzorcowany jednoczesnie z wyswietlacza i z wyjscia analogowego (na "
+            "Stronie 2 dwa wiersze z tym samym nr fabrycznym: jeden z rozdzielczoscia, drugi "
+            "ze skalowaniem). Powstaje JEDEN arkusz: w zakladkach E/F z wyswietlacza, G/H "
+            "z wyjscia; 'Wyniki' jak we wzorze — krok 3 zmienia tylko liczbe wierszy. "
+            "Z innego wzoru: python cc_szablon_przetwornika.py --th <plik wzorcowy>"),
     _U("GEN_EXCEL", "Generuj arkusze Excel", "flaga", True, "ark",
        grupa="Etapy",
        opis="Wylaczone = korzysta z juz istniejacych kopii (przydatne, gdy chcesz "

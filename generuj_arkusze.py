@@ -414,6 +414,10 @@ SZABLON_PRZETWORNIKA = os.environ.get("CC_SZABLON_PRZETW") or (
 # Przetwornik tylko RH — 'Wyniki' 1:1 jak w recznie przygotowanych (230, 263051).
 SZABLON_PRZETWORNIKA_RH = os.environ.get("CC_SZABLON_PRZETW_RH") or (
     "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik RH (CC).xlsx")
+# Przyrzad z wyswietlaczem i wyjsciem analogowym (zlecenie 239, PTU303 D4850103) —
+# jeden arkusz; 'Wyniki' 1:1 jak w recznie przygotowanym (patrz _polacz_wyswietlacz_z_wyjsciem).
+SZABLON_TH_PRZETWORNIKA = os.environ.get("CC_SZABLON_TH_PRZETW") or (
+    "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - TH + Przetwornik (CC).xlsx")
 
 # =============================================================================
 # WARUNKI ŚRODOWISKOWE — czujnik + Wzory.xls
@@ -936,7 +940,8 @@ def _czy_blok_ef_aktywny(ef_blok):
     if not isinstance(ef_blok, dict):
         return False
 
-    for key in ("E_dane", "F_dane"):
+    # G/H — wyjscie analogowe przyrzadu z wyswietlaczem (_polacz_wyswietlacz_z_wyjsciem).
+    for key in ("E_dane", "F_dane", "G_dane", "H_dane"):
         for value in (ef_blok.get(key) or []):
             if _czy_wartosc_niepusta(value):
                 return True
@@ -1092,6 +1097,62 @@ def _odfiltruj_przyrzady_bez_danych(dane_s2, dane_ef, f24_per_kopia):
         else:
             pominiete.append((j + 1, rekord))
     return zachowane_s2, zachowane_ef, zachowane_f24, pominiete
+
+
+# Przyrzad wzorcowany jednoczesnie z wyswietlacza i z wyjscia analogowego (zlecenie 239,
+# VAISALA PTU303 D4850103): na Stronie 2 dwa wiersze z tym samym nr fabrycznym —
+# jeden z rozdzielczoscia odczytu (wyswietlacz, °C/%), drugi ze skalowaniem (wyjscie
+# V/mA). To JEDEN przyrzad i jeden arkusz: E/F zakladek z wyswietlacza, G/H z wyjscia,
+# K10 = 'TH/Przetwornik', 'Wyniki' z szablonu SZABLON_TH_PRZETWORNIKA.
+K10_TH_PRZETWORNIK = "TH/Przetwornik"
+
+
+def _polacz_wyswietlacz_z_wyjsciem(dane_s2, dane_ef, f24_per_kopia):
+    """
+    Laczy pary (wyswietlacz, wyjscie analogowe) o tym samym nr fabrycznym w jeden
+    rekord — na miejscu wiersza wyswietlacza; wiersz wyjscia znika z obiegu.
+    Dane wyjscia (jego E/F ze Strony 3) przechodza do blokow jako G_dane/H_dane.
+    Zwraca (dane_s2, dane_ef, f24_per_kopia, pary[(rekord_wyswietlacza, rekord_wyjscia)]).
+    """
+    po_serialu = {}
+    for j, rekord in enumerate(dane_s2):
+        rekord.setdefault("_nr_przyrzadu", j + 1)
+        klucz = pz_dane.normalizuj_serial(_cell_to_str(rekord.get("E")))
+        if klucz:
+            po_serialu.setdefault(klucz, []).append(j)
+
+    usuniete, pary = set(), []
+    dane_ef = list(dane_ef)
+    for idx in po_serialu.values():
+        wysw = [j for j in idx if not dane_s2[j].get("PRZETWORNIK")]
+        wyj = [j for j in idx if dane_s2[j].get("PRZETWORNIK")]
+        if len(wysw) != 1 or len(wyj) != 1:
+            continue
+        jd, ja = wysw[0], wyj[0]
+        rd, ra = dane_s2[jd], dane_s2[ja]
+        rd["PRZETWORNIK"] = dict(ra["PRZETWORNIK"], K10=K10_TH_PRZETWORNIK,
+                                 _szablon=SZABLON_TH_PRZETWORNIKA)
+        rd["POLACZONY"] = True
+        ef_d = dane_ef[jd] if jd < len(dane_ef) else []
+        ef_a = dane_ef[ja] if ja < len(dane_ef) else []
+        bloki = []
+        for i in range(max(len(ef_d), len(ef_a))):
+            d = dict(ef_d[i]) if i < len(ef_d) and isinstance(ef_d[i], dict) else {
+                "E_dane": [None] * BLOK_S3, "F_dane": [None] * BLOK_S3}
+            a = ef_a[i] if i < len(ef_a) and isinstance(ef_a[i], dict) else {}
+            d["G_dane"], d["G_fmt"] = list(a.get("E_dane") or []), list(a.get("E_fmt") or [])
+            d["H_dane"], d["H_fmt"] = list(a.get("F_dane") or []), list(a.get("F_fmt") or [])
+            bloki.append(d)
+        if jd < len(dane_ef):
+            dane_ef[jd] = bloki
+        usuniete.add(ja)
+        pary.append((rd, ra))
+
+    zostaja = [j for j in range(len(dane_s2)) if j not in usuniete]
+    return ([dane_s2[j] for j in zostaja],
+            [dane_ef[j] for j in zostaja if j < len(dane_ef)],
+            [f24_per_kopia[j] for j in zostaja if j < len(f24_per_kopia)],
+            pary)
 
 
 def _zbuduj_dane_zakladek_per_kopia(dane_zakladek, dane_ef, dane_s2=None):
@@ -2956,7 +3017,9 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
 
     for j, (rekord, nowa_nazwa_xlsx) in enumerate(pary):
         nr_sw = numery_sw[j]
-        _przetw = rekord.get("PRZETWORNIK")
+        # Wyswietlacz + wyjscie: swiadectwo jak termohigrometru (wyniki z wyswietlacza,
+        # wiersze 239/246) — K10 'TH/Przetwornik', nie 'Przetwornik'.
+        _przetw = None if rekord.get("POLACZONY") else rekord.get("PRZETWORNIK")
         prefiks, rok, nr_fab, typ = _parsuj_nazwe_pliku(nowa_nazwa_xlsx)
 
         # Dane przyrzadu z PZ (po nr fabrycznym): fallback pol Strony 2 + ew. UZYTKOWNIK.
@@ -3225,6 +3288,14 @@ def _uklad_wynikow(ws_w):
             return str(ws_w.range(adres).formula or "")
         except Exception:
             return ""
+    # Wyswietlacz + wyjscie: sekcje z wierszy 239/246, 253/260, 274/279 jedna pod druga.
+    try:
+        _sekcje = _sekcje_wynikow(ws_w.range(ZAKRES_WYNIKOW_POLACZONYCH).formula)
+    except Exception:
+        _sekcje = []
+    if len(_sekcje) >= 2:
+        return {"przetwornik": False, "polaczony": True, "histereza": "E219",
+                "sekcje": _sekcje, "tabele": []}
     # Szablon przetwornika RH: jedna tabela B:L z wiersza 253, kolumny t to '-'.
     if (re.search(r"!\$?D\$?253\b", f("B4")) and re.search(r"!\$?N\$?253\b", f("K4"))
             and f("D4").strip() == "-"):
@@ -3442,7 +3513,7 @@ def _znajdz_komorke_histerezy(ws_w, extra_rows=0):
     except Exception:
         pass
     try:
-        kol = ws_w.range("J1:J80").formula
+        kol = ws_w.range("J1:J400").formula
     except Exception:
         return None, None
     for idx, val in enumerate(kol, start=1):
@@ -3613,19 +3684,7 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
                 w["rh_ref"] = None
         w["powtorka"] = _to_jest_powtorka_kolizji(arkusz)
 
-    def _klucz_bi(w):
-        temp = w["val_b"]
-        try:
-            temp = float(temp)
-        except (TypeError, ValueError):
-            return (float('inf'), 1, float('inf'), float('inf'))
-        rounded = _round_half_away_from_zero(temp)
-        rh_ref = w.get("rh_ref")
-        rh_val = float(rh_ref) if rh_ref is not None else 0.0
-        # Powtorki histerezy (sufiks ' (N)') na koncu grupy temperaturowej;
-        # w ramach tej samej grupy RH rosnie (8 → 49 → 82 → 49(2)).
-        is_dup = 1 if w.get("powtorka") else 0
-        return (rounded, is_dup, rh_val, temp)
+    _klucz_bi = _klucz_wiersza_rh
 
     # Tabele 'rh' — tylko zakladki z wilgotnoscia; tabele 't' — reprezentant na temperature.
     valid_rh_sorted = sorted((w for w in valid if w["ma_rh"]), key=_klucz_bi)
@@ -3644,6 +3703,199 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
             _wyczysc_wiersz(ws_w, FIRST_ROW + i, t["kolumny"])
 
     return last_row - LAST_ROW_DEFAULT
+
+
+def _klucz_wiersza_rh(w):
+    """
+    Kolejnosc wierszy tabel z wilgotnoscia: temperatura (zaokraglona) rosnaco,
+    powtorki histerezy (sufiks ' (N)') na koncu grupy, w grupie RH rosnaco
+    (8 → 49 → 82 → 49(2)). w: {'val_b', 'rh_ref', 'powtorka'}.
+    """
+    temp = w["val_b"]
+    try:
+        temp = float(temp)
+    except (TypeError, ValueError):
+        return (float('inf'), 1, float('inf'), float('inf'))
+    rounded = _round_half_away_from_zero(temp)
+    rh_ref = w.get("rh_ref")
+    rh_val = float(rh_ref) if rh_ref is not None else 0.0
+    is_dup = 1 if w.get("powtorka") else 0
+    return (rounded, is_dup, rh_val, temp)
+
+
+# ─── 'Wyniki' przyrzadu z wyswietlaczem i wyjsciem (szablon 'TH + Przetwornik') ─────
+# Wzor: arkusz 239/LA/TH/2026 - 1 - D4850103 przygotowany recznie. Trzy sekcje jedna pod
+# druga, kazda z naglowkiem i wierszami punktow:
+#   wyswietlacz      B:I <- wiersz 239 zakladki, W:Z  <- 246 (+ zgodnosc M:T / AF:AI)
+#   wyjscie (°C/%)   B:K <- 253,                 W:AB <- 260
+#   wyjscie (V/mA)   B:I <- 274,                 W:AD <- 279
+# Logika wypelniania jest w szablonie: pierwszy wiersz kazdej sekcji jest wzorem
+# (ktora komorka zakladki trafia do ktorej kolumny + formuly zgodnosci). Krok 3 zmienia
+# tylko liczbe wierszy i nazwy zakladek — lewa czesc wg punktow z RH, prawa wg
+# temperatur (reprezentanci), jak w zwyklym szablonie.
+ZAKRES_WYNIKOW_POLACZONYCH = "A1:AJ400"
+WIERSZE_ZAKLADKI_TYLKO_T = {246, 260, 279}
+_RE_REF_ZAKLADKI = re.compile(r"^=(?:'(?:[^']|'')+'|[^!'=][^!]*)!\$?([A-Z]{1,3})\$?(\d+)$")
+
+
+def _wiersze_formul(formuly):
+    """Wynik range.formula -> lista wierszy (lista list), takze dla jednej kolumny/wiersza."""
+    if not isinstance(formuly, (list, tuple)):
+        return [[formuly]]
+    if formuly and not isinstance(formuly[0], (list, tuple)):
+        return [list(formuly)]
+    return [list(w) for w in formuly]
+
+
+def _kolumny_sekcji(wiersz):
+    """
+    Wiersz-wzor sekcji -> [(indeks_kolumny, rodzaj 'rh'/'t', komorka_zakladki albo None)].
+    Formula zgodnosci (bez odwolania do zakladki) nalezy do tabeli z lewej.
+    """
+    wynik, rodzaj = [], None
+    for c, f in enumerate(wiersz):
+        f = f if isinstance(f, str) else ""
+        m = _RE_REF_ZAKLADKI.match(f)
+        if m:
+            rodzaj = "t" if int(m.group(2)) in WIERSZE_ZAKLADKI_TYLKO_T else "rh"
+            wynik.append((c, rodzaj, f"{m.group(1)}{m.group(2)}"))
+        elif f.startswith("=") and rodzaj:
+            wynik.append((c, rodzaj, None))
+    return wynik
+
+
+def _sekcje_wynikow(formuly):
+    """
+    Sekcje 'Wynikow' wyswietlacz + wyjscie: ciagi wierszy z odwolaniami do zakladek.
+    Zwraca [{'start': nr_wiersza (od 1), 'koniec': ..., 'kolumny': _kolumny_sekcji}].
+    """
+    wiersze = _wiersze_formul(formuly)
+    sekcje, start = [], None
+    for i, w in enumerate(wiersze + [[]]):
+        ma = any(isinstance(f, str) and _RE_REF_ZAKLADKI.match(f) for f in w)
+        if ma and start is None:
+            start = i
+        elif not ma and start is not None:
+            sekcje.append({"start": start + 1, "koniec": i,
+                           "kolumny": _kolumny_sekcji(wiersze[start])})
+            start = None
+    return sekcje
+
+
+def _numer_kolumny(litery):
+    n = 0
+    for ch in litery:
+        n = n * 26 + ord(ch) - 64
+    return n
+
+
+def _wiersz_r1c1(wzor_r1c1, kolumny, nazwa_rh, nazwa_t, wiersz):
+    """
+    Formuly R1C1 wiersza `wiersz` sekcji (od kolumny A do ostatniej kolumny sekcji):
+    odwolania do zakladki z wiersza-wzoru z nowa nazwa (wzgledne, jak we wzorze:
+    ='20,45'!D239), formuly zgodnosci jak we wzorze; tabela bez punktu w tym
+    wierszu — puste komorki.
+    """
+    ost = max(c for c, _r, _k in kolumny)
+    wynik = [(wzor_r1c1[c] if c < len(wzor_r1c1) else "") or "" for c in range(ost + 1)]
+    for c, rodzaj, komorka in kolumny:
+        nazwa = nazwa_rh if rodzaj == "rh" else nazwa_t
+        if nazwa is None:
+            wynik[c] = ""
+        elif komorka:
+            m = re.match(r"([A-Z]+)(\d+)$", komorka)
+            wynik[c] = (f"='{nazwa.replace(chr(39), chr(39) * 2)}'!"
+                        f"R[{int(m.group(2)) - wiersz}]C[{_numer_kolumny(m.group(1)) - c - 1}]")
+    return wynik
+
+
+def _listy_wierszy_wynikow(wb, nazwy):
+    """
+    (punkty z RH posortowane, reprezentanci temperatur posortowani) — jak tabele
+    zwyklego szablonu (B:I i O:R). Wilgotnosc: odczyty RHm wyswietlacza (F15:F19)
+    albo nazwa zakladki (punkt z PZ jeszcze bez pomiarow).
+    """
+    wpisy = []
+    for nazwa in nazwy:
+        ws = wb.sheets[nazwa]
+        rh_nazwy = _rh_z_nazwy_zakladki(nazwa)
+        if _zakladka_bez_pomiarow(ws):
+            ma_rh = rh_nazwy is not None
+        else:
+            _adres, rhm = _zakres_rh_zakladki(ws)
+            ma_rh = any(not _brak_wartosci(v) for v in rhm)
+        try:
+            t = float(str(ws.range("D239").value).replace(",", "."))
+        except (TypeError, ValueError):
+            t = _t_z_nazwy_zakladki(nazwa)
+        wpisy.append({"arkusz": nazwa, "val_b": t, "ma_rh": ma_rh,
+                      "rh_ref": rh_nazwy if ma_rh else None,
+                      "powtorka": _to_jest_powtorka_kolizji(nazwa)})
+    return _kolejnosc_wierszy_wynikow(wpisy)
+
+
+def _kolejnosc_wierszy_wynikow(wpisy):
+    """wpisy {'arkusz','val_b','ma_rh','rh_ref','powtorka'} -> (nazwy z RH, nazwy temperatur)."""
+    lista_rh = sorted((w for w in wpisy if w["ma_rh"]), key=_klucz_wiersza_rh)
+
+    def _t(w):
+        try:
+            return _round_half_away_from_zero(float(w["val_b"]))
+        except (TypeError, ValueError):
+            return None
+    lista_t = sorted(_wybierz_reprezentantow_temp(
+        [(_t(w), _rh_z_nazwy_zakladki(w["arkusz"]), w["powtorka"], w)
+         for w in wpisy if _t(w) is not None]), key=_t)
+    return [w["arkusz"] for w in lista_rh], [w["arkusz"] for w in lista_t]
+
+
+def _wyniki_polaczone(app, ws_w, nazwy):
+    """
+    'Wyniki' szablonu wyswietlacz + wyjscie: kazda sekcja dostaje tyle wierszy, ile
+    punktow (wiersze usuwane/wstawiane w srodku sekcji, wiec ramki, formatowanie
+    warunkowe i odwolania zakladek do stopki 'Wynikow' przesuwaja sie same), potem
+    wiersze wg wzoru z nazwami zakladek. Zwraca nr wiersza 'ODLEGŁOŚĆ OD CZUJNIKA'
+    (stopka) albo None.
+    """
+    lista_rh, lista_t = _listy_wierszy_wynikow(ws_w.book, nazwy)
+    n = max(len(lista_rh), len(lista_t), 1)
+    sekcje = _sekcje_wynikow(ws_w.range(ZAKRES_WYNIKOW_POLACZONYCH).formula)
+    if not sekcje:
+        _warn("'Wyniki' (wyswietlacz + wyjscie): nie znaleziono sekcji z odwolaniami "
+              "do zakladek — tabele zostaja jak w szablonie.")
+        return None
+    for s in reversed(sekcje):            # od dolu — wyzsze sekcje nie przesuwaja sie
+        dl = s["koniec"] - s["start"] + 1
+        if n < dl:
+            ws_w.api.Rows(f"{s['start'] + 1}:{s['start'] + dl - n}").Delete()
+        for _ in range(n - dl):
+            ws_w.api.Rows(s["start"]).Copy()
+            ws_w.api.Rows(s["start"] + 1).Insert(Shift=-4121)    # xlShiftDown
+        app.api.CutCopyMode = False
+
+    sekcje = _sekcje_wynikow(ws_w.range(ZAKRES_WYNIKOW_POLACZONYCH).formula)
+    for s in sekcje:
+        kolumny = s["kolumny"]
+        ost = max(c for c, _r, _k in kolumny)
+        wzor = _wiersze_formul(
+            ws_w.range((s["start"], 1), (s["start"], ost + 1)).api.FormulaR1C1)[0]
+        for i in range(n):
+            r = s["start"] + i
+            wiersz = _wiersz_r1c1(wzor, kolumny,
+                                  lista_rh[i] if i < len(lista_rh) else None,
+                                  lista_t[i] if i < len(lista_t) else None, r)
+            ws_w.range((r, 1), (r, ost + 1)).api.FormulaR1C1 = (tuple(wiersz),)
+    print(f"  [Wyniki] Wyswietlacz + wyjscie: {len(sekcje)} sekcje po {n} wierszy "
+          f"(z RH: {len(lista_rh)}, temperatury: {len(lista_t)}).")
+    return _wiersz_stopki(ws_w)
+
+
+def _wiersz_stopki(ws_w):
+    """Wiersz 'ODLEGŁOŚĆ OD CZUJNIKA WZORCOWEGO' w kolumnie A 'Wynikow' (None gdy brak)."""
+    for i, (v, *_r) in enumerate(_wiersze_formul(ws_w.range("A1:A400").formula), start=1):
+        if isinstance(v, str) and v.strip().upper().startswith("ODLEG"):
+            return i
+    return None
 
 
 def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, nowa_nazwa, ark_wyniki, f24_val, sciezki_linkowane=None, _pierwsza_kopia=True, _cache_fg=None):
@@ -3864,7 +4116,9 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
 
             # Przetwornik: odczyty wyjsc (mA/V) ida do G/H (Itm/IRHm), nie do E/F.
             _przetw = rekord.get("PRZETWORNIK")
-            _kol_t, _kol_rh = (7, 8) if _przetw else (5, 6)
+            # Wyswietlacz + wyjscie: E/F z wyswietlacza, G/H (G_dane/H_dane) z wyjscia.
+            _polaczony = bool(rekord.get("POLACZONY"))
+            _kol_t, _kol_rh = (7, 8) if (_przetw and not _polaczony) else (5, 6)
             if isinstance(ef, dict):
                 e_dane = ef.get("E_dane") or []
                 e_fmt_list = ef.get("E_fmt") or []
@@ -3894,6 +4148,20 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                             cell.api.NumberFormat = fmt
                     if fmt:
                         ws.cells(15 + offset, 8).api.NumberFormat = fmt  # H15:H19
+                if _polaczony:
+                    for _kol, _klucz in ((7, "G"), (8, "H")):
+                        _dane = ef.get(f"{_klucz}_dane") or []
+                        _fmty = ef.get(f"{_klucz}_fmt") or []
+                        for offset in range(5):
+                            val = _dane[offset] if offset < len(_dane) else None
+                            fmt = _fmty[offset] if offset < len(_fmty) else None
+                            if isinstance(val, str) and val.strip() in ("-", ""):
+                                val = None
+                            cell = ws.cells(15 + offset, _kol)
+                            if val is not None:
+                                cell.value = val
+                            if fmt:
+                                cell.api.NumberFormat = fmt
 
             # --- Etap 5: naglowki i stopki ---
             ws.range("E4").value = f"{prefiks}/LA/TH/{rok}"
@@ -3914,9 +4182,12 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                             _v = "'" + _v
                         ws.range(_kom).value = _v
                 # Bez wyjscia temperatury rozdzielczosc t nie dotyczy.
-                if _przetw.get("K15") == "-":
+                if _przetw.get("K15") == "-" and not _polaczony:
                     ws.range("H57").value = "-"
-            if rekord.get("K") is not None and not _przetw:
+                if _polaczony and _rh_z_nazwy_zakladki(zd.get("nazwa")) is None:
+                    # Punkt samej temperatury: wyjscie RH nie jest wzorcowane (wzor 239).
+                    ws.range("K16").value = "-"
+            if rekord.get("K") is not None and (not _przetw or _polaczony):
                 # Rozdzielczosc bywa podana osobno dla kazdej temperatury
                 # ('dla 70°C t: 0,056 °C / dla 20°C t: 0,024 °C ...'). Zakladka
                 # dostaje wtedy wartosc dla SWOJEJ temperatury — tekst wpisany
@@ -3993,42 +4264,56 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             ws_w = wb.sheets[ark_wyniki]
             _przetw_w = rekord.get("PRZETWORNIK")
             _uklad_w = _uklad_wynikow(ws_w)
-            # Szablon RH ma 'Wyniki' gotowe 1:1 — zmieniaja sie tylko formuly (punkty).
-            _aktywne = (tabele_przetwornika(_przetw_w)
-                        if _przetw_w and _uklad_w["przetwornik"]
-                        and not _uklad_w.get("szablon_rh") else None)
-            extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=_aktywne)
-            _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows,
-                                          klucz=klucz_histerezy(_aktywne))
-            if _aktywne and working_final:
-                # Naglowki tabel z zakladki (L10 ustawione) — 'pradu/napiecia', I/U, mA/V.
-                import cc_szablon_przetwornika as SZ
-                _z0 = wb.sheets[working_final[0]]
-                _z0.api.Calculate()
-                SZ.przepisz_naglowki(ws_w.api, _z0.api, [SZ.tabela(n) for n in sorted(_aktywne)])
-                if len(_aktywne) == 1:
-                    # Jedna tabela (przetwornik t albo RH) — od kolumny B, jak w zwyklym szablonie.
-                    _t = SZ.tabela(next(iter(_aktywne)))
-                    if _t["wyniki"][0] != "B":
-                        _szer = [ws_w.range(f"{k}1").column_width for k in _t["wyniki"]]
-                        _cel = SZ._kolumny("B", SZ._litera(1 + len(_t["wyniki"])))
-                        ws_w.range(f"{_t['wyniki'][0]}1:{_t['wyniki'][-1]}{9 + extra_rows}").api.Cut(
-                            ws_w.range("B1").api)
-                        for _k, _w in zip(_cel, _szer):
-                            ws_w.range(f"{_k}1").column_width = _w
-                if _przetw_w.get("K15") in (None, "", "-"):
-                    _kreski_temperatury(ws_w, 9 + extra_rows)
-                print(f"  [Wyniki] Przetwornik — tabele: "
-                      f"{', '.join(sorted(_aktywne))} (pozostale usuniete).")
-            elif _przetw_w:
-                _warn(f"Kopia '{nowa_nazwa}': przetwornik, ale szablon ma 'Wyniki' "
-                      f"termohigrometru (wiersz 239) — wskaz szablon przetwornika.")
-            if f24_val is not None:
-                ws_w.range(f"F{24 + extra_rows}").value = f24_val
-            ws_w.range(f"C{28 + extra_rows}").value = dzis
-            ws_w.range(f"C{32 + extra_rows}").value = dzis
-            ws_w.range(f"E{28 + extra_rows}").value = PODPISUJACY_1   # scalone E28:G28
-            ws_w.range(f"E{32 + extra_rows}").value = PODPISUJACY_2   # scalone E32:G32
+            if _uklad_w.get("polaczony"):
+                # Wyswietlacz + wyjscie: 'Wyniki' jak we wzorze, zmienia sie liczba wierszy.
+                _stopka = _wyniki_polaczone(app, ws_w, working_final)
+                _aktualizuj_formule_histerezy(ws_w, working_final, klucz="E219")
+                if _stopka:
+                    if f24_val is not None:
+                        ws_w.range(f"F{_stopka}").value = f24_val
+                    for _dr, _kto in ((4, PODPISUJACY_1), (8, PODPISUJACY_2)):
+                        ws_w.range(f"C{_stopka + _dr}").value = dzis
+                        ws_w.range(f"E{_stopka + _dr}").value = _kto
+                else:
+                    _warn("'Wyniki': brak wiersza 'ODLEGŁOŚĆ OD CZUJNIKA' — daty i podpisy "
+                          "nie wpisane.")
+            else:
+                # Szablon RH ma 'Wyniki' gotowe 1:1 — zmieniaja sie tylko formuly (punkty).
+                _aktywne = (tabele_przetwornika(_przetw_w)
+                            if _przetw_w and _uklad_w["przetwornik"]
+                            and not _uklad_w.get("szablon_rh") else None)
+                extra_rows = _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=_aktywne)
+                _aktualizuj_formule_histerezy(ws_w, working_final, extra_rows,
+                                              klucz=klucz_histerezy(_aktywne))
+                if _aktywne and working_final:
+                    # Naglowki tabel z zakladki (L10 ustawione) — 'pradu/napiecia', I/U, mA/V.
+                    import cc_szablon_przetwornika as SZ
+                    _z0 = wb.sheets[working_final[0]]
+                    _z0.api.Calculate()
+                    SZ.przepisz_naglowki(ws_w.api, _z0.api, [SZ.tabela(n) for n in sorted(_aktywne)])
+                    if len(_aktywne) == 1:
+                        # Jedna tabela (przetwornik t albo RH) — od kolumny B, jak w zwyklym szablonie.
+                        _t = SZ.tabela(next(iter(_aktywne)))
+                        if _t["wyniki"][0] != "B":
+                            _szer = [ws_w.range(f"{k}1").column_width for k in _t["wyniki"]]
+                            _cel = SZ._kolumny("B", SZ._litera(1 + len(_t["wyniki"])))
+                            ws_w.range(f"{_t['wyniki'][0]}1:{_t['wyniki'][-1]}{9 + extra_rows}").api.Cut(
+                                ws_w.range("B1").api)
+                            for _k, _w in zip(_cel, _szer):
+                                ws_w.range(f"{_k}1").column_width = _w
+                    if _przetw_w.get("K15") in (None, "", "-"):
+                        _kreski_temperatury(ws_w, 9 + extra_rows)
+                    print(f"  [Wyniki] Przetwornik — tabele: "
+                          f"{', '.join(sorted(_aktywne))} (pozostale usuniete).")
+                elif _przetw_w:
+                    _warn(f"Kopia '{nowa_nazwa}': przetwornik, ale szablon ma 'Wyniki' "
+                          f"termohigrometru (wiersz 239) — wskaz szablon przetwornika.")
+                if f24_val is not None:
+                    ws_w.range(f"F{24 + extra_rows}").value = f24_val
+                ws_w.range(f"C{28 + extra_rows}").value = dzis
+                ws_w.range(f"C{32 + extra_rows}").value = dzis
+                ws_w.range(f"E{28 + extra_rows}").value = PODPISUJACY_1   # scalone E28:G28
+                ws_w.range(f"E{32 + extra_rows}").value = PODPISUJACY_2   # scalone E32:G32
 
         # --- Etap 7: warunki środowiskowe (Strona 3 F/G + Wzory.xls) ---
         _log_etap("licze warunki srodowiskowe (Pom. nr 9 + Wzory.xls)...", _t0)
@@ -4511,6 +4796,15 @@ def _main_impl():
             print("[BŁĄD] Zaden przyrzad nie ma aktywnych pomiarow na Stronie 3 — "
                   "nie ma czego generowac. Sprawdz kolory komorek E/F.")
             return
+
+    # Wyswietlacz + wyjscie analogowe tego samego przyrzadu -> jeden arkusz.
+    dane_s2, dane_ef, f24_per_kopia, _pary = _polacz_wyswietlacz_z_wyjsciem(
+        dane_s2, dane_ef, f24_per_kopia)
+    for _rd, _ra in _pary:
+        print(f"  [Wyswietlacz + wyjscie] {_numer_do_nazwy(_rd)}: przyrzady "
+              f"{_rd['_nr_przyrzadu']} (wyswietlacz) i {_ra['_nr_przyrzadu']} "
+              f"({_rd['PRZETWORNIK']['L10']}) ze Strony 2 to jeden przyrzad — jeden arkusz, "
+              f"szablon '{SZABLON_TH_PRZETWORNIKA}'.")
 
     if not dane_zakladek:
         print("[OSTRZEŻENIE] Brak definicji zakładek w Strona 3.")

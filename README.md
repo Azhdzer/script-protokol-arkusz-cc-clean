@@ -284,7 +284,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
 | `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
 | `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 869 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+| `testy/` | ~1200 | 886 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -344,7 +344,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**869 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**886 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -412,6 +412,15 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Przyrząd z wyświetlaczem i wyjściem analogowym = jeden arkusz** (zlecenie 239, VAISALA PTU303
+  D4850103): gdy na Stronie 2 są dwa wiersze z tym samym nr fabrycznym — jeden z rozdzielczością odczytu
+  (wyświetlacz, °C/%), drugi ze skalowaniem (wyjście V/mA) — krok 3 robi jeden arkusz z szablonu
+  `… - 1 - TH + Przetwornik (CC).xlsx` (ustawienie `CC_SZABLON_TH_PRZETW`): w zakładkach E/F z
+  wyświetlacza, G/H z wyjścia, K10 `TH/Przetwornik`, kanały/zakres jak dla przetwornika (punkt samej
+  temperatury: K16 `-`). *Wyniki* 1:1 jak w ręcznie przygotowanym arkuszu — trzy sekcje (wyświetlacz 239/246,
+  wyjście w °C/% 253/260, wyjście w V 274/279) z kryteriami zgodności; krok 3 zmienia tylko liczbę wierszy
+  i nazwy zakładek. Świadectwo jak termohigrometru (wyniki z wyświetlacza). Szablon z ręcznego wzoru:
+  `python cc_szablon_przetwornika.py --th <arkusz wzorcowy>`.
 - **Obserwacja: data z sekundami we wszystkich wierszach** — szablon ma formaty tylko do wiersza 7421,
   dłuższy pomiar pokazywał niżej `08.11.2026 20:16` zamiast `2026/11/08 20:16:06`; teraz każdy wiersz dostaje
   format pierwszego wiersza kolumny. **Krok 3: linki serwerowe w otwartym arkuszu** — arkusz otwarty w Excelu

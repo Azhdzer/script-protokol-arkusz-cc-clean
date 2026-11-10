@@ -239,8 +239,152 @@ def zbuduj_rh(zrodlo, wzor_wynikow, cel, app=None):
     return cel
 
 
+# ─── Szablon WYSWIETLACZ + WYJSCIE ('TH + Przetwornik') — z recznie przygotowanego ────
+# Zlecenie 239, VAISALA PTU303 D4850103: przyrzad wzorcowany z wyswietlacza i z wyjscia
+# napieciowego naraz. Operator przygotowal arkusz recznie: zakladki jak w szablonie
+# standardowym (K10 'TH/Przetwornik', E/F z wyswietlacza, G/H z wyjscia), 'Wyniki' z
+# trzema sekcjami (239/246, 253/260, 274/279) i kryteriami zgodnosci. Szablon to TEN
+# plik: 'Wyniki' zostaja 1:1, zakladki wracaja do wartosci szablonu standardowego
+# (bez pomiarow, dat, podpisow), zostaje tyle zakladek, ile ma szablon standardowy.
+DOMYSLNY_CEL_TH = ("xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 "
+                   "z 17.06.2026 - 1 - TH + Przetwornik (CC).xlsx")
+ZAKRES_ZAKLADKI = "A1:BT300"
+ZAKRES_WYNIKOW_TH = "A1:AJ400"
+_RE_NAZWA_ARKUSZA = re.compile(r"'((?:[^']|'')+)'!")
+
+
+def przemapuj_arkusze(formula, mapa):
+    """W formule odwolania 'Arkusz'!... do arkuszy z `mapa` -> nowa nazwa."""
+    def _zm(m):
+        nazwa = m.group(1).replace("''", "'")
+        nowa = mapa.get(nazwa, nazwa)
+        return "'" + nowa.replace("'", "''") + "'!"
+    return _RE_NAZWA_ARKUSZA.sub(_zm, formula)
+
+
+def mapa_usuwanych_arkuszy(formuly, zostaja):
+    """
+    Arkusze spoza `zostaja` (w kolejnosci pojawienia sie w formulach) -> kolejno
+    zostajace arkusze, w kolko. Formuly 'Wynikow' nie dostaja #ADR! po usunieciu zakladek.
+    """
+    kolejnosc = []
+    for f in formuly:
+        for m in _RE_NAZWA_ARKUSZA.finditer(str(f or "")):
+            n = m.group(1).replace("''", "'")
+            if n not in kolejnosc:
+                kolejnosc.append(n)
+    obce = [n for n in kolejnosc if n not in zostaja]
+    return {n: zostaja[i % len(zostaja)] for i, n in enumerate(obce)}
+
+
+def roznice_do_wyczyszczenia(wzor, szablon):
+    """
+    Komorki zakladki wzoru recznego do przywrocenia z szablonu standardowego:
+    [(wiersz, kolumna, wartosc_szablonu)] (od 1). Stale (pomiary, daty, numery,
+    podpisy) wracaja do szablonu; formuly zmienione w recznym wzorze (np. odwolanie
+    do przesunietej stopki 'Wynikow': M50, H56) zostaja.
+    """
+    wynik = []
+    for r, (w_w, w_s) in enumerate(zip(wzor, szablon), start=1):
+        for c, (a, b) in enumerate(zip(w_w, w_s), start=1):
+            a, b = a or "", b or ""
+            if a == b:
+                continue
+            if str(a).startswith("=") and str(b).startswith("="):
+                continue
+            wynik.append((r, c, b))
+    return wynik
+
+
+def zbuduj_th(wzor_reczny, zrodlo, cel, app=None):
+    """Szablon 'TH + Przetwornik' z recznie przygotowanego arkusza `wzor_reczny`."""
+    shutil.copy2(wzor_reczny, cel)
+    try:
+        os.chmod(cel, 0o666)
+    except OSError:
+        pass
+    wlasny = app is None
+    if wlasny:
+        import xlwings as xw
+        app = xw.App(visible=False, add_book=False)
+        app.display_alerts = False
+    try:
+        app.api.EnableEvents = False
+        st = app.books.api.Open(os.path.abspath(zrodlo), UpdateLinks=0, ReadOnly=True)
+        app.api.Calculation = -4135                  # reczne — bez przeliczania 15 zakladek
+        wb = app.books.api.Open(os.path.abspath(cel), UpdateLinks=0)
+        zakl_s = [s.Name for s in st.Worksheets if s.Name != "Wyniki"]
+        zakl_w = [s.Name for s in wb.Worksheets if s.Name != "Wyniki"]
+        zostaja = zakl_w[:len(zakl_s)]
+        ws = wb.Worksheets("Wyniki")
+
+        # 1. 'Wyniki': odwolania do usuwanych zakladek -> zakladki, ktore zostaja.
+        formuly = ws.Range(ZAKRES_WYNIKOW_TH).Formula
+        plaskie = [f for w in formuly for f in w]
+        mapa = mapa_usuwanych_arkuszy(plaskie, zostaja)
+        for r, wiersz in enumerate(formuly, start=1):
+            for c, f in enumerate(wiersz, start=1):
+                if isinstance(f, str) and f.startswith("="):
+                    nowa = przemapuj_arkusze(f, mapa)
+                    if nowa != f:
+                        ws.Cells(r, c).Formula = nowa
+        for n in zakl_w[len(zostaja):]:
+            wb.Worksheets(n).Delete()
+
+        # 2. Zakladki: stale wracaja do szablonu standardowego.
+        wzorzec = st.Worksheets(zakl_s[0]).Range(ZAKRES_ZAKLADKI).Formula
+        for n in zostaja:
+            z = wb.Worksheets(n)
+            for r, c, v in roznice_do_wyczyszczenia(z.Range(ZAKRES_ZAKLADKI).Formula, wzorzec):
+                kom = z.Cells(r, c)
+                if kom.HasArray:
+                    continue
+                if v == "":
+                    (kom.MergeArea if kom.MergeCells else kom).ClearContents()
+                else:
+                    kom.Formula = v
+
+        # 3. Nazwy zakladek jak w szablonie standardowym.
+        for i, n in enumerate(zostaja):
+            wb.Worksheets(n).Name = f"__tmp_{i}__"
+        for i, n in enumerate(zostaja):
+            wb.Worksheets(f"__tmp_{i}__").Name = zakl_s[i]
+
+        # 4. Stopka 'Wynikow': odleglosc jak w szablonie, bez dat i podpisow.
+        kol_a = ws.Range("A1:A400").Formula
+        stopka = next((i for i, (v,) in enumerate(kol_a, start=1)
+                       if str(v or "").strip().upper().startswith("ODLEG")), None)
+        if stopka:
+            ws.Range(f"F{stopka}").Value = st.Worksheets("Wyniki").Range("F24").Value
+            for dr in (4, 8):
+                for kol in ("C", "E"):
+                    ws.Range(f"{kol}{stopka + dr}").MergeArea.ClearContents()
+        ws.Activate()
+        # Zapis w trybie automatycznym (jak szablon standardowy), ale bez przeliczania
+        # pustych zakladek — przeliczenie ich z linkami potrafi trwac kilkanascie minut
+        # (krok 3, zlecenie 239). EnableCalculation nie jest zapisywane w pliku.
+        for n in zakl_s[:len(zostaja)]:
+            wb.Worksheets(n).EnableCalculation = False
+        app.api.Calculation = -4105
+        wb.Save()
+        wb.Close(False)
+        st.Close(False)
+    finally:
+        try:
+            app.api.EnableEvents = True
+        except Exception:
+            pass
+        if wlasny:
+            cc_excel.zamknij_excel_xlwings(app)
+    return cel
+
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--rh":
+    if len(sys.argv) > 1 and sys.argv[1] == "--th":
+        # python cc_szablon_przetwornika.py --th <recznie przygotowany arkusz> [cel]
+        ce = sys.argv[3] if len(sys.argv) > 3 else DOMYSLNY_CEL_TH
+        print(f"Szablon wyswietlacz + wyjscie: {zbuduj_th(sys.argv[2], DOMYSLNE_ZRODLO, ce)}")
+    elif len(sys.argv) > 1 and sys.argv[1] == "--rh":
         # python cc_szablon_przetwornika.py --rh <plik z wzorcowymi 'Wynikami'> [cel]
         ce = sys.argv[3] if len(sys.argv) > 3 else DOMYSLNY_CEL_RH
         print(f"Szablon przetwornika RH: {zbuduj_rh(DOMYSLNE_ZRODLO, sys.argv[2], ce)}")
