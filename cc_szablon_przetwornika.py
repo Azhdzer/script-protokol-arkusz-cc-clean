@@ -379,8 +379,149 @@ def zbuduj_th(wzor_reczny, zrodlo, cel, app=None):
     return cel
 
 
+# ─── Swiadectwo WYSWIETLACZ + WYJSCIE — szablon z wydanego swiadectwa ───────────────
+# Wzor: 1276/239/LA/TH/2026 (ang.). Dane klienta i przyrzadu -> placeholdery, tabele
+# wynikow puste (krok 3 wypelnia je z sekcji 'Wynikow'), 'voltage'/'V' -> placeholdery,
+# zeby ten sam szablon pasowal do wyjscia pradowego.
+DOMYSLNY_CEL_WORD_TH = "xxx_yyy_LA_TH_2026 - TH + przetwornik (ang).docx"
+_RE_OBIEKT = re.compile(r"type:\s*(?P<typ>.+?),\s*serial number:\s*(?P<nr_fabr>.+?),"
+                        r"(?:\s*identification number:\s*(?P<nr_ewid>.+?),)?"
+                        r"\s*manufacturer:\s*(?P<wytworca>.+?),"
+                        r"\s*year of production:\s*(?P<rok_produkcji>\d{4})")
+_RE_ZAKRES_DWOCH = re.compile(r"\((-?[\d,.]+)\s+(?:÷\s*)?(-?[\d,.]+)\)")
+
+
+def zamien_w_akapicie(para, stary, nowy):
+    """Pierwsze wystapienie `stary` w akapicie (takze rozbite miedzy runy) -> `nowy`."""
+    runy = para.runs
+    teksty = [r.text for r in runy]
+    pelny = "".join(teksty)
+    pos = pelny.find(stary)
+    if pos < 0 or not stary:
+        return False
+    run_znaku = [i for i, t in enumerate(teksty) for _ in t]
+    i, j = run_znaku[pos], run_znaku[pos + len(stary) - 1]
+    poczatek = sum(len(t) for t in teksty[:i])
+    laczny = "".join(teksty[i:j + 1])
+    runy[i].text = laczny[:pos - poczatek] + nowy + laczny[pos - poczatek + len(stary):]
+    for r in runy[i + 1:j + 1]:
+        r.text = ""
+    return True
+
+
+def _akapity(doc):
+    """Wszystkie akapity: tresc, tabele, naglowki i stopki."""
+    def z(kontener):
+        yield from kontener.paragraphs
+        for t in kontener.tables:
+            for row in t.rows:
+                for c in row.cells:
+                    yield from z(c)
+    yield from z(doc)
+    for s in doc.sections:
+        yield from z(s.header)
+        yield from z(s.footer)
+
+
+def _tylko_tekst(cell, tekst):
+    """Komorka z jednym akapitem i jednym runem `tekst` (format pierwszego runu)."""
+    pierwszy = cell.paragraphs[0]
+    for p in cell.paragraphs[1:]:
+        p._p.getparent().remove(p._p)
+    for r in pierwszy.runs[1:]:
+        r._r.getparent().remove(r._r)
+    if pierwszy.runs:
+        pierwszy.runs[0].text = tekst
+    else:
+        pierwszy.add_run(tekst)
+
+
+def zbuduj_word_th(wzor_docx, cel, podpis=None):
+    """Szablon swiadectwa wyswietlacz + wyjscie z wydanego swiadectwa `wzor_docx`."""
+    from docx import Document
+    import generuj_arkusze as A
+    doc = Document(wzor_docx)
+    podpis = podpis or A.PODPISUJACY_2
+
+    # 1. Tabele wynikow — puste wiersze (format zostaje).
+    for t in A._tabele_wynikow_swiadectwa(doc):
+        for row in list(t.rows)[A.WIERSZE_NAGLOWKA_SWIADECTWA:]:
+            for c in A._komorki_wiersza(row):
+                A._ustaw_tekst_komorki(c, "")
+
+    # 2. Tabela opisowa (pierwsza): przedmiot, zleceniodawca, warunki, data.
+    for row in doc.tables[0].rows:
+        etykieta = row.cells[0].text.strip().upper()
+        tresc = row.cells[-1]
+        if etykieta.startswith("OBJECT"):
+            m = _RE_OBIEKT.search(tresc.text)
+            if not m:
+                raise ValueError(f"Nie rozpoznano opisu przyrzadu: {tresc.text!r}")
+            for pole, wartosc in m.groupdict().items():
+                if wartosc:
+                    for p in tresc.paragraphs:
+                        zamien_w_akapicie(p, wartosc.strip(), f"[{pole}]")
+        elif etykieta.startswith("APPLICANT"):
+            _tylko_tekst(tresc, "[zleceniodawca]")
+        elif etykieta.startswith("ENVIRONMENTAL"):
+            for p, (a, b) in zip(tresc.paragraphs, (("[temp_min]", "[temp_max]"),
+                                                    ("[wilg_min]", "[wilg_max]"))):
+                m = _RE_ZAKRES_DWOCH.search(p.text)
+                if m:
+                    zamien_w_akapicie(p, m.group(1), a)
+                    zamien_w_akapicie(p, m.group(2), b)
+        elif etykieta.startswith("DATE OF CALIBRATION"):
+            _tylko_tekst(tresc, "[data_wzorcowania]")
+
+    # 3. Naglowek: data wydania, numer swiadectwa.
+    for s in doc.sections:
+        for t in s.header.tables:
+            for row in t.rows:
+                for c in row.cells:
+                    txt = c.text.strip()
+                    m = re.fullmatch(r"\d+/\d+/LA/TH/(\d{4})", txt)
+                    if m:
+                        _tylko_tekst(c, f"[nr_sw]/[nr_zl]/LA/TH/{m.group(1)}")
+                    elif re.fullmatch(r"\d{1,2} [A-Z][a-z]+ \d{4}", txt):
+                        _tylko_tekst(c, "[data]")
+
+    # 4. Tresc: podpis, przypis histerezy, zakresy, rodzaj wyjscia.
+    for p in list(_akapity(doc)):
+        if podpis and podpis in p.text:
+            zamien_w_akapicie(p, podpis, "[Podpis]")
+        m = re.search(r"Point \((-?[\d.,]+) °C, ([\d.,]+) %rh\)", p.text)
+        if m:
+            zamien_w_akapicie(p, m.group(0), "Point ([hist_t] °C, [hist_rh] %rh)")
+        m = re.search(r"tm\s*=\s*\((-?[\d,.]+) ÷ (-?[\d,.]+)\) °C", p.text)
+        if m:
+            zamien_w_akapicie(p, f"({m.group(1)} ÷ {m.group(2)}) °C", "([t_min] ÷ [t_max]) °C")
+        m = re.search(r"RHm\s*=\s*\((-?[\d,.]+) ÷ (-?[\d,.]+)\) %", p.text)
+        if m:
+            zamien_w_akapicie(p, f"({m.group(1)} ÷ {m.group(2)}) %", "([rh_min] ÷ [rh_max]) %")
+        m = re.search(r"\((-?[\d,.]+) ÷ (-?[\d,.]+)\) (V|mA) DC", p.text)
+        if m:
+            zamien_w_akapicie(p, m.group(0), "([wy_min] ÷ [wy_max]) [jedn_wy] DC")
+        for r in p.runs:
+            if "voltage" in r.text:
+                r.text = r.text.replace("voltage", "[wyjscie_en]")
+        runy = p.runs
+        for r, nast in zip(runy, runy[1:]):
+            if r.text == "V" and nast.font.subscript:
+                r.text = "[symbol_en]"
+        if p.text.strip() == "V" and len([r for r in runy if r.text.strip()]) == 1:
+            for r in runy:
+                if r.text.strip() == "V":
+                    r.text = r.text.replace("V", "[jedn_wy]")
+    doc.save(cel)
+    return cel
+
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--th":
+    if len(sys.argv) > 1 and sys.argv[1] == "--word":
+        # python cc_szablon_przetwornika.py --word <wydane swiadectwo.docx> [cel]
+        ce = sys.argv[3] if len(sys.argv) > 3 else DOMYSLNY_CEL_WORD_TH
+        print(f"Szablon swiadectwa wyswietlacz + wyjscie: {zbuduj_word_th(sys.argv[2], ce)}")
+    elif len(sys.argv) > 1 and sys.argv[1] == "--th":
         # python cc_szablon_przetwornika.py --th <recznie przygotowany arkusz> [cel]
         ce = sys.argv[3] if len(sys.argv) > 3 else DOMYSLNY_CEL_TH
         print(f"Szablon wyswietlacz + wyjscie: {zbuduj_th(sys.argv[2], DOMYSLNE_ZRODLO, ce)}")

@@ -43,11 +43,11 @@ class PZPrzyrzad:
     """Jeden przyrzad z PZ (po rozwinieciu 'N szt.' — dokladnie jeden nr fabryczny)."""
     __slots__ = ("nr_zlecenia", "wytworca", "typ", "nr_fabr", "nr_ewid",
                  "czuj_wytworca", "czuj_typ", "czuj_nr_fabr", "uzytkownik",
-                 "zleceniodawca", "pozycja", "komora", "uwagi")
+                 "zleceniodawca", "pozycja", "komora", "uwagi", "rok_produkcji")
 
     def __init__(self, nr_zlecenia="", wytworca="", typ="", nr_fabr="", nr_ewid="",
                  czuj_wytworca="", czuj_typ="", czuj_nr_fabr="", uzytkownik="",
-                 zleceniodawca="", pozycja=None, komora=False, uwagi=""):
+                 zleceniodawca="", pozycja=None, komora=False, uwagi="", rok_produkcji=""):
         self.nr_zlecenia = nr_zlecenia
         self.wytworca = wytworca
         self.typ = typ
@@ -61,6 +61,7 @@ class PZPrzyrzad:
         self.pozycja = pozycja         # numer pozycji w 'Obiekty wzorcowania' (1,2,3...)
         self.komora = komora           # True = wzorcowany w KOMORZE KLIMATYCZNEJ (ILAJ 5.4/11)
         self.uwagi = uwagi             # dopisek za producentem ('– wzorcowanie czujnika ...')
+        self.rok_produkcji = rok_produkcji  # 'year of production: 2008' / 'rok produkcji: 2008'
 
     def __repr__(self):
         return (f"PZPrzyrzad(zlec={self.nr_zlecenia}, wytw={self.wytworca!r}, "
@@ -1090,6 +1091,25 @@ def _podziel_na_wpisy(sekcja):
     return wynik
 
 
+_RE_ROK_PRODUKCJI = re.compile(r'(?:year\s+of\s+production|rok\s+produkcji)\s*:\s*(\d{4})', re.I)
+
+
+def rok_produkcji(text, nr_fabr):
+    """
+    Rok produkcji z opisu przyrzadu w PZ: pierwsze 'year of production: NNNN' po jego
+    numerze fabrycznym, przed opisem nastepnej pozycji ('2) ...'). '' gdy brak.
+    """
+    if not nr_fabr:
+        return ""
+    plaski = re.sub(r'\s+', ' ', text or "")
+    i = plaski.find(nr_fabr)
+    if i < 0:
+        return ""
+    reszta = re.split(r'\s\d{1,2}\)\s', plaski[i:], maxsplit=1)[0]
+    m = _RE_ROK_PRODUKCJI.search(reszta)
+    return m.group(1) if m else ""
+
+
 def parsuj_tekst(text):
     """
     Parsuje TEKST wyciagniety z PZ -> lista PZPrzyrzad.
@@ -1164,6 +1184,7 @@ def parsuj_tekst(text):
                         or uzyt_wg_poz.get(None)
                         or (uzyt if not uzyt_wg_poz else ""))
         p.zleceniodawca = zlec_adres
+        p.rok_produkcji = rok_produkcji(text, p.nr_fabr)
     return przyrzady
 
 

@@ -416,6 +416,9 @@ SZABLON_PRZETWORNIKA_RH = os.environ.get("CC_SZABLON_PRZETW_RH") or (
     "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik RH (CC).xlsx")
 # Przyrzad z wyswietlaczem i wyjsciem analogowym (zlecenie 239, PTU303 D4850103) —
 # jeden arkusz; 'Wyniki' 1:1 jak w recznie przygotowanym (patrz _polacz_wyswietlacz_z_wyjsciem).
+# Swiadectwo takiego przyrzadu — wzor 1276/239/LA/TH/2026 (ang.): piec tabel wynikow jak
+# sekcje 'Wynikow' arkusza (patrz _wypelnij_swiadectwo_th_przetw).
+SZABLON_WORD_TH_PRZETW = C.tekst("GEN_WORD_TH_PRZETW", "xxx_yyy_LA_TH_2026 - TH + przetwornik (ang).docx")
 SZABLON_TH_PRZETWORNIKA = os.environ.get("CC_SZABLON_TH_PRZETW") or (
     "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - TH + Przetwornik (CC).xlsx")
 
@@ -2307,7 +2310,8 @@ def _formatuj_daty_wzorcowania(daty_raw):
 
 
 _FRAGMENTY_NR_EWID = (", nr ewid.: [nr_ewid]", ", nr ewid.:\xa0[nr_ewid]",
-                      ",\xa0nr ewid.: [nr_ewid]", ", nr ewid.:[nr_ewid]")
+                      ",\xa0nr ewid.: [nr_ewid]", ", nr ewid.:[nr_ewid]",
+                      ", identification number: [nr_ewid]")
 
 
 def _bez_nr_ewid(nr_ewid):
@@ -3041,12 +3045,27 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             szablon_word = szablon_word_z_rh or szablon_word_tylko_temp
         else:
             szablon_word = szablon_word_tylko_temp or szablon_word_z_rh
+        # Wyswietlacz + wyjscie: wlasne swiadectwo z tabelami jak sekcje 'Wynikow'.
+        _sekcje_th = None
+        if rekord.get("POLACZONY"):
+            _sekcje_th = TABELE_WYNIKOW_POLACZONYCH.get(os.path.basename(nowa_nazwa_xlsx).lower())
+            if not os.path.exists(os.path.join(folder, SZABLON_WORD_TH_PRZETW)):
+                _warn(f"Brak szablonu '{SZABLON_WORD_TH_PRZETW}' — '{nowa_nazwa_xlsx}' dostaje "
+                      f"swiadectwo termohigrometru (bez wynikow wyjscia).")
+                _sekcje_th = None
+            elif _sekcje_th is None:
+                _warn(f"'{nowa_nazwa_xlsx}': nie odczytano 'Wynikow' (wyswietlacz + wyjscie) — "
+                      f"swiadectwo termohigrometru (bez wynikow wyjscia).")
+            else:
+                szablon_word = SZABLON_WORD_TH_PRZETW
+                print(f"  [Word] '{nowa_nazwa_xlsx}': wyswietlacz + wyjscie -> szablon "
+                      f"'{szablon_word}'.")
         if not szablon_word:
             print(f"  [UWAGA] Brak skonfigurowanego szablonu Word dla kopii '{nowa_nazwa_xlsx}' — pomijam.")
             continue
 
         # Gdy PZ zawiera UZYTKOWNIKA — uzyj wariantu szablonu '(uzytkownik)', jesli istnieje.
-        if uzytkownik_v:
+        if uzytkownik_v and _sekcje_th is None:
             wariant = _wariant_uzytkownik(szablon_word)
             if os.path.exists(os.path.join(folder, wariant)):
                 szablon_word = wariant
@@ -3101,6 +3120,9 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
             **({**placeholdery_przetwornika(rekord),
                 "[zasilanie]": placeholdery_przetwornika(rekord)["[zasilanie]"]
                 or "Uz = (UZUPEŁNIJ) V DC."} if _przetw else {}),
+            **(placeholdery_th_przetw(rekord, data_str, data_wzorcowania,
+                                      getattr(_pzdev, "rok_produkcji", "") if _pzdev else "")
+               if _sekcje_th is not None else {}),
         }.items():
             _zastap_tekst_w_dok(doc, placeholder, wartosc)
         if _przetw and not placeholdery_przetwornika(rekord)["[zasilanie]"]:
@@ -3108,8 +3130,14 @@ def utworz_kopie_word(folder, szablon_word_tylko_temp, szablon_word_z_rh, szablo
                   f"w swiadectwie wpisano 'Uz = (UZUPEŁNIJ) V DC.', popraw recznie.")
 
         punkty = dane_kalibracji[j] if j < len(dane_kalibracji) else []
-        _uzupelnij_tabele_kalibracji(doc, punkty)
-        _zastap_histereza_w_dok(doc, punkty)
+        if _sekcje_th is not None:
+            _wypelnij_swiadectwo_th_przetw(doc, _sekcje_th)
+            if not (getattr(_pzdev, "rok_produkcji", "") if _pzdev else ""):
+                _warn(f"'{nowa_nazwa_docx}': brak roku produkcji w PZ — w swiadectwie "
+                      f"'(UZUPEŁNIJ)', popraw recznie.")
+        else:
+            _uzupelnij_tabele_kalibracji(doc, punkty)
+            _zastap_histereza_w_dok(doc, punkty)
 
         zakresy = warunki_per_kopia[j] if warunki_per_kopia and j < len(warunki_per_kopia) else None
         if zakresy is None:
@@ -3898,6 +3926,165 @@ def _wiersz_stopki(ws_w):
     return None
 
 
+# ─── Swiadectwo przyrzadu z wyswietlaczem i wyjsciem (wzor 1276/239/LA/TH/2026, ang.) ────
+# Piec tabel wynikow = sekcje 'Wynikow' arkusza (lewa czesc 'rh', prawa 't'):
+#   wyswietlacz t + RH, wyswietlacz t, wyjscie w °C/% (t + RH), wyjscie w V/mA (t + RH),
+#   wyjscie w V/mA (t). Kolumny jak w arkuszu (odwolania do zakladek), na koncu
+#   zgodnosc z wymaganiami ('tak'/'nie' -> 'pass'/'fail').
+TABELE_SWIADECTWA_TH_PRZETW = ((0, "rh"), (0, "t"), (1, "rh"), (2, "rh"), (2, "t"))
+WIERSZE_NAGLOWKA_SWIADECTWA = 3
+ZGODNOSC_EN = {"tak": "pass", "nie": "fail"}
+MIESIACE_EN = ("", "January", "February", "March", "April", "May", "June", "July",
+               "August", "September", "October", "November", "December")
+# Odczyt kalibracji (krok 3 i 5) -> tworzenie swiadectwa: {nazwa pliku (lower): sekcje}.
+TABELE_WYNIKOW_POLACZONYCH = {}
+
+
+def data_po_angielsku(tekst):
+    """'05 ÷ 09 listopada 2026 r.' -> '05 ÷ 09 November 2026'."""
+    tekst = str(tekst or "")
+    for m in range(1, 13):
+        tekst = re.sub(rf"\b{MIESIACE_GEN[m]}\b", MIESIACE_EN[m], tekst)
+    return re.sub(r"\s*r\.\s*$", "", tekst)
+
+
+def placeholdery_th_przetw(rekord, data_str, data_wzorcowania, rok_prod=""):
+    """Teksty swiadectwa wyswietlacz + wyjscie (ang.): daty, rodzaj wyjscia, zakresy."""
+    p = placeholdery_przetwornika(rekord)
+    napiecie = (rekord.get("PRZETWORNIK") or {}).get("L10") == "Napięcie"
+    return {
+        **{k: v for k, v in p.items() if k != "[zasilanie]"},
+        "[data]": data_po_angielsku(data_str),
+        "[data_wzorcowania]": data_po_angielsku(data_wzorcowania),
+        "[wyjscie_en]": "voltage" if napiecie else "current",
+        "[symbol_en]": "V" if napiecie else "I",
+        "[rok_produkcji]": rok_prod or "(UZUPEŁNIJ)",
+    }
+
+
+def _tekst_liczby_en(v, fmt):
+    t = tekst_jak_w_komorce(v, fmt)
+    return "" if t is None else str(t).strip().replace(",", ".")
+
+
+def _czytaj_tabele_wynikow_polaczonych(ws_w):
+    """
+    Sekcje 'Wynikow' wyswietlacz + wyjscie jako teksty jak w komorkach:
+    [{'rh': [wiersz...], 't': [wiersz...]}], wiersz = {'arkusz', 'dane', 'zgodnosc'}.
+    """
+    formuly = _wiersze_formul(ws_w.range(ZAKRES_WYNIKOW_POLACZONYCH).formula)
+    wynik = []
+    for s in _sekcje_wynikow(formuly):
+        sekcja = {"rh": [], "t": []}
+        for r in range(s["start"], s["koniec"] + 1):
+            f_wiersza = formuly[r - 1]
+            for rodzaj in ("rh", "t"):
+                ref = [c for c, k, kom in s["kolumny"] if k == rodzaj and kom]
+                if not ref or not str(f_wiersza[ref[0]] or "").startswith("="):
+                    continue
+                zgodnosc = [c for c, k, kom in s["kolumny"] if k == rodzaj and not kom
+                            and '"tak"' in str(f_wiersza[c] or "")]
+
+                def _t(c):
+                    kom = ws_w.range((r, c + 1))
+                    return _tekst_liczby_en(kom.value, kom.number_format)
+                sekcja[rodzaj].append({
+                    "arkusz": _arkusz_z_formuly(f_wiersza[ref[0]]),
+                    "dane": [_t(c) for c in ref],
+                    "zgodnosc": [ZGODNOSC_EN.get(_t(c), _t(c)) for c in zgodnosc],
+                })
+        wynik.append(sekcja)
+    return wynik
+
+
+def _komorki_wiersza(row):
+    """Komorki wiersza tabeli Word bez powtorzen scalen (gridSpan)."""
+    wynik, bylo = [], set()
+    for c in row.cells:
+        if id(c._tc) not in bylo:
+            bylo.add(id(c._tc))
+            wynik.append(c)
+    return wynik
+
+
+def _ustaw_tekst_komorki(cell, tekst, przypis=None):
+    """Tekst komorki w formacie pierwszego runu; `przypis` — indeks gorny po tekscie."""
+    para = cell.paragraphs[0]
+    runy = para.runs
+    if runy:
+        runy[0].text = tekst
+        for r in runy[1:]:
+            r._r.getparent().remove(r._r)
+        run = runy[0]
+    else:
+        run = para.add_run(tekst)
+    if przypis:
+        sup = deepcopy(run._r)
+        run._r.addnext(sup)
+        from docx.text.run import Run
+        r2 = Run(sup, para)
+        r2.text = przypis
+        r2.font.superscript = True
+
+
+def _dopasuj_wiersze_tabeli(table, n, naglowek=WIERSZE_NAGLOWKA_SWIADECTWA):
+    """Tyle wierszy danych, ile punktow — ostatni wiersz (dolna ramka) zostaje ostatni."""
+    dane = list(table.rows)[naglowek:]
+    m = len(dane)
+    if not m:
+        return
+    if n < m:
+        for r in dane[max(n - 1, 0):m - 1]:
+            r._tr.getparent().remove(r._tr)
+        if n == 0:
+            dane[-1]._tr.getparent().remove(dane[-1]._tr)
+    for _ in range(n - m):
+        wzor = dane[-2] if m >= 2 else dane[0]
+        dane[-1]._tr.addprevious(deepcopy(wzor._tr))
+
+
+def _tabele_wynikow_swiadectwa(doc):
+    """Tabele wynikow szablonu: wiersz jednostek (3.) konczy sie 'pass/fail'."""
+    wynik = []
+    for t in doc.tables:
+        if len(t.rows) > WIERSZE_NAGLOWKA_SWIADECTWA - 1:
+            ost = _komorki_wiersza(t.rows[WIERSZE_NAGLOWKA_SWIADECTWA - 1])[-1].text
+            if "pass" in ost.replace(" ", "").lower():
+                wynik.append(t)
+    return wynik
+
+
+def _wypelnij_swiadectwo_th_przetw(doc, sekcje):
+    """Tabele wynikow + przypis o histerezie (punkt powtorzony) wg sekcji 'Wynikow'."""
+    tabele = _tabele_wynikow_swiadectwa(doc)
+    if len(tabele) != len(TABELE_SWIADECTWA_TH_PRZETW):
+        _warn(f"Szablon swiadectwa ma {len(tabele)} tabel wynikow (oczekiwano "
+              f"{len(TABELE_SWIADECTWA_TH_PRZETW)}) — wypelniam po kolei.")
+    hist = None
+    for tabela, (nr, rodzaj) in zip(tabele, TABELE_SWIADECTWA_TH_PRZETW):
+        wiersze = sekcje[nr][rodzaj] if nr < len(sekcje) else []
+        _dopasuj_wiersze_tabeli(tabela, len(wiersze))
+        for row, w in zip(list(tabela.rows)[WIERSZE_NAGLOWKA_SWIADECTWA:], wiersze):
+            teksty = w["dane"] + w["zgodnosc"]
+            powt = rodzaj == "rh" and _to_jest_powtorka_kolizji(w["arkusz"])
+            if powt:
+                hist = hist or w["arkusz"]
+            for i, (cell, tekst) in enumerate(zip(_komorki_wiersza(row), teksty)):
+                if powt and i == 1:
+                    _ustaw_tekst_komorki(cell, f"   {tekst} ", przypis="1)")
+                else:
+                    _ustaw_tekst_komorki(cell, tekst)
+    # Przypis: punkt z nazwy zakladki (nominal z PZ), jak w polskich swiadectwach.
+    if hist:
+        t, rh = _t_z_nazwy_zakladki(hist), _rh_z_nazwy_zakladki(hist)
+        _zastap_tekst_w_dok(doc, "[hist_t]", f"{_round_half_away_from_zero(t):g}" if t is not None else "?")
+        _zastap_tekst_w_dok(doc, "[hist_rh]", f"{_round_half_away_from_zero(rh):g}" if rh is not None else "?")
+    else:
+        for para in list(doc.paragraphs):
+            if "[hist_t]" in para.text:
+                para._p.getparent().remove(para._p)
+
+
 def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, nowa_nazwa, ark_wyniki, f24_val, sciezki_linkowane=None, _pierwsza_kopia=True, _cache_fg=None):
     """
     Otwiera kopie xlsx przez xlwings (COM Excel):
@@ -4469,6 +4656,17 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
 
         working_final_list = [s.name for s in wb.sheets if s.name not in wykluczone]
 
+        # Wyswietlacz + wyjscie: tabele swiadectwa = sekcje 'Wynikow' (tak jak je widac).
+        try:
+            if ark_wyniki in {s.name for s in wb.sheets}:
+                _ws_w = wb.sheets[ark_wyniki]
+                if _uklad_wynikow(_ws_w).get("polaczony"):
+                    TABELE_WYNIKOW_POLACZONYCH[os.path.basename(sciezka_pliku).lower()] = (
+                        _czytaj_tabele_wynikow_polaczonych(_ws_w))
+        except Exception as _e:
+            _warn(f"'Wyniki' (wyswietlacz + wyjscie) — nie odczytano tabel: "
+                  f"{type(_e).__name__}: {_e}", indent="    ")
+
         # Punkty z PZ jeszcze nie domierzone: bez wartosci w swiadectwie i bez wplywu na
         # wybor szablonu Word. Po uzupelnieniu zakladki wejda przy generowaniu samego Worda.
         _bez_pomiarow = [n for n in working_final_list if _zakladka_bez_pomiarow(wb.sheets[n])]
@@ -4696,12 +4894,27 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki,
 
         print("  Odczyt kalibracji po zakonczeniu wypelniania wszystkich kopii...")
         # Swieza sesja rowniez na odczyt kalibracji (poprzednia obrobila ostatnia kopie).
+        # Kopie sa juz zapisane — pad Excela tutaj (RPC, np. gdy rownolegle dziala drugi
+        # krok 3 i sprzata 'zawieszone' Excele) nie moze konczyc kroku bez swiadectw:
+        # swieza sesja i jeszcze jedna proba.
         _zamknij_sesje_excel(app, linked_wbs)
-        app, linked_wbs, sciezki_linkowane = _nowa_sesja_excel(folder)
+        app = None
         for j, nowa_nazwa, sciezka_kopii, _ in kopie:
             print(f"    [Kalibracja {j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
-            kal, klasa = _odczytaj_kalibracje_xlwings(
-                app, sciezka_kopii, ark_wyniki, enable_diag=(j == 0), sciezki_linkowane=sciezki_linkowane)
+            for _proba in range(2):
+                try:
+                    if app is None or _proba:
+                        _zamknij_sesje_excel(app, linked_wbs)
+                        app, linked_wbs, sciezki_linkowane = _nowa_sesja_excel(folder)
+                    kal, klasa = _odczytaj_kalibracje_xlwings(
+                        app, sciezka_kopii, ark_wyniki, enable_diag=(j == 0),
+                        sciezki_linkowane=sciezki_linkowane)
+                    break
+                except Exception as _e:
+                    if _proba:
+                        raise
+                    _warn(f"Excel padl przy odczycie kalibracji ({type(_e).__name__}: {_e}) — "
+                          f"nowa sesja Excela i ponowna proba.", indent="    ")
             dane_kalibracji.append(kal or [])
             klasa_wilg_per_kopia.append(klasa)
     finally:

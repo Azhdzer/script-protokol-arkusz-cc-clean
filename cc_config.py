@@ -451,6 +451,13 @@ _ARKUSZE = [
        grupa="Szablony Word", wzorzec=(".docx",),
        opis="Przetwornik t + RH, gdy czesc punktow jest tylko temperaturowa — dwie tabele. "
             "Warianty '(uzytkownik)' wszystkich szablonow przetwornikow dobierane sa wg PZ."),
+    _U("GEN_WORD_TH_PRZETW", "Szablon Word — wyswietlacz + wyjscie analogowe", "plik",
+       "xxx_yyy_LA_TH_2026 - TH + przetwornik (ang).docx", "ark",
+       grupa="Szablony Word", wzorzec=(".docx",),
+       opis="Przyrzad wzorcowany z wyswietlacza i z wyjscia naraz (jeden arkusz 'TH + "
+            "Przetwornik'): piec tabel wynikow jak sekcje 'Wynikow' arkusza, ze zgodnoscia "
+            "pass/fail. Z innego wydanego swiadectwa: python cc_szablon_przetwornika.py "
+            "--word <swiadectwo.docx>"),
 
     # --- zaawansowane ---
     _U("GEN_K18_DOM", "Higrometr K18 — domyslny", "tekst", "S8000", "ark",

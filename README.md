@@ -421,6 +421,15 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   wyjście w °C/% 253/260, wyjście w V 274/279) z kryteriami zgodności; krok 3 zmienia tylko liczbę wierszy
   i nazwy zakładek. Świadectwo jak termohigrometru (wyniki z wyświetlacza). Szablon z ręcznego wzoru:
   `python cc_szablon_przetwornika.py --th <arkusz wzorcowy>`.
+- **Świadectwo przyrządu z wyświetlaczem i wyjściem** (`xxx_yyy_LA_TH_2026 - TH + przetwornik (ang).docx`,
+  ustawienie `GEN_WORD_TH_PRZETW`, zbudowany z wydanego 1276/239/LA/TH/2026): pięć tabel wyników = sekcje
+  *Wyników* arkusza (wyświetlacz t+RH i t, wyjście w °C/%, wyjście w V/mA t+RH i t) z kolumną zgodności
+  pass/fail; przypis o punkcie powtórzonym, daty po angielsku, rok produkcji z PZ
+  (`year of production` / `rok produkcji`), voltage/current i V/I/mA wg L10. Sprawdzone na 239: tabele
+  i treść 1:1 z wydanym świadectwem. Szablon z innego świadectwa:
+  `python cc_szablon_przetwornika.py --word <świadectwo.docx>`.
+- **Krok 3: pad Excela przy odczycie kalibracji** (kopie już zapisane) — nowa sesja Excela i ponowna próba,
+  zamiast kończyć krok bez świadectw.
 - **Obserwacja: data z sekundami we wszystkich wierszach** — szablon ma formaty tylko do wiersza 7421,
   dłuższy pomiar pokazywał niżej `08.11.2026 20:16` zamiast `2026/11/08 20:16:06`; teraz każdy wiersz dostaje
   format pierwszego wiersza kolumny. **Krok 3: linki serwerowe w otwartym arkuszu** — arkusz otwarty w Excelu

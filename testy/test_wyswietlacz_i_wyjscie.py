@@ -185,5 +185,109 @@ class TestBudowaSzablonu(unittest.TestCase):
                          [(1, 1, "/LA/TH/2026"), (1, 3, ""), (2, 3, "Termohigrometr")])
 
 
+def dokument_z_tabelami(liczby_wierszy=(3, 2, 3, 3, 2)):
+    from docx import Document
+    doc = Document()
+    doc.add_paragraph("1) Point ([hist_t] °C, [hist_rh] %rh) was repeated.")
+    for n in liczby_wierszy:
+        t = doc.add_table(rows=3 + n, cols=3)
+        t.rows[2].cells[2].text = "pass/fail"
+        for r in t.rows[3:]:
+            for c in r.cells:
+                c.paragraphs[0].add_run("")
+    return doc
+
+
+def wiersz(arkusz, *dane, zg=("tak",)):
+    return {"arkusz": arkusz, "dane": list(dane), "zgodnosc": [A.ZGODNOSC_EN[z] for z in zg]}
+
+
+class TestSwiadectwo(unittest.TestCase):
+
+    def sekcje(self):
+        rh = [wiersz("10, 22", "10.1", "22.2"), wiersz("20, 45", "20.1", "44.6"),
+              wiersz("20, 45 (2)", "20.1", "44.4", zg=("nie",))]
+        t = [wiersz("-25, -", "-25.1", "-25.3")]
+        return [{"rh": rh, "t": t}, {"rh": rh[:2], "t": t}, {"rh": rh, "t": t + t}]
+
+    def test_tabele_i_przypis(self):
+        doc = dokument_z_tabelami()
+        A._wypelnij_swiadectwo_th_przetw(doc, self.sekcje())
+        tabele = A._tabele_wynikow_swiadectwa(doc)
+        self.assertEqual([len(t.rows) - 3 for t in tabele], [3, 1, 2, 3, 2])
+        w = tabele[0].rows[5]
+        self.assertEqual(w.cells[0].text, "20.1")
+        self.assertEqual(w.cells[1].text, "   44.4 1)")
+        self.assertTrue(w.cells[1].paragraphs[0].runs[-1].font.superscript)
+        self.assertEqual(w.cells[2].text, "fail")
+        self.assertEqual(tabele[1].rows[3].cells[2].text, "pass")
+        self.assertIn("Point (20 °C, 45 %rh)", doc.paragraphs[0].text)
+
+    def test_bez_powtorki_przypis_znika(self):
+        doc = dokument_z_tabelami()
+        sek = [{"rh": [wiersz("10, 22", "10.1", "22.2")], "t": []}] * 3
+        A._wypelnij_swiadectwo_th_przetw(doc, sek)
+        self.assertFalse(any("[hist_t]" in p.text for p in doc.paragraphs))
+
+    def test_wiecej_wierszy_niz_w_szablonie(self):
+        doc = dokument_z_tabelami((2, 2, 2, 2, 2))
+        rh = [wiersz(f"{t}, 50", str(t), "50.0") for t in range(5)]
+        A._wypelnij_swiadectwo_th_przetw(doc, [{"rh": rh, "t": []}] * 3)
+        t0 = A._tabele_wynikow_swiadectwa(doc)[0]
+        self.assertEqual([r.cells[0].text for r in t0.rows[3:]], ["0", "1", "2", "3", "4"])
+
+    def test_daty_po_angielsku(self):
+        self.assertEqual(A.data_po_angielsku("05 ÷ 09 listopada 2026 r."), "05 ÷ 09 November 2026")
+        self.assertEqual(A.data_po_angielsku("29 kwietnia, 04 maja 2026 r."), "29 April, 04 May 2026")
+
+    def test_placeholdery_wyjscia(self):
+        rek = {"P": "", "F": "EV1", "PRZETWORNIK": {"L10": "Prąd", "M22": 4, "O22": 20}}
+        p = A.placeholdery_th_przetw(rek, "10 listopada 2026 r.", "")
+        self.assertEqual((p["[wyjscie_en]"], p["[symbol_en]"], p["[jedn_wy]"], p["[wy_min]"]),
+                         ("current", "I", "mA", "4"))
+        rek["PRZETWORNIK"]["L10"] = "Napięcie"
+        p = A.placeholdery_th_przetw(rek, "10 listopada 2026 r.", "")
+        self.assertEqual((p["[wyjscie_en]"], p["[symbol_en]"], p["[jedn_wy]"], p["[data]"]),
+                         ("voltage", "V", "V", "10 November 2026"))
+
+
+class TestSzablonSwiadectwa(unittest.TestCase):
+
+    def test_zamiana_rozbita_miedzy_runy(self):
+        from docx import Document
+        p = Document().add_paragraph()
+        for t in ("(", "2", "0", ",", "7", "  2", "4", ") °C"):
+            p.add_run(t)
+        self.assertTrue(SZ.zamien_w_akapicie(p, "20,7", "[temp_min]"))
+        self.assertEqual(p.text, "([temp_min]  24) °C")
+
+    def test_opis_przyrzadu(self):
+        m = SZ._RE_OBIEKT.search("Temperature and humidity transmitter type: PTU303, serial number: "
+                                 "D4850103, identification number: EV363465, manufacturer: VAISALA, "
+                                 "year of production: 2008.")
+        self.assertEqual(m.group("typ", "nr_fabr", "nr_ewid", "wytworca", "rok_produkcji"),
+                         ("PTU303", "D4850103", "EV363465", "VAISALA", "2008"))
+
+    def test_rok_produkcji_z_pz(self):
+        import pz_dane
+        tekst = ("Calibration objects: 1) Temperature and humidity transmitter type: PTU303, "
+                 "serial number: D4850103, identification number: EV363465, manufacturer: "
+                 "VAISALA, year of production: 2008. 2) Pressure transmitter type: X, serial "
+                 "number: P1, year of production: 2015.")
+        self.assertEqual(pz_dane.rok_produkcji(tekst, "D4850103"), "2008")
+        self.assertEqual(pz_dane.rok_produkcji(tekst, "P1"), "2015")
+        self.assertEqual(pz_dane.rok_produkcji("typ: X, nr fabr.: A1. 2) typ: Y, nr fabr.: B2, "
+                                               "rok produkcji: 2010.", "A1"), "")
+
+    def test_rok_produkcji_w_swiadectwie(self):
+        rek = {"P": "", "F": "", "PRZETWORNIK": {"L10": "Napięcie"}}
+        self.assertEqual(A.placeholdery_th_przetw(rek, "", "", "2008")["[rok_produkcji]"], "2008")
+        self.assertEqual(A.placeholdery_th_przetw(rek, "", "")["[rok_produkcji]"], "(UZUPEŁNIJ)")
+
+    def test_zakres_warunkow(self):
+        m = SZ._RE_ZAKRES_DWOCH.search("Relative humidity: (29  50) %")
+        self.assertEqual(m.groups(), ("29", "50"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

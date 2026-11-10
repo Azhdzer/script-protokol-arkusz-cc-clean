@@ -123,8 +123,11 @@ def odczytaj_arkusz(sciezka):
             if i == 0:
                 for k in ("E5", "E6", "G6"):
                     dane[k] = ws[k].value
-                if str(ws["K10"].value or "").strip() == "Przetwornik":
+                k10 = str(ws["K10"].value or "").strip()
+                if k10 in ("Przetwornik", A.K10_TH_PRZETWORNIK):
                     dane["przetwornik"] = {k: ws[k].value for k in A.KOMORKI_PRZETWORNIKA}
+                    # Wyswietlacz + wyjscie (krok 3): swiadectwo z sekcji 'Wynikow'.
+                    dane["polaczony"] = k10 == A.K10_TH_PRZETWORNIK
         return dane
     finally:
         wb.close()
@@ -247,6 +250,7 @@ def rekord_arkusza(nazwa, dane, pz):
         "D": dane.get("E6"),
         "P": (getattr(dev, "uwagi", "") if dev else "") or "",
         "PRZETWORNIK": dane.get("przetwornik"),
+        "POLACZONY": bool(dane.get("polaczony")),
     }
 
 
