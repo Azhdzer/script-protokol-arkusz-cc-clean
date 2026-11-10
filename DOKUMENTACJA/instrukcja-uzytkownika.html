@@ -2,589 +2,847 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Generator CC — Instrukcja użytkownika</title>
 <script src="mermaid.min.js"></script>
 <style>
-  @page { size: A4 portrait; margin: 18mm 16mm 16mm; }
-  :root{ --ink:#1e293b; --muted:#5b6b85; --accent:#2563eb; --accent2:#1d4ed8; --stroke:#e2e8f0; }
+  @page { size: A4 portrait; margin: 16mm 14mm 16mm; }
+  :root{ --ink:#1e293b; --muted:#5b6b85; --accent:#2563eb; --accent2:#1d4ed8; --stroke:#e2e8f0;
+         --in:#2563eb; --xf:#d97706; --out:#16a34a; --pz:#9333ea; }
   *{box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact}
   html,body{margin:0;padding:0;font-family:'Segoe UI',system-ui,sans-serif;color:var(--ink);font-size:10.5pt;line-height:1.5}
   h1{font-size:22pt;color:#0f172a;margin:0 0 3mm}
-  h2{font-size:15pt;color:#0f172a;border-bottom:2px solid var(--accent);padding-bottom:2mm;margin:0 0 4mm}
-  h3{font-size:12pt;color:var(--accent2);margin:5mm 0 2mm}
+  h2{font-size:15pt;color:#0f172a;border-bottom:2px solid var(--accent);padding-bottom:2mm;margin:8mm 0 4mm}
+  h3{font-size:12pt;color:var(--accent2);margin:6mm 0 2mm}
+  h4{font-size:10.5pt;margin:4mm 0 1mm;color:#0f172a}
   p{margin:2mm 0} ul,ol{margin:2mm 0 3mm 6mm;padding:0} li{margin:1.2mm 0}
-  code{font-family:'Cascadia Mono','Consolas',monospace;background:#f1f5f9;padding:0 4px;border-radius:4px;font-size:9.5pt;color:#0b6}
-  .mono{font-family:'Cascadia Mono','Consolas',monospace;font-size:9.5pt}
+  code{font-family:'Cascadia Mono','Consolas',monospace;background:#f1f5f9;padding:0 4px;border-radius:4px;font-size:9pt;color:#0b6b3a}
   pre{background:#0f172a;color:#e2e8f0;padding:3mm 4mm;border-radius:2mm;font-family:'Cascadia Mono','Consolas',monospace;
-      font-size:9pt;line-height:1.45;overflow:hidden;white-space:pre-wrap}
-  pre .c{color:#7dd3fc} pre .g{color:#86efac}
-  table{width:100%;border-collapse:collapse;margin:3mm 0;font-size:9.5pt}
-  th,td{border:1px solid var(--stroke);padding:1.8mm 2.5mm;text-align:left;vertical-align:top}
-  tr{page-break-inside:avoid;break-inside:avoid}
-  h2,h3{page-break-after:avoid;break-after:avoid}
+      font-size:9pt;line-height:1.45;white-space:pre-wrap}
+  pre.mermaid{background:none;color:inherit;padding:0;margin:0;white-space:normal}
+  table{width:100%;border-collapse:collapse;margin:3mm 0;font-size:9.2pt}
+  th,td{border:1px solid var(--stroke);padding:1.5mm 2.2mm;text-align:left;vertical-align:top}
   th{background:#eef4ff;color:#334155;font-weight:700}
   tr:nth-child(even) td{background:#fafcff}
+  td.r,th.r{text-align:right}
+  tr{page-break-inside:avoid;break-inside:avoid}
+  h2,h3,h4{page-break-after:avoid;break-after:avoid}
   .chapter{page-break-before:always}
   .note{border-left:4px solid var(--accent);background:#eff6ff;padding:2.5mm 4mm;margin:3mm 0;border-radius:0 2mm 2mm 0}
   .warn{border-left-color:#d97706;background:#fffbeb}
   .ok{border-left-color:#16a34a;background:#f0fdf4}
-  .diagbox{border:1px solid var(--stroke);border-radius:2mm;padding:3mm;margin:3mm 0;text-align:center;page-break-inside:avoid}
-  .kv{display:grid;grid-template-columns:42mm 1fr;gap:1mm 4mm;margin:2mm 0}
-  .kv .k{color:var(--muted);font-weight:600}
+  .bad{border-left-color:#dc2626;background:#fef2f2}
+  .diagbox{border:1px solid var(--stroke);border-radius:2mm;padding:3mm;margin:3mm 0;text-align:center;page-break-inside:avoid;background:#fff}
+  .diagbox svg{max-height:215mm;height:auto}
+  .diagbox .cap{font-size:8.5pt;color:var(--muted);margin-top:1mm}
+  .muted{color:var(--muted)} .small{font-size:8.5pt}
+  .tag{display:inline-block;font-size:7.5pt;padding:0 2mm;border-radius:10px;background:#e2e8f0;color:#334155;font-weight:600}
+  .tag.z{background:#fef3c7;color:#92400e}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin:4mm 0}
+  .stat{border:1px solid var(--stroke);border-radius:2mm;padding:3mm;text-align:center;background:#f8fafc}
+  .stat b{display:block;font-size:17pt;color:var(--accent2)} .stat span{font-size:8.5pt;color:var(--muted)}
+  .steps{display:grid;grid-template-columns:repeat(6,1fr);gap:2mm;margin:4mm 0}
+  .steps div{border:1px solid var(--stroke);border-radius:2mm;padding:2mm;font-size:8.5pt;background:#f8fafc}
+  .steps b{display:block;color:var(--accent2);font-size:9.5pt}
+  table.ust td:nth-child(2){white-space:nowrap}
+  table.ust{font-size:8.4pt}
   /* cover */
-  .cover{height:247mm;display:flex;flex-direction:column;justify-content:center;page-break-after:always}
+  .cover{min-height:240mm;display:flex;flex-direction:column;justify-content:center;page-break-after:always}
   .cover .brand{font-size:11pt;letter-spacing:3px;text-transform:uppercase;color:var(--accent);font-weight:700}
   .cover h1{font-size:30pt;margin:6mm 0 4mm;line-height:1.12}
-  .cover .st{font-size:15pt;color:var(--muted)}
-  .cover .meta{margin-top:16mm;border-top:1px solid var(--stroke);padding-top:6mm;font-size:11pt}
-  .badge{display:inline-block;background:#2563eb;color:#fff;padding:1mm 4mm;border-radius:20px;font-weight:700;font-size:11pt}
-  .toc a{color:var(--ink);text-decoration:none}
-  .toc li{margin:1.6mm 0;font-size:11pt}
-  .lead{font-size:11.5pt;color:#334155}
-  footer.run{position:fixed;bottom:6mm;left:16mm;right:16mm;display:flex;justify-content:space-between;
-     font-size:8pt;color:#94a3b8;border-top:1px solid var(--stroke);padding-top:1.5mm}
-  @media screen{ body{background:#e9edf5;padding:16px} .sheet{background:#fff;max-width:210mm;margin:0 auto 16px;
-     padding:18mm 16mm;box-shadow:0 6px 24px rgba(15,23,42,.12)} }
+  .cover .st{font-size:14pt;color:var(--muted)}
+  .cover .meta{margin-top:14mm;border-top:1px solid var(--stroke);padding-top:6mm;font-size:10.5pt}
+  .toc{columns:2;column-gap:10mm}
+  .toc a{color:var(--ink);text-decoration:none} .toc li{margin:1.2mm 0;font-size:10pt;break-inside:avoid}
+  @media screen{ body{background:#e9edf5;padding:16px} .sheet{background:#fff;max-width:215mm;margin:0 auto 16px;
+     padding:16mm 14mm;box-shadow:0 6px 24px rgba(15,23,42,.12)} }
+  @media print{ .sheet{padding:0} details{display:block} }
 </style>
 </head>
 <body>
 <div class="sheet">
 
-<footer class="run"><span>by Artsiom Azhdzer</span><span>Wersja 1.2 · 2026</span></footer>
-
-<!-- COVER -->
+<!-- ═══════════════════════════ OKŁADKA ═══════════════════════════ -->
 <div class="cover">
   <div class="brand">Laboratorium Pomiarowe PLUM · System wzorcowania</div>
   <h1>Generator arkuszy i protokołów<br>wzorcowania CC / CC‑04</h1>
-  <div class="st">Instrukcja użytkownika — pełny opis możliwości, konfiguracji i obsługi programu.</div>
+  <div class="st">Instrukcja użytkownika i opis działania — od logów przyrządów do świadectw wzorcowania.</div>
+  <!-- AUTO:statystyki -->
+<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 265</b><span>linii kodu</span></div><div class="stat"><b>627</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>923</b><span>testów (50 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 10.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<!-- /AUTO:statystyki -->
   <div class="meta">
-    <div class="kv">
-      <div class="k">Nazwa programu</div><div>Generator CC (CC / CC‑04)</div>
-      <div class="k">Wersja</div><div><span class="badge">1.2</span></div>
-      <div class="k">Autor</div><div>Artsiom Azhdzer</div>
-      <div class="k">Wydanie</div><div>lipiec 2026 r.</div>
-      <div class="k">Przeznaczenie</div><div>Automatyzacja wzorcowania termohigrometrów: analiza logów,
-        protokoły, arkusze obliczeniowe Excel i świadectwa Word.</div>
-      <div class="k">Środowisko</div><div>Windows 10/11 · Microsoft Excel · Python</div>
-    </div>
+    <b>Wersja 2.0</b> · listopad 2026 · opracował Artsiom Azhdzer<br>
+    Program: <code>ProtokolCC.exe</code> (panel PySide6) albo <code>app_gui.py</code> z folderu projektu.<br>
+    Dokument techniczny dla programisty: <a href="infografika-projektu.html">infografika-projektu.html</a>.
   </div>
 </div>
 
-<!-- SPIS TRESCI -->
-<div class="chapter">
-  <h2>Spis treści</h2>
-  <ul class="toc" style="list-style:none;padding-left:0">
-    <li>1. O programie</li>
-    <li>2. Wymagania i uruchomienie środowiska</li>
-    <li>3. Struktura projektu i pliki robocze</li>
-    <li>4. Jak działa program — pełny obieg</li>
-    <li>5. Przygotowanie danych wejściowych</li>
-    <li>6. Moduł 1 — Analiza logów pomiarowych</li>
-    <li>7. Moduł 2 — Dane przyrządów z zamówień (PZ)</li>
-    <li>8. Moduł 3 — Obserwacja i protokół</li>
-    <li>9. Moduł 4 — Arkusze obliczeniowe i świadectwa</li>
-    <li>10. Szablony i mapowanie komórek</li>
-    <li>11. Konfiguracja — pełny wykaz parametrów</li>
-    <li>12. Procedura krok po kroku</li>
-    <li>13. Rozwiązywanie problemów</li>
-    <li>14. Słownik pojęć</li>
-  </ul>
-  <div class="note">Program składa się z <b>czterech modułów</b> (skryptów) uruchamianych kolejno.
-  Dane przekazywane są przez pliki w folderze roboczym — Excel, TXT i PDF. Każdy moduł ma sekcję
-  <b>KONFIGURACJA</b> na początku pliku, gdzie ustawia się nazwy plików i parametry pracy.</div>
+<!-- ═══════════════════════════ SPIS TREŚCI ═══════════════════════════ -->
+<h2>Spis treści</h2>
+<ol class="toc">
+  <li><a href="#o-programie">O programie — co automatyzuje</a></li>
+  <li><a href="#uruchomienie">Wymagania i uruchomienie</a></li>
+  <li><a href="#pliki">Foldery, pliki i szablony</a></li>
+  <li><a href="#obieg">Pełny obieg — schemat</a></li>
+  <li><a href="#panel">Panel sterujący</a></li>
+  <li><a href="#przygotowanie">Przygotowanie (lista kontrolna)</a></li>
+  <li><a href="#krok1">Krok 1 — analiza logów</a></li>
+  <li><a href="#krok2">Krok 2 — obserwacja i protokół</a></li>
+  <li><a href="#algorytm">Krok 2 — jak wybierane są punkty</a></li>
+  <li><a href="#protokol">Krok 2 — co trafia do protokołu</a></li>
+  <li><a href="#krok3">Krok 3 — arkusze i świadectwa</a></li>
+  <li><a href="#typy">Krok 3 — typy przyrządów i szablony</a></li>
+  <li><a href="#word">Krok 3 — świadectwa Word</a></li>
+  <li><a href="#krok4">Krok 4 — warunki środowiskowe</a></li>
+  <li><a href="#krok5">Krok 5 — świadectwa z arkuszy</a></li>
+  <li><a href="#bezpieczenstwo">Kopie zapasowe, otwarte pliki, Excel</a></li>
+  <li><a href="#ustawienia">Wszystkie ustawienia</a></li>
+  <li><a href="#problemy">Rozwiązywanie problemów</a></li>
+  <li><a href="#slownik">Słownik pojęć</a></li>
+</ol>
+
+<!-- ═══════════════════════════ 1 ═══════════════════════════ -->
+<h2 id="o-programie" class="chapter">1. O programie — co automatyzuje</h2>
+<p class="lead">Program prowadzi cały obieg wzorcowania termohigrometrów, termometrów i przetworników
+w komorach klimatycznych <b>CC</b> i <b>CC‑04</b>: z surowych plików przyrządów i multimetru robi arkusz
+obserwacji, protokół, arkusze obliczeniowe Excel i świadectwa wzorcowania Word. Każdy krok uruchamia się
+osobnym przyciskiem w panelu — po każdym można sprawdzić i poprawić wynik ręcznie.</p>
+
+<div class="steps">
+  <div><b>Przygotowanie</b>Pliki wejściowe i ich świeżość</div>
+  <div><b>1 · Analiza logów</b>Logi przyrządów → jeden format</div>
+  <div><b>2 · Obserwacja</b>TXT multimetru → obserwacja + protokół</div>
+  <div><b>3 · Arkusze i Word</b>Protokół → arkusze Excel + świadectwa</div>
+  <div><b>4 · Warunki</b>Pom. nr 9 → t/RH pomieszczenia w protokole</div>
+  <div><b>5 · Świadectwa</b>Gotowe arkusze → świadectwa Word</div>
 </div>
 
-<!-- 1. O PROGRAMIE -->
-<div class="chapter">
-  <h2>1. O programie</h2>
-  <p class="lead">Generator CC automatyzuje pełny obieg dokumentacji wzorcowania termohigrometrów
-  w akredytowanym laboratorium — od surowych logów czujników aż po gotowe świadectwa wzorcowania.</p>
-  <h3>Główne możliwości</h3>
-  <ul>
-    <li><b>Ujednolicanie danych z loggerów</b> — automatyczne rozpoznanie i przetworzenie 11 formatów
-      czujników temperatury/wilgotności do jednego formatu wynikowego.</li>
-    <li><b>Analiza stabilności pomiaru</b> — wykrywanie punktów wzorcowania, dobór okna czasowego
-      i 5 reprezentatywnych odczytów na punkt, z automatycznym kolorowaniem.</li>
-    <li><b>Generowanie protokołu</b> (CC oraz CC‑04) — wypełnianie danych pomiarowych i tabeli
-      przyrządów na podstawie zamówień (PZ), dwujęzycznie (PL/EN).</li>
-    <li><b>Kopie arkuszy obliczeniowych Excel</b> — z zachowaniem formuł, linków i warunków
-      środowiskowych (automatyzacja przez Microsoft Excel).</li>
-    <li><b>Świadectwa wzorcowania Word</b> — wypełnianie pól, tabel kalibracji, dat i danych użytkownika.</li>
-  </ul>
-  <h3>Moduły programu</h3>
-  <table>
-    <tr><th>Moduł (plik)</th><th>Rola</th><th>Wynik</th></tr>
-    <tr><td><code>analizuj_excele.py</code></td><td>Parser logów czujników</td><td><code>wyniki/*.xlsx</code></td></tr>
-    <tr><td><code>pz_dane.py</code></td><td>Dane przyrządów z PZ + rozdzielczości</td><td>(moduł pomocniczy)</td></tr>
-    <tr><td><code>generuj_obserwacje.py</code></td><td>Obserwacja + protokół (CC/CC‑04)</td><td>protokół (Strona 2 + 3)</td></tr>
-    <tr><td><code>generuj_arkusze.py</code></td><td>Kopie Excel + świadectwa Word</td><td>kopie arkuszy + .docx</td></tr>
-  </table>
-  <h3>Zależności modułów</h3>
-  <div class="diagbox">
-  <div class="mermaid">
+<div class="diagbox"><pre class="mermaid">
 flowchart LR
-  LOG["Logi DUT"]:::in --> M1["analizuj_excele"]:::xf --> WYN[("wyniki/*")]:::out --> M3["generuj_obserwacje"]:::xf
-  TXT["TXT multimetru"]:::in --> M3 --> PROTO[("protokol")]:::out --> M4["generuj_arkusze"]:::xf
-  PZ["PZ + Zestawienie"]:::in --> M2["pz_dane"]:::pz --> M3
-  M2 -.fallback.-> M4
-  M4 --> OUT[("kopie Excel + swiadectwa Word")]:::out
+  LOG["Logi przyrządów<br/>csv · xlsx · txt · pdf · log"]:::in --> K1["1 · Analiza logów"]:::xf
+  K1 --> WYN[("wyniki/<br/>&lt;zlecenie&gt;_&lt;serial&gt;.xlsx")]:::out
+  TXT["TXT multimetru<br/>(komora CC / CC-04)"]:::in --> K2["2 · Obserwacja"]:::xf
+  PZ["PZ — potwierdzenie<br/>zamówienia (PDF)"]:::pz --> K2
+  WYN --> K2
+  K2 --> OBS[("Obserwacja .xlsx")]:::out
+  K2 --> PROT[("Protokół .xlsx<br/>Strona 1·2·3")]:::out
+  POM["Pom. nr 9<br/>czujnik pomieszczenia"]:::in --> K4["4 · Warunki"]:::xf
+  K4 --> PROT
+  PROT --> K3["3 · Arkusze i Word"]:::xf
+  PZ --> K3
+  K3 --> ARK[("Arkusze obliczeniowe<br/>po jednym na przyrząd")]:::out
+  K3 --> SW[("Świadectwa .docx")]:::out
+  ARK -. "uzupełnione ręcznie" .-> K5["5 · Świadectwa z arkuszy"]:::xf
+  K5 --> SW
   classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
   classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
   classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-  </div>
-  </div>
-</div>
+</pre><div class="cap">Rys. 1. Obieg w skrócie: niebieskie — dane wejściowe, żółte — kroki programu, zielone — pliki wynikowe, fioletowe — PZ.</div></div>
 
-<!-- 2. WYMAGANIA -->
-<div class="chapter">
-  <h2>2. Wymagania i uruchomienie środowiska</h2>
-  <h3>Wymagania</h3>
-  <ul>
-    <li>System <b>Windows 10 lub 11</b>.</li>
-    <li>Zainstalowany <b>Microsoft Excel</b> (program automatyzuje Excel przez COM/xlwings).</li>
-    <li>Pliki wzorcowe <code>Wzory.xls</code> i <code>Obliczenia tdp, RH, C.xls</code> — program pobiera je
-      z <b>własnego folderu</b> (lokalnie). Dostęp do zasobu sieciowego
-      <span class="mono">\\plum4\LabPomiarowe\</span> jest potrzebny tylko wtedy, gdy plików brak lokalnie
-      (są wówczas pobierane z sieci).</li>
-    <li>Środowisko Python z zależnościami: <span class="mono">openpyxl, xlwings, python-docx, pandas, pypdf</span>.</li>
-  </ul>
-  <h3>Przygotowanie środowiska (jednorazowo)</h3>
-  <pre><span class="c"># utworzenie i aktywacja środowiska</span>
-python -m venv .venv
-<span class="c"># instalacja zależności</span>
-.venv\Scripts\python.exe -m pip install -r requirements.txt</pre>
-  <h3>Uruchamianie modułów</h3>
-  <p>Każdy moduł uruchamia się poleceniem w folderze programu:</p>
-  <pre>.venv\Scripts\python.exe analizuj_excele.py
-.venv\Scripts\python.exe generuj_obserwacje.py
-.venv\Scripts\python.exe generuj_arkusze.py</pre>
-  <div class="note ok">Przed każdym uruchomieniem zapisującym zamknij pliki wyjściowe w Excelu/Word —
-  otwarty plik blokuje zapis (błąd „PermissionError").</div>
-</div>
+<h3>Najważniejsze możliwości</h3>
+<table>
+<tr><th style="width:30%">Obszar</th><th>Co program robi sam</th></tr>
+<tr><td>Logi przyrządów</td><td>Rozpoznaje format (tempmate PDF, PuTTY/Vaisala, Rotronic, ALMEMO, Comet/TFA, xTHERM, HOBO, Aranet, ElogVis, Lascar, dowolny CSV/TXT/Excel) i zapisuje jednolity plik <i>Czas | Temperatura | Wilgotność</i> z nazwą zlecenia z PZ.</td></tr>
+<tr><td>Wybór punktów</td><td>Znajduje odcinki stałej nastawy komory, liczy stabilizację, wybiera 5‑minutowe okno i 5 wierszy reprezentacyjnych wg kryteriów rozrzutu (K, L); tylko punkty zamówione w PZ.</td></tr>
+<tr><td>Dopasowanie przyrządów</td><td>Do każdego punktu dobiera 5 wierszy z pliku każdego przyrządu (najbliższa pełna minuta), koryguje rozjechany zegar loggera, odrzuca pliki z innej komory.</td></tr>
+<tr><td>Protokół</td><td>Strona 1 (czujniki wzorcowe), Strona 2 (tabela przyrządów z PZ i Zestawienia), Strona 3 (pomiary, warunki środowiskowe); dokłada kolumny dla &gt;10 przyrządów i bloki dla &gt;6 punktów.</td></tr>
+<tr><td>Arkusze obliczeniowe</td><td>Kopia szablonu na przyrząd, zakładka na punkt (nazwy z PZ), odczyty, czujnik wzorcowy, higrometr, rozdzielczości, przetworniki, puste zakładki do domierzenia, tabele <i>Wyniki</i>, histereza.</td></tr>
+<tr><td>Świadectwa</td><td>Dobór szablonu (temp. / zakres / zakres+temp / przetworniki / wyświetlacz+wyjście), wszystkie pola, tabele wyników, warunki środowiskowe, data wzorcowania, numeracja wg nr fabrycznego lub ewidencyjnego.</td></tr>
+<tr><td>Bezpieczeństwo pracy</td><td>Kopia zapasowa każdego nadpisywanego pliku, zapis i zamknięcie pliku otwartego w Excelu przed nadpisaniem, tylko własne instancje Excela, kontrola danych przed startem.</td></tr>
+</table>
 
-<!-- 3. STRUKTURA -->
-<div class="chapter">
-  <h2>3. Struktura projektu i pliki robocze</h2>
-  <table>
-    <tr><th>Element</th><th>Rodzaj</th><th>Opis</th></tr>
-    <tr><td><code>excel_do_analizy/</code></td><td>folder wejściowy</td><td>surowe logi czujników (DUT) do przetworzenia</td></tr>
-    <tr><td><code>wyniki/</code></td><td>folder wyjściowy</td><td>ujednolicone pliki <code>&lt;serial&gt;_wynik.xlsx</code></td></tr>
-    <tr><td><code>PZ/</code></td><td>folder wejściowy</td><td>„Potwierdzenie zamówienia" (PDF) — dane przyrządów</td></tr>
-    <tr><td><code>Zestawienie wzorcowanych przyrządów.xlsx</code></td><td>plik danych</td><td>rozdzielczości przyrządów (arkusz „Termohigrometry")</td></tr>
-    <tr><td><code>Pom. nr 9 (MX1101-02) - 2026.xlsx</code></td><td>plik danych</td><td>odczyty czujnika środowiskowego (T/RH pomieszczenia)</td></tr>
-    <tr><td><code>Wzory.xls</code>, <code>Obliczenia tdp, RH, C.xls</code></td><td>pliki wzorcowe</td><td>formuły środowiskowe i kalibracyjne (linkowane)</td></tr>
-    <tr><td>Szablony <code>xxx_..</code>, <code>xxx_yyy_.. .docx</code></td><td>szablony</td><td>wzory protokołów i świadectw</td></tr>
-    <tr><td><code>&lt;data&gt;_&lt;nr&gt;.txt</code></td><td>plik wejściowy</td><td>log multimetru wzorcowego (dane pomiarowe punktu)</td></tr>
-  </table>
-  <h3 style="page-break-before:always">Szablony (dokładne nazwy plików)</h3>
-  <table>
-    <tr><th>Szablon</th><th>Nazwa pliku</th><th>Używa</th></tr>
-    <tr><td>Obserwacja CC</td><td class="mono">xxx_LA_TH_2026 - obserwacje CC.xlsx</td><td>generuj_obserwacje</td></tr>
-    <tr><td>Obserwacja CC‑04</td><td class="mono">szablon_LA_TH_2026 - obserwacje.xlsx</td><td>generuj_obserwacje</td></tr>
-    <tr><td>Protokół CC</td><td class="mono">xxx_LA_TH_2026 - protokół CC.xlsx</td><td>generuj_obserwacje</td></tr>
-    <tr><td>Protokół CC‑04</td><td class="mono">xxx_LA_TH_2026 - protokół CC-04.xlsx</td><td>generuj_obserwacje</td></tr>
-    <tr><td>Arkusz obliczeniowy</td><td class="mono">xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx</td><td>generuj_arkusze</td></tr>
-    <tr><td>Świadectwo — tylko temperatura</td><td class="mono">xxx_yyy_LA_TH_2026 - tylko temp.docx</td><td>generuj_arkusze</td></tr>
-    <tr><td>Świadectwo — z wilgotnością</td><td class="mono">xxx_yyy_LA_TH_2026 - zakres.docx</td><td>generuj_arkusze</td></tr>
-    <tr><td>Świadectwo — mieszane (temp+RH)</td><td class="mono">xxx_yyy_LA_TH_2026 - zakres + temp.docx</td><td>generuj_arkusze</td></tr>
-    <tr><td>Warianty świadectwa z użytkownikiem</td><td class="mono">… (uzytkownik).docx</td><td>generuj_arkusze (gdy PZ ma USER)</td></tr>
-  </table>
-  <p class="small"><code>xxx</code> = numer pomiaru (podstawiany automatycznie w miejsce „xxx"),
-  <code>yyy</code> = numer świadectwa. Pliki wzorcowe/pomocnicze: <code>Wzory.xls</code>,
-  <code>Obliczenia tdp, RH, C.xls</code>, <code>Zestawienie wzorcowanych przyrządów.xlsx</code>,
-  <code>Pom. nr 9 (MX1101-02) - 2026.xlsx</code>.</p>
-  <div class="note">Nazwy plików protokołu i szablonów wskazuje się w sekcji <b>KONFIGURACJA</b>
-  odpowiedniego modułu (rozdział 11). Można je też nadpisać zmiennymi środowiskowymi
-  (<code>CC_FOLDER</code>, <code>CC_PROTOKOL</code>, <code>CC_SZABLON</code>, <code>OBS_TXT_FILES</code>).</div>
-</div>
+<!-- ═══════════════════════════ 2 ═══════════════════════════ -->
+<h2 id="uruchomienie">2. Wymagania i uruchomienie</h2>
+<table>
+<tr><th style="width:30%">Wymaganie</th><th>Szczegóły</th></tr>
+<tr><td>System</td><td>Windows 10 / 11.</td></tr>
+<tr><td>Microsoft Excel</td><td>Zainstalowany (kroki 2, 3 i 5 sterują Excelem przez COM — przeliczenie formuł, linki do <code>Wzory.xls</code> i <code>Obliczenia tdp, RH, C.xls</code>).</td></tr>
+<tr><td>Microsoft Word</td><td>Niepotrzebny do generowania (świadectwa tworzy biblioteka python-docx); potrzebny tylko do otwarcia wyniku.</td></tr>
+<tr><td>Sieć</td><td>Dostęp do <code>\\plum4\LabPomiarowe</code> (pliki linkowane, czujnik pomieszczenia) — lokalne kopie w folderze roboczym wystarczają do pracy.</td></tr>
+</table>
+<h3>Sposoby uruchomienia</h3>
+<table>
+<tr><th>Sposób</th><th>Polecenie</th><th>Kiedy</th></tr>
+<tr><td>Plik wykonywalny</td><td><code>dist\ProtokolCC.exe</code> (dwuklik)</td><td>Normalna praca — nic nie trzeba instalować poza Excelem.</td></tr>
+<tr><td>Skrót bez konsoli</td><td><code>Generator protokolow.lnk</code> (tworzy go <code>zrob_skrot.py</code>)</td><td>Praca z kodu źródłowego, bez czarnego okna.</td></tr>
+<tr><td>Z kodu</td><td><code>.venv\Scripts\python.exe app_gui.py</code></td><td>Rozwój i testy.</td></tr>
+<tr><td>Pojedynczy krok</td><td><code>python generuj_arkusze.py</code> itd.</td><td>Bez panelu obowiązują wartości domyślne z kodu.</td></tr>
+<tr><td>Budowa exe</td><td><code>powershell -ExecutionPolicy Bypass -File build.ps1</code></td><td>Po zmianach w kodzie → <code>dist\ProtokolCC.exe</code>.</td></tr>
+</table>
+<div class="note warn"><b>Jeden krok naraz.</b> Nie uruchamiaj dwóch kroków jednocześnie (dwa panele, panel + skrypt z konsoli).
+Krok 3 na starcie kończy „zawieszone” Excele bez okna — także te, których właśnie używa drugi przebieg; oba kończą się wtedy błędem
+<code>RPC … niedostępny</code>.</div>
 
-<!-- 4. JAK DZIALA -->
-<div class="chapter">
-  <h2>4. Jak działa program — pełny obieg</h2>
-  <p class="lead">Cztery moduły uruchamiane po kolei. Poniższy schemat pokazuje, skąd biorą się dane
-  i co powstaje na każdym etapie.</p>
-  <div class="diagbox">
-  <div class="mermaid">
-flowchart TB
-  subgraph F0["Przygotowanie danych (ręcznie)"]
-    direction LR
-    P1["loggery →<br/>excel_do_analizy/"]:::in
-    P2["PZ →<br/>PZ/"]:::in
-    P6["TXT multimetru →<br/>folder roboczy"]:::in
-    P4["Wzory.xls · Pom. nr 9 ·<br/>Zestawienie (aktualizacja)"]:::in
+<!-- ═══════════════════════════ 3 ═══════════════════════════ -->
+<h2 id="pliki" class="chapter">3. Foldery, pliki i szablony</h2>
+<p>Wszystkie ścieżki względne liczone są od <b>folderu roboczego</b> (ustawienie <code>CC_FOLDER</code>, domyślnie folder programu).</p>
+<table>
+<tr><th style="width:30%">Folder / plik</th><th>Co zawiera</th><th style="width:16%">Tworzy</th><th style="width:16%">Czyta</th></tr>
+<tr><td><code>excel_do_analizy/</code></td><td>Surowe logi przyrządów (DUT) — wgrywasz ręcznie.</td><td>Ty</td><td>Krok 1, 2</td></tr>
+<tr><td><code>wyniki/</code></td><td>Znormalizowane pliki przyrządów: <code>&lt;zlecenie&gt;_LA_TH_2026_&lt;serial&gt;_opracowanie danych.xlsx</code> (bez PZ: <code>&lt;serial&gt;_wynik.xlsx</code>) i <code>…_zestawienie_pomiarow.xlsx</code>.</td><td>Krok 1 (nazwa i podpis — krok 2)</td><td>Krok 2</td></tr>
+<tr><td><code>PZ/</code></td><td>PDF (albo skrót <code>.lnk</code>) potwierdzenia zamówienia — przyrządy, punkty, użytkownik, zleceniodawca.</td><td>Ty</td><td>Krok 1, 2, 3, 5</td></tr>
+<tr><td><code>RRRR-MM-DD GG.MM_&lt;nr&gt;.txt</code></td><td>Plik multimetru komory (CC albo CC‑04). Kilka plików = przerwany pomiar.</td><td>Multimetr</td><td>Krok 2</td></tr>
+<tr><td><code>&lt;nr&gt;_LA_TH_2026 - obserwacje.xlsx</code></td><td>Arkusz obserwacji z zaznaczonymi oknami i punktami.</td><td>Krok 2</td><td>Ty</td></tr>
+<tr><td><code>&lt;nr&gt;_LA_TH_2026 - protokół CC(-04).xlsx</code></td><td>Protokół: Strona 1, 2, 3.</td><td>Krok 2 (F/G — krok 4)</td><td>Krok 3, 4, 5</td></tr>
+<tr><td><code>&lt;nr&gt;_LA_TH_2026 - ILAJ … - &lt;poz.&gt; - &lt;serial&gt;.xlsx</code></td><td>Arkusz obliczeniowy przyrządu.</td><td>Krok 3</td><td>Krok 3 (Word), 5</td></tr>
+<tr><td><code>&lt;nr_św&gt;_&lt;nr&gt;_LA_TH_2026.docx</code></td><td>Świadectwo wzorcowania.</td><td>Krok 3, 5</td><td>Ty</td></tr>
+<tr><td><code>Etap_5_ark_obl_to_word/</code></td><td>Gotowe (uzupełnione) arkusze do kroku 5; tu też powstają ich świadectwa.</td><td>Ty</td><td>Krok 5</td></tr>
+<tr><td><code>kopie_zapasowe/</code></td><td>Poprzednie wersje nadpisywanych plików (20 najnowszych na plik).</td><td>Kroki 2–5</td><td>Ty</td></tr>
+<tr><td><code>foto/</code></td><td>Zdjęcia wyświetlaczy z chwil punktów (<code>punkt_NN_…</code>).</td><td>Krok 2 (opcja)</td><td>Ty</td></tr>
+<tr><td><code>Wzory.xls</code>, <code>Obliczenia tdp, RH, C.xls</code></td><td>Pliki linkowane arkuszy obliczeniowych (UDF-y). Lokalna kopia musi być aktualna.</td><td>Serwer</td><td>Krok 3, 5</td></tr>
+<tr><td><code>Pom. nr 9 (MX1101-02) - 2026.xlsx</code></td><td>Czujnik pomieszczenia (t, RH co 60 s).</td><td>Serwer / Ty</td><td>Krok 3, 4, 5</td></tr>
+<tr><td><code>Zestawienie wzorcowanych przyrządów.xlsx</code></td><td>Rozdzielczości t/RH wg producenta i typu.</td><td>Ty</td><td>Krok 2</td></tr>
+<tr><td><code>cc_ustawienia.json</code></td><td>Ustawienia panelu (zapisywane automatycznie).</td><td>Panel</td><td>Panel</td></tr>
+</table>
+
+<h3>Szablony</h3>
+<table>
+<tr><th style="width:44%">Plik szablonu</th><th>Do czego</th><th>Ustawienie</th></tr>
+<tr><td><code>xxx_LA_TH_2026 - obserwacje CC.xlsx</code></td><td>Obserwacja komory CC</td><td><code>OBS_TEMPLATE</code></td></tr>
+<tr><td><code>szablon_LA_TH_2026 - obserwacje.xlsx</code></td><td>Obserwacja komory CC‑04</td><td><code>OBS_CC04_TEMPLATE</code></td></tr>
+<tr><td><code>xxx_LA_TH_2026 - protokół CC.xlsx</code> / <code>… CC-04.xlsx</code></td><td>Protokół</td><td><code>OBS_PROT_CC</code>, <code>OBS_PROT_CC04</code></td></tr>
+<tr><td><code>xxx_… - 1 - RH (CC).xlsx</code></td><td>Arkusz obliczeniowy termohigrometru / termometru</td><td><code>CC_SZABLON</code></td></tr>
+<tr><td><code>xxx_… - 1 - Przetwornik (CC).xlsx</code></td><td>Arkusz przetwornika (wyjście t i/lub RH)</td><td><code>CC_SZABLON_PRZETW</code></td></tr>
+<tr><td><code>xxx_… - 1 - Przetwornik RH (CC).xlsx</code></td><td>Arkusz przetwornika tylko RH</td><td><code>CC_SZABLON_PRZETW_RH</code></td></tr>
+<tr><td><code>xxx_… - 1 - TH + Przetwornik (CC).xlsx</code></td><td>Arkusz przyrządu z wyświetlaczem i wyjściem analogowym</td><td><code>CC_SZABLON_TH_PRZETW</code></td></tr>
+<tr><td><code>xxx_yyy_LA_TH_2026 - tylko temp.docx</code></td><td>Świadectwo: tylko temperatura</td><td><code>GEN_WORD_TEMP</code></td></tr>
+<tr><td><code>xxx_yyy_LA_TH_2026 - zakres.docx</code></td><td>Świadectwo: t + RH we wszystkich punktach</td><td><code>GEN_WORD_RH</code></td></tr>
+<tr><td><code>xxx_yyy_LA_TH_2026 - zakres + temp.docx</code></td><td>Świadectwo: punkty z RH i punkty samej temperatury (dwie tabele)</td><td><code>GEN_WORD_MIX</code></td></tr>
+<tr><td><code>xxx_yyy_LA_TH_2026 - przetwornik RH / T / TH / TH + temp.docx</code></td><td>Świadectwa przetworników</td><td><code>GEN_WORD_PRZETW_*</code></td></tr>
+<tr><td><code>xxx_yyy_LA_TH_2026 - TH + przetwornik (ang).docx</code></td><td>Świadectwo przyrządu z wyświetlaczem i wyjściem (ang.)</td><td><code>GEN_WORD_TH_PRZETW</code></td></tr>
+<tr><td>… <code>(uzytkownik).docx</code></td><td>Wariant z blokiem UŻYTKOWNIK — wybierany sam, gdy PZ go zawiera</td><td>—</td></tr>
+</table>
+<div class="note">Szablony przetworników buduje <code>cc_szablon_przetwornika.py</code> z szablonu standardowego albo z ręcznie
+przygotowanego wzoru: <code>--rh &lt;plik&gt;</code>, <code>--th &lt;arkusz&gt;</code>, <code>--word &lt;świadectwo.docx&gt;</code>.
+Po nowej wersji szablonu standardowego zbuduj je ponownie.</div>
+
+<!-- ═══════════════════════════ 4 ═══════════════════════════ -->
+<h2 id="obieg" class="chapter">4. Pełny obieg — schemat</h2>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  subgraph F0["Przygotowanie — ręcznie"]
+    P1["Logi przyrządów → excel_do_analizy/"]:::in
+    P2["PZ (PDF) → PZ/"]:::pz
+    P3["TXT multimetru → folder roboczy"]:::in
+    P4["Aktualne: Wzory.xls, Obliczenia…xls,<br/>Pom. nr 9, Zestawienie"]:::in
   end
-  A["1 · analizuj_excele<br/>→ wyniki/*.xlsx"]:::xf
-  B["2 · generuj_obserwacje<br/>→ protokol (Strona 2 + Strona 3)"]:::xf
-  C["3 · generuj_arkusze<br/>→ kopie Excel + swiadectwa Word"]:::xf
-  OUT[("Kopie Excel + Swiadectwa Word")]:::out
-  P1 --> A --> B --> C --> OUT
-  P6 --> B
-  P2 --> B
-  P4 --> C
-  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
-  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
-  </div>
-  </div>
-  <div class="note"><b>Kolejność jest obowiązkowa:</b> moduł 2 czyta wyniki modułu 1,
-  a moduł 3 czyta protokół z modułu 2. Pliki wzorcowe <code>Wzory.xls</code> i <code>Pom. nr 9</code>
-  są wykorzystywane dopiero w ostatnim etapie modułu 3 (warunki środowiskowe).</div>
-</div>
-
-<!-- 5. PRZYGOTOWANIE DANYCH -->
-<div class="chapter">
-  <h2>5. Przygotowanie danych wejściowych</h2>
-  <p>Przed pierwszym uruchomieniem przygotuj i umieść dane w odpowiednich miejscach:</p>
-  <table>
-    <tr><th>Co przygotować</th><th>Gdzie umieścić</th><th>Format / uwagi</th></tr>
-    <tr><td>Logi czujników wzorcowanych (DUT)</td><td><code>excel_do_analizy/</code></td><td>.csv .xls .xlsx .txt .pdf .log</td></tr>
-    <tr><td>Potwierdzenia zamówienia (PZ)</td><td><code>PZ/</code></td><td>PDF (język polski lub angielski)</td></tr>
-    <tr><td>Log multimetru wzorcowego</td><td>folder roboczy</td><td>nazwa <code>YYYY-MM-DD HH.MM_nr.txt</code>; wiele plików = przerwany pomiar</td></tr>
-    <tr><td>Dane czujnika środowiskowego</td><td><code>Pom. nr 9 (MX1101-02) - 2026.xlsx</code></td><td>uzupełnij o bieżący miesiąc pomiaru</td></tr>
-    <tr><td>Rozdzielczości przyrządów</td><td><code>Zestawienie wzorcowanych przyrządów.xlsx</code></td><td>arkusz „Termohigrometry"</td></tr>
-    <tr><td>Pliki wzorcowe / linkowane</td><td><code>Wzory.xls</code>, <code>Obliczenia tdp…</code></td><td>aktualne formuły; dostęp do zasobu sieciowego</td></tr>
-  </table>
-  <div class="note warn"><b>Ważne:</b> serial (numer) w nazwie pliku loggera staje się nazwą pliku wyniku
-  i to on później łączy pomiar środowiskowy z konkretnym przyrządem z PZ. Dbaj o zgodność numerów.</div>
-</div>
-
-<!-- 6. MODUL 1 -->
-<div class="chapter">
-  <h2>6. Moduł 1 — Analiza logów pomiarowych</h2>
-  <p class="lead"><code>analizuj_excele.py</code> — rozpoznaje format każdego pliku z folderu
-  <code>excel_do_analizy/</code> i przetwarza go na wspólny format wynikowy.</p>
-  <div class="kv">
-    <div class="k">Wejście</div><div><code>excel_do_analizy/</code> (dowolne obsługiwane pliki)</div>
-    <div class="k">Wyjście</div><div><code>wyniki/&lt;serial&gt;_wynik.xlsx</code> — kolumny: Czas | Temperatura [°C] | Wilgotność [%RH]</div>
-    <div class="k">Uruchomienie</div><div class="mono">python analizuj_excele.py &nbsp;|&nbsp; python analizuj_excele.py plik.pdf</div>
-  </div>
-  <h3>Obsługiwane formaty loggerów</h3>
-  <table>
-    <tr><th>Format</th><th>Wykrycie</th><th>Format</th><th>Wykrycie</th></tr>
-    <tr><td>tempmate (PDF)</td><td>%PDF</td><td>HOBO</td><td>LGR S/N</td></tr>
-    <tr><td>Vaisala PTU (.log)</td><td>„PuTTY log"</td><td>Aranet</td><td>Aranet</td></tr>
-    <tr><td>Rotronic HW4</td><td>[#D]Measurements</td><td>Comet / TFA</td><td>Numer seryjny</td></tr>
-    <tr><td>ALMEMO</td><td>ALMEMO</td><td>xTHERM (2×temp)</td><td>czas odbioru</td></tr>
-    <tr><td>Excel (auto)</td><td>.xls / .xlsx</td><td>CSV / TXT (ogólny)</td><td>fallback</td></tr>
-  </table>
-  <p>Moduł jest odporny na różne kodowania, separatory i formaty dat; automatycznie przelicza °F → °C
-  oraz odrzuca linie‑echa poleceń i domyślne daty urządzeń.</p>
-  <h3>Kluczowe funkcje</h3>
-  <table>
-    <tr><th>Funkcja</th><th>Działanie</th></tr>
-    <tr><td class="mono">sniff_format()</td><td>rozpoznaje format z pierwszego 1 KB pliku i wybiera właściwy parser</td></tr>
-    <tr><td class="mono">parse_* (11 parserów)</td><td>parser dedykowany dla każdego typu loggera (tempmate, PuTTY, Rotronic, HOBO…)</td></tr>
-    <tr><td class="mono">save_result()</td><td>normalizuje kolumny (Czas/Temp/Wilg), usuwa duplikaty i NaN, zapisuje <code>&lt;serial&gt;_wynik.xlsx</code></td></tr>
-    <tr><td class="mono">zbuduj_zestawienie()</td><td>łączy WSZYSTKIE przyrządy w jeden plik wyrównany po czasie (patrz niżej)</td></tr>
-  </table>
-  <div class="note"><b>Zestawienie zbiorcze:</b> po przetworzeniu wszystkich plików program tworzy dodatkowo
-  <code>wyniki/zestawienie_pomiarow.xlsx</code> — jedną tabelę <span class="mono">Czas | Temp&lt;p1&gt; | Wilg&lt;p1&gt; |
-  Temp&lt;p2&gt; | Wilg&lt;p2&gt; | …</span> dla wszystkich przyrządów, dopasowaną po najbliższym czasie
-  (siatka = odstęp najliczniejszego przyrządu, zwykle 60 s).</div>
-  <div class="note ok"><b>Kontrola:</b> po uruchomieniu sprawdź, że w folderze <code>wyniki/</code> pojawiły się
-  pliki dla wszystkich czujników i że zawierają sensowne wartości (podgląd w Excelu).</div>
-</div>
-
-<!-- 7. MODUL 2 -->
-<div class="chapter">
-  <h2>7. Moduł 2 — Dane przyrządów z zamówień (PZ)</h2>
-  <p class="lead"><code>pz_dane.py</code> — moduł pomocniczy używany przez moduły 3 i 4. Parsuje PDF
-  „Potwierdzenie zamówienia" (dwujęzycznie PL/EN) oraz plik Zestawienia rozdzielczości.</p>
-  <h3>Co program odczytuje z PZ</h3>
-  <ul>
-    <li>numer zlecenia (trafia do kolumny <code>O</code> na Stronie 2 protokołu),</li>
-    <li>wytwórca, typ, numer fabryczny, numer ewidencyjny przyrządu,</li>
-    <li>osobny czujnik pomiarowy (jeśli występuje),</li>
-    <li>blok danych <b>UŻYTKOWNIK / USER</b> (trafia do świadectwa Word).</li>
-  </ul>
-  <div class="diagbox">
-  <div class="mermaid">
-flowchart LR
-  P["PZ/*.pdf (PL/EN)"]:::in --> PA["odczyt PZ"]:::pz --> DEV["przyrzad:<br/>wytworca, typ, nr fabr.,<br/>nr ewid., czujnik, uzytkownik"]:::out
-  DEV --> MAP["dopasowanie po<br/>nr fabr. LUB nr ewid."]:::pz
-  Z["Zestawienie.xlsx"]:::in --> RES["rozdzielczosc t / RH"]:::pz
-  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
-  </div>
-  </div>
-  <div class="note"><b>Dopasowanie przyrządu:</b> program szuka przyrządu po numerze fabrycznym
-  <b>oraz</b> ewidencyjnym — ponieważ plik loggera bywa nazwany jednym lub drugim numerem
-  (np. u czujników Vaisala plik nazwany jest numerem ewidencyjnym).</div>
-</div>
-
-<!-- 8. MODUL 3 -->
-<div class="chapter">
-  <h2>8. Moduł 3 — Obserwacja i protokół</h2>
-  <p class="lead"><code>generuj_obserwacje.py</code> — z logu multimetru buduje arkusz obserwacji,
-  analizuje stabilność pomiaru i tworzy protokół (Strona 3 — pomiary, Strona 2 — przyrządy).</p>
-  <div class="kv">
-    <div class="k">Wejście</div><div>log(i) TXT + <code>wyniki/*</code> + dane z PZ + Zestawienie</div>
-    <div class="k">Wyjście</div><div>arkusz obserwacji oraz <b>protokół</b> (CC lub CC‑04)</div>
-    <div class="k">Uruchomienie</div><div class="mono">python generuj_obserwacje.py</div>
-  </div>
-  <h3>Dobór 5 reprezentantów w punkcie</h3>
-  <ul>
-    <li>Punkt to odcinek o stałej nastawie temperatury i wilgotności.</li>
-    <li><b>Warunek startu okna:</b> okno analizy rozpoczyna się <b>2 godziny</b> od chwili, gdy odczyty
-      komory wejdą w widełki wokół nastaw — <u>zarówno temperatura, jak i wilgotność</u>:
-      temperatura <b>±0,4 °C</b> od nastawy T (nie może „uciekać") oraz wilgotność <b>±3%</b> od nastawy RH.
-      Okno trwa do końca punktu.</li>
-    <li><b>Punkt tylko‑temperaturowy:</b> liczy się samo wejście temperatury w widełki ±0,4 °C.</li>
-    <li><b>Reguła zapasowa:</b> gdy odczyty nie wejdą w widełki (albo brak 2 h do końca punktu),
-      okno rozpoczyna się po <b>1 godz. 45 min</b> od początku punktu.</li>
-    <li>W oknie wybieranych jest 5 kolejnych minut o najmniejszym rozrzucie — kolorowane i pogrubiane.</li>
-    <li>Automatyczne rozpoznanie suszenia i histerezy (punkt z sufiksem „(2)" = powtórka po wysokiej wilgotności).</li>
-  </ul>
-  <div class="diagbox">
-  <div class="mermaid">
-flowchart LR
-  T["TXT (1..N)"]:::in --> CB["sklejenie<br/>+ deduplikacja"]:::xf --> AN["analiza:<br/>okno, 5 reprezentantow"]:::xf --> GP["protokol"]:::xf
-  W[("wyniki/*")]:::in --> GP
-  PZ["PZ + Zestaw."]:::pz --> GP
-  GP --> S3[("Strona 3 — pomiary")]:::out
-  GP --> S2[("Strona 2 — przyrzady")]:::out
+  subgraph F1["1 · Analiza logów"]
+    A1{"Rozpoznanie formatu<br/>(pierwszy 1 KB pliku)"}:::xf --> A2["Parser formatu"]:::xf --> A3[("wyniki/ — Czas | t | RH<br/>+ zestawienie wszystkich")]:::out
+  end
+  subgraph F2["2 · Obserwacja i protokół"]
+    B1["Sklejenie TXT, arkusz obserwacji"]:::xf --> B2["Odcinki stałej nastawy → okna → 5 reprezentantów"]:::xf
+    B2 --> B3["Punkty zamówione w PZ"]:::pz --> B4["Protokół: Strona 3 — komora"]:::xf
+    B4 --> B5["Dopasowanie plików przyrządów<br/>(5 wierszy, korekta zegara)"]:::xf --> B6["Strona 2 z PZ + Zestawienia,<br/>Strona 1 czujniki wzorcowe"]:::pz
+    B6 --> B7[("Obserwacja + protokół<br/>+ opracowane pliki wyników")]:::out
+  end
+  subgraph F4["4 · Warunki (opcjonalnie przed 3)"]
+    D1["Pom. nr 9 → F/G każdego punktu"]:::xf
+  end
+  subgraph F3["3 · Arkusze i Word"]
+    C1["Strona 2 = lista przyrządów,<br/>Strona 3 = zakładki"]:::xf --> C2["Kopia szablonu na przyrząd"]:::xf --> C3["Zakładki: odczyty, czujniki,<br/>przetworniki, puste z PZ"]:::xf
+    C3 --> C4["Wyniki + histereza + warunki"]:::xf --> C5[("Arkusze obliczeniowe")]:::out
+    C5 --> C6["Odczyt kalibracji → świadectwa Word"]:::pz --> C7[("Świadectwa .docx")]:::out
+  end
+  subgraph F5["5 · Świadectwa z arkuszy"]
+    E1["Uzupełnione arkusze + protokoły"]:::in --> E2[("Świadectwa .docx")]:::out
+  end
+  P1 --> A1
+  P3 --> B1
+  A3 --> B5
+  P2 --> B3
+  P2 --> B6
+  B7 --> D1
+  B7 --> C1
+  D1 --> C1
+  P4 --> C4
+  C5 -. "domiar / poprawki" .-> E1
   classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
   classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
   classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-  </div>
-  </div>
-  <h3>Kluczowe funkcje</h3>
-  <table>
-    <tr><th>Funkcja</th><th>Działanie</th></tr>
-    <tr><td class="mono">resolve_txt_files() / combine_txt()</td><td>wybór plików TXT (tolerancyjny) i sklejenie wielu w jeden ciąg z deduplikacją po czasie</td></tr>
-    <tr><td class="mono">analyze_and_highlight()</td><td>dzieli pomiar na punkty (stała nastawa), filtruje suszenie/histerezę, koloruje okno</td></tr>
-    <tr><td class="mono">_oblicz_start_okna()</td><td>wyznacza start okna: 2 h od wejścia T (±0,4 °C) i RH (±3%) w widełki</td></tr>
-    <tr><td class="mono">_find_best_minute_reps()</td><td>wybiera 5 kolejnych minut o najmniejszym rozrzucie (kolor + pogrubienie)</td></tr>
-    <tr><td class="mono">_wypelnij_wyniki_srodowiskowe()</td><td>wpisuje dane z <code>wyniki/*</code> do Strony 3 (nearest po czasie)</td></tr>
-    <tr><td class="mono">generuj_protokol() / wypelnij_strone2_z_pz()</td><td>tworzy protokół i wypełnia tabelę przyrządów danymi z PZ</td></tr>
-  </table>
-  <div class="note">Tabela przyrządów (Strona 2) wypełniana jest automatycznie: dane z PZ dopasowane po numerze,
-  a rozdzielczość K/L z Zestawienia (gdy brak — wyliczana z wahania cyfr po przecinku w danych pomiarowych).</div>
-</div>
+</pre><div class="cap">Rys. 2. Pełny obieg z zależnościami między krokami.</div></div>
 
-<!-- 9. MODUL 4 -->
-<div class="chapter">
-  <h2>9. Moduł 4 — Arkusze obliczeniowe i świadectwa</h2>
-  <p class="lead"><code>generuj_arkusze.py</code> — z gotowego protokołu tworzy kopie arkuszy Excel
-  (z zachowaniem formuł i linków) oraz świadectwa wzorcowania Word. Praca w 7 etapach.</p>
-  <div class="kv">
-    <div class="k">Wejście</div><div>protokół + szablony + <code>Wzory.xls</code> + <code>Pom. nr 9</code> + PZ</div>
-    <div class="k">Wyjście</div><div>kopie arkuszy Excel oraz świadectwa <code>.docx</code></div>
-    <div class="k">Uruchomienie</div><div class="mono">python generuj_arkusze.py</div>
-  </div>
-  <div class="diagbox">
-  <div class="mermaid">
+<h3>Wejścia i wyjścia kroków</h3>
+<table>
+<tr><th>Krok</th><th>Potrzebuje</th><th>Tworzy / zmienia</th><th>Excel?</th></tr>
+<tr><td>1 · Analiza logów</td><td>Logi w <code>excel_do_analizy/</code>; PZ (dla nazwy zlecenia)</td><td><code>wyniki/*</code>, zestawienie pomiarów</td><td>nie</td></tr>
+<tr><td>2 · Obserwacja</td><td>TXT multimetru, <code>wyniki/*</code>, PZ, Zestawienie, szablony obserwacji i protokołu; opcjonalnie pliki multimetru przetworników, zdjęcia</td><td>Obserwacja, protokół, podpisane i przemianowane pliki wyników, zaznaczenia w zestawieniu, <code>foto/</code></td><td>tak (wstawianie bloków/kolumn)</td></tr>
+<tr><td>3 · Arkusze i Word</td><td>Protokół, szablony arkuszy i Word, PZ, Wzory/Obliczenia, Pom. nr 9</td><td>Arkusze obliczeniowe, świadectwa, F/G protokołu</td><td>tak</td></tr>
+<tr><td>4 · Warunki</td><td>Protokół, Pom. nr 9</td><td>F/G na Stronie 3 protokołu</td><td>nie</td></tr>
+<tr><td>5 · Świadectwa z arkuszy</td><td>Arkusze w <code>Etap_5_ark_obl_to_word/</code>, protokoły, PZ</td><td>Świadectwa obok arkuszy</td><td>tak (odczyt)</td></tr>
+</table>
+
+<!-- ═══════════════════════════ 5 ═══════════════════════════ -->
+<h2 id="panel" class="chapter">5. Panel sterujący</h2>
+<p>Okno ma po lewej listę kroków (<i>Przygotowanie, 1–5, Zaawansowane</i>), w środku formularz wybranego kroku
+z przyciskiem uruchomienia, a na dole dwie zakładki:</p>
+<ul>
+  <li><b>Log</b> — wyjście kroku na żywo: <span style="color:#dc2626">BŁĄD</span> na czerwono, <span style="color:#d97706">UWAGA</span> na pomarańczowo, <span style="color:#16a34a">[OK]</span> na zielono; log zapisywany do pliku.</li>
+  <li><b>Utworzone pliki</b> — co powstało lub się zmieniło w folderze (rozmiar, zakładki w środku); dwuklik otwiera plik.</li>
+</ul>
+<table>
+<tr><th style="width:24%">Strona panelu</th><th>Co tu robisz</th></tr>
+<tr><td>Przygotowanie</td><td>Lista kontrolna plików wejściowych z ich wiekiem — plik sprzed wielu dni dostaje „ZAKTUALIZUJ przed uruchomieniem”. Przycisk <i>Otwórz</i> przy każdym pliku.</td></tr>
+<tr><td>1 · Analiza logów</td><td>Lista plików z <code>excel_do_analizy/</code> (data, rozmiar) do zaznaczenia; brak zaznaczeń = wszystkie. Nowe pliki są niezaznaczone, wybór jest zapamiętywany.</td></tr>
+<tr><td>2 · Obserwacja</td><td>Zaznaczenie pliku(ów) TXT multimetru (od najnowszego), podpisy, szablony, PZ, Zestawienie, filtr nastawy, zdjęcia; sekcja <b>2a · Przetworniki</b> — pliki multimetru i karty przetworników.</td></tr>
+<tr><td>3 · Arkusze i Word</td><td>Protokół, szablony, etapy (Excel / Word), numer pierwszego świadectwa i sposób numeracji, higrometr K18, podpisy, czujniki wzorcowe komór, szablony Word.</td></tr>
+<tr><td>4 · Warunki środowiskowe</td><td>Protokół i czujnik pomieszczenia; <i>Nadpisuj</i> dla już wypełnionych komórek.</td></tr>
+<tr><td>5 · Świadectwa z arkuszy</td><td>Folder z arkuszami, numer pierwszego świadectwa, numeracja wg nr ewidencyjnego.</td></tr>
+<tr><td>Zaawansowane</td><td>Okno analizy, wykrywanie suszenia, korekta zegara, filtr kolorów Strony 3, pliki linkowane, stabilność Excela, wygląd plików.</td></tr>
+</table>
+
+<h3>Kontrola przed startem</h3>
+<p>Przed każdym krokiem panel sprawdza dane i pokazuje listę zastrzeżeń do zatwierdzenia albo poprawienia:</p>
+<table>
+<tr><th>Krok</th><th>Sprawdzane</th></tr>
+<tr><td>1</td><td>Folder logów istnieje i nie jest pusty; zaznaczone pliki istnieją; <b>pliki w folderze, których nie zaznaczono</b> (nie trafią do protokołu).</td></tr>
+<tr><td>2</td><td>Zaznaczono plik TXT; istnieją szablony; protokół / obserwacja pomiaru już istnieją → pytanie „Nadpisać?” (domyślnie „Nie”) z datą zmiany.</td></tr>
+<tr><td>3</td><td>Protokół i szablon istnieją; szablony Word; pliki linkowane w folderze roboczym.</td></tr>
+<tr><td>4</td><td>Wskazany plik jest protokołem (ma Stronę 3).</td></tr>
+<tr><td>5</td><td>Folder arkuszy istnieje i zawiera arkusze; jest protokół (w nim albo w folderze głównym); żaden arkusz nie jest otwarty w Excelu.</td></tr>
+</table>
+
+<div class="diagbox"><pre class="mermaid">
+sequenceDiagram
+  participant U as Użytkownik
+  participant G as Panel (app_gui)
+  participant W as Krok (podproces)
+  U->>G: Uruchom krok
+  G->>G: zapis cc_ustawienia.json + kontrola danych
+  G-->>U: lista zastrzeżeń (gdy są)
+  U->>G: Kontynuuj
+  G->>W: start podprocesu + ustawienia jako zmienne środowiskowe
+  W-->>G: wyjście na żywo (Log)
+  W-->>G: kod wyjścia 0 = OK / 1 = BŁĄD
+  G-->>U: „zakończono OK” albo „BLAD, kod 1” + Utworzone pliki
+</pre><div class="cap">Rys. 3. Uruchomienie kroku z panelu. W pliku .exe ten sam program pełni rolę panelu i kroku (zmienna <code>CC_WORKER</code>).</div></div>
+
+<!-- ═══════════════════════════ 6 ═══════════════════════════ -->
+<h2 id="przygotowanie">6. Przygotowanie (lista kontrolna)</h2>
+<ol>
+  <li>Logi z przyrządów skopiuj do <code>excel_do_analizy/</code> (tylko tego pomiaru — albo zaznacz potem właściwe w kroku 1).</li>
+  <li>PZ (PDF albo skrót) do <code>PZ/</code>. Jeden wsad komory dla kilku zleceń → wszystkie PZ.</li>
+  <li>Plik(i) TXT multimetru do folderu roboczego.</li>
+  <li>Sprawdź świeżość <code>Wzory.xls</code>, <code>Obliczenia tdp, RH, C.xls</code>, <code>Pom. nr 9 … .xlsx</code> (strona <i>Przygotowanie</i>).</li>
+  <li>Przetworniki z wyjściem analogowym mierzone osobnym multimetrem (np. 1586A) — plik <code>dat00001.csv</code> do folderu i karta w <i>2a · Przetworniki</i>.</li>
+  <li>Zdjęcia wyświetlaczy (opcjonalnie) — folder źródłowy w kroku 2.</li>
+</ol>
+
+<!-- ═══════════════════════════ 7 ═══════════════════════════ -->
+<h2 id="krok1" class="chapter">7. Krok 1 — analiza logów</h2>
+<p>Każdy zaznaczony plik z <code>excel_do_analizy/</code> jest rozpoznawany po zawartości (nie po rozszerzeniu) i zapisywany jako jednolita tabela
+<b>Czas | Temperatura [°C] | Wilgotność [%RH]</b>. Na końcu powstaje zestawienie wszystkich przyrządów na wspólnej osi czasu.</p>
+<div class="diagbox"><pre class="mermaid">
 flowchart LR
-  R["wczytaj<br/>Strona 2 + 3"]:::xf --> E1["Etap 1-2<br/>kopie + zakladki"]:::xf --> E34["Etap 3-4<br/>C/D/E/F"]:::xf --> E5["Etap 5<br/>naglowki K11-K18"]:::xf --> E6["Etap 6<br/>Wyniki, histereza"]:::xf --> E7["Etap 7<br/>srodowisko"]:::xf
-  E7 --> KOP[("Kopie Excel")]:::out
-  E7 --> WD["swiadectwa Word"]:::pz --> DOC[("Swiadectwa .docx")]:::out
-  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
-  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
-  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-  </div>
-  </div>
-  <h3>Co powstaje w etapach</h3>
-  <table>
-    <tr><th>Etap</th><th>Działanie</th></tr>
-    <tr><td>1–2</td><td>utworzenie nazwanych kopii szablonu; dopasowanie liczby i nazw zakładek</td></tr>
-    <tr><td>3–4</td><td>wypełnienie danych pomiarowych w zakładkach (kolumny C/D/E/F)</td></tr>
-    <tr><td>5</td><td>nagłówki i stopki: numery, daty, podpisy, K11–K17, higrometr K18</td></tr>
-    <tr><td>6</td><td>arkusz „Wyniki": sortowanie tabel, formuła histerezy</td></tr>
-    <tr><td>7</td><td>warunki środowiskowe: odczyt czujnika + obliczenie zakresów (Wzory.xls)</td></tr>
-    <tr><td>Word</td><td>świadectwa: wybór szablonu, wypełnienie pól i tabel kalibracji</td></tr>
-  </table>
-  <h3>Kluczowe funkcje</h3>
-  <table>
-    <tr><th>Funkcja</th><th>Działanie</th></tr>
-    <tr><td class="mono">wczytaj_wszystko_xlwings()</td><td>jednym otwarciem Excela czyta Stronę 2 (lista kopii) i Stronę 3 (zakładki, dane, F24)</td></tr>
-    <tr><td class="mono">_dostosuj_xlwings()</td><td>na jednej kopii wykonuje etapy 2–7 (zakładki, dane, nagłówki, Wyniki, środowisko)</td></tr>
-    <tr><td class="mono">_uporzadkuj_tabele_wyniki() / _aktualizuj_formule_histerezy()</td><td>sortuje tabele w „Wyniki" i aktualizuje formułę histerezy</td></tr>
-    <tr><td class="mono">_oblicz_warunki_srodowiskowe()</td><td>odczyt czujnika (Pom. nr 9) + obliczenie zakresów przez Wzory.xls</td></tr>
-    <tr><td class="mono">_odczytaj_kalibracje_xlwings()</td><td>czyta wyniki kalibracji z kopii (D239:K239 / D246:G246)</td></tr>
-    <tr><td class="mono">utworz_kopie_word()</td><td>tworzy świadectwa: wybór szablonu, podmiana pól, tabele kalibracji</td></tr>
-  </table>
-  <div class="note">Świadectwo wypełnia pola: <code>[wytworca] [typ] [nr_fabr] [nr_ewid] [uzytkownik]
-  [data_wzorcowania] [temp_min/max] [wilg_min/max]</code> oraz tabele kalibracji per punkt.</div>
-</div>
+  S["Plik z excel_do_analizy/"] --> F{"Pierwszy 1 KB pliku"}
+  F -->|"%PDF"| PDF["Raport PDF (tempmate)"]
+  F -->|"linie T= RH= / jednostki 'C %RH"| PU["Log PuTTY (Vaisala)"]
+  F -->|"Ch NNN (ADC/VDC)"| MM["Eksport multimetru 1586A<br/>= przetworniki → POMIJANY"]
+  F -->|"[#I]Device Name"| RO["Rotronic HW4"]
+  F -->|"ALMEMO"| AL["ALMEMO"]
+  F -->|"Nazwa: / Numer seryjny:"| CT["Comet / TFA (txt)"]
+  F -->|"czas odbioru;"| XT["xTHERM (COM)"]
+  F -->|"HOBO / Aranet"| HA["HOBO · Aranet (csv)"]
+  F -->|"Excel"| EX["Excel: tempmate .xls, ElogVis,<br/>Comet, ALMEMO, ogólny"]
+  F -->|"inny tekst"| GEN["Ogólny CSV / TXT<br/>(separator, kodowanie, kolumny po nazwie/jednostce)"]
+  PDF & PU & RO & AL & CT & XT & HA & EX & GEN --> N["Czas | t | RH<br/>czas lokalny, liczby z przecinkiem"]
+  N --> Z{"Przyrząd w PZ?"}
+  Z -->|"tak"| Z1[("&lt;zlecenie&gt;_LA_TH_RRRR_&lt;serial&gt;_opracowanie danych.xlsx")]
+  Z -->|"nie"| Z2[("&lt;serial&gt;_wynik.xlsx")]
+  Z1 & Z2 --> ZE[("zestawienie_pomiarow.xlsx")]
+</pre><div class="cap">Rys. 4. Rozpoznawanie formatu w kroku 1.</div></div>
+<table>
+<tr><th style="width:26%">Format</th><th>Rozpoznanie i szczegóły</th></tr>
+<tr><td>tempmate (PDF, .xls)</td><td>Tabela <code>No. | Time | Temperature°C</code>; numer z <code>Serial Number</code>; zdarzenia (<i>Low Voltage</i>) i dziury w zapisie → ostrzeżenie; °F → błąd.</td></tr>
+<tr><td>PuTTY / Vaisala (.log)</td><td>Linie z <code>T=</code>, <code>RH=</code> albo z jednostkami (<code>22.4 'C 54 %RH</code>); ciśnienie pomijane.</td></tr>
+<tr><td>Rotronic HW4, ALMEMO, Comet/TFA, xTHERM, HOBO, Aranet, ElogVis</td><td>Dedykowane parsery; Aranet — osobny wynik na czujnik; xTHERM — dwie temperatury.</td></tr>
+<tr><td>Ogólny CSV / TXT / Excel</td><td>Separator i kodowanie dobierane automatycznie; nagłówek pod blokiem opisowym (np. KH30); kanały <code>Ch1_Value | Ch1_Unit</code> rozpoznawane po jednostce; UTC + lokalny → lokalny.</td></tr>
+<tr><td>Lascar EasyLog <code>pomiar_000007263.xlsx</code></td><td>Słowo opisowe na początku nazwy (<code>pomiar_</code>, <code>dane_</code>, <code>eksport_</code>…) odcinane — numer pasuje do PZ.</td></tr>
+<tr><td>Eksport multimetru 1586A</td><td>Nie jest loggerem — pomijany (używa go krok 2 dla przetworników); stary wynik usuwany.</td></tr>
+</table>
+<div class="note">Numer seryjny przyrządu = nazwa pliku (bez dopisków typu <code>_LOG 66</code>). Po nim krok 2 łączy plik z przyrządem z PZ (nr fabryczny <b>lub</b> ewidencyjny).</div>
 
-<!-- 10. SZABLONY I MAPOWANIE KOMOREK -->
-<div class="chapter">
-  <h2>10. Szablony i mapowanie komórek</h2>
-  <p class="lead">Program pracuje na gotowych szablonach Excel/Word. Poniżej: jakie szablony są używane
-  oraz z których komórek dane są <b>odczytywane</b> i do których <b>wpisywane</b>.</p>
+<!-- ═══════════════════════════ 8 ═══════════════════════════ -->
+<h2 id="krok2" class="chapter">8. Krok 2 — obserwacja i protokół</h2>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  T["Zaznaczone TXT multimetru"] --> T1["Sklejenie chronologiczne,<br/>usunięcie powtórzonych czasów"]
+  T1 --> T2{"Linia 5: CC-04?"}
+  T2 -->|"CC"| C1["Szablon obserwacji CC<br/>kolumny A..L (+ przetworniki)"]
+  T2 -->|"CC-04"| C2["Szablon obserwacji CC-04<br/>pełny układ kanałów, nazwy Pt100"]
+  C1 & C2 --> PR["Dołączenie kolumn przetworników<br/>(pliki 1586A, najbliższa minuta)"]
+  PR --> AN["Analiza stabilności → punkty<br/>(rozdz. 9)"]
+  AN --> ZP[("Obserwacja .xlsx<br/>zielone / pomarańczowe okna, nr punktów")]
+  AN --> P1["Protokół z szablonu:<br/>bloki 5 wierszy na punkt"]
+  P1 --> P2["Strona 3: nastawy, czasy, odczyty komory<br/>+ 5 wierszy każdego przyrządu"]
+  P2 --> P3["Strona 2: przyrządy z PZ,<br/>rozdzielczości z Zestawienia"]
+  P3 --> P4["Strona 1: czujniki wzorcowe, multimetr przetworników"]
+  P4 --> P5[("Protokół .xlsx")]
+  P5 --> O1["Pliki wyników: podpis Opracował/Data,<br/>nazwa zlecenia, zaznaczone wiersze"]
+  P5 --> O2["Zdjęcia punktów → foto/ (opcja)"]
+</pre><div class="cap">Rys. 5. Przebieg kroku 2.</div></div>
 
-  <h3>Używane szablony</h3>
-  <table>
-    <tr><th>Szablon</th><th>Rola</th></tr>
-    <tr><td>Protokół CC / CC‑04 (<code>PROTOKOL_..._TEMPLATE</code>)</td><td>arkusz wynikowy: Strona 2 (przyrządy) + Strona 3 (pomiary)</td></tr>
-    <tr><td>Arkusz obliczeniowy (<code>SZABLON_PLIK</code>, „RH (CC)" / CC‑04)</td><td>kopia per zakładka; zawiera formuły i linki do <code>Wzory.xls</code></td></tr>
-    <tr><td>Świadectwo Word (<code>SZABLON_WORD_*</code> ×3 + warianty „(uzytkownik)")</td><td>dokument świadectwa: pola <code>[..]</code> i tabele kalibracji</td></tr>
-  </table>
+<h3>Komora CC a CC‑04</h3>
+<table>
+<tr><th style="width:26%"></th><th>CC</th><th>CC‑04</th></tr>
+<tr><td>Rozpoznanie</td><td colspan="2">Po linii 5 pliku TXT (zawiera „CC-04”).</td></tr>
+<tr><td>Czujnik wzorcowy</td><td>Jeden (Pt100 z nagłówka, J1 obserwacji; K11 = ustawienie <code>GEN_CC_CZUJNIK</code>)</td><td>4 narożniki LG / LD / PD / PG — każdy z własnym Pt100, kanałem i oznaczeniem (<code>GEN_MAP_CC04</code>)</td></tr>
+<tr><td>Kolumny przyrządów na Stronie 3</td><td>od <b>Q/R</b>, co 2 kolumny</td><td>od <b>S/T</b>, co 2 kolumny</td></tr>
+<tr><td>Odczyty komory w protokole</td><td>L, M</td><td>K–N (4 kanały) + O (tdp)</td></tr>
+<tr><td>Narożnik przyrządu</td><td>—</td><td>Wiersz 14 Strony 3 nad kolumnami przyrządu</td></tr>
+<tr><td>Forma kondensacji (O25 arkusza)</td><td>kolumna P</td><td>kolumna R</td></tr>
+<tr><td>Higrometr K18</td><td><code>GEN_K18_CC</code> (S8000-02)</td><td><code>GEN_K18_CC04</code> (S8000)</td></tr>
+</table>
 
-  <h3>Co program ODCZYTUJE (źródło)</h3>
-  <table>
-    <tr><th>Miejsce</th><th>Komórki</th><th>Dane</th></tr>
-    <tr><td>Protokół · Strona 2 (od w. 11)</td><td>O, B, D, E, F, K</td><td>lista przyrządów: nr zlecenia, wytwórca, typ, nr fabr., nr ewid.</td></tr>
-    <tr><td>Protokół · Strona 3</td><td>A, B/C, E (data/czasy), L/M</td><td>definicje zakładek, nastawy T/RH, daty i czasy punktu</td></tr>
-    <tr><td>Protokół · Strona 3</td><td>Q/R (CC) lub S/T (CC‑04), co 2 kol.</td><td>dane pomiarowe E/F per kopia (przyrząd)</td></tr>
-    <tr><td>Pom. nr 9 (czujnik)</td><td>wg daty/czasu punktu</td><td>temperatura i wilgotność otoczenia</td></tr>
-    <tr><td>PZ (PDF) / Zestawienie</td><td>—</td><td>dane przyrządu i rozdzielczość t/RH</td></tr>
-  </table>
+<h3>Dopasowanie plików przyrządów</h3>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  W["Plik z wyniki/"] --> K{"Zegar loggera<br/>rozjechany?"}
+  K -->|"korekta zegara wł."| KZ["Porównanie profilu t loggera<br/>z komorą, przesunięcie ±6 h co 5 min"]
+  K -->|"nie"| D
+  KZ --> D["Dla każdego punktu: 5 pełnych minut<br/>reprezentantów → najbliższy wiersz pliku"]
+  D --> TOL{"Odchyłka ≤ tolerancja<br/>(OBS_TOL, 3 min)?"}
+  TOL -->|"nie"| X["Plik nie pasuje do punktu"]
+  TOL -->|"tak"| R{"Odczyt ≈ nastawa komory?<br/>(≤ 5 °C)"}
+  R -->|"nie — inna komora"| X
+  R -->|"tak"| OK["Para kolumn t/RH na Stronie 3<br/>+ zaznaczenie wierszy w pliku wyników"]
+</pre><div class="cap">Rys. 6. Przypisanie pliku przyrządu do punktów protokołu.</div></div>
+<ul>
+  <li>Przyrząd z PZ wzorcowany w komorze, którego pliku brak w <code>wyniki/</code>, jest zgłaszany w logu („NIE trafią do protokołu”).</li>
+  <li>Odczyty przyrządu w punktach, których <b>nie zamówiono</b> dla niego w PZ, są wyszarzane (nie idą do arkusza).</li>
+  <li>&gt; 10 przyrządów: nowe pary kolumn wstawiane przed ostatnią (ramki, nagłówki, obszar wydruku rosną same).</li>
+</ul>
 
-  <h3>Co program WPISUJE (cel)</h3>
-  <table>
-    <tr><th>Miejsce</th><th>Komórki</th><th>Wartość</th></tr>
-    <tr><td>Kopia · zakładka</td><td>C15:C19, D15:D19, E15:E19, F15:F19</td><td>dane pomiarowe punktu (5 wierszy)</td></tr>
-    <tr><td>Kopia · zakładka</td><td>E4, G6, K4, E5, E6, H57</td><td>nr zlecenia/LA/TH, nr fabr., data, wytwórca, typ, info</td></tr>
-    <tr><td>Kopia · zakładka</td><td>K11–K13, K17 (CC‑04), K18</td><td>parametry przyrządu wzorcowego; higrometr (S8000 / „-")</td></tr>
-    <tr><td>Kopia · zakładka</td><td>O25, B228/H228, B230/H230</td><td>woda/szron, data, podpisy</td></tr>
-    <tr><td>Kopia · „Wyniki"</td><td>F24, C28/C32, E28/E32, J23/J26</td><td>etykieta, daty, podpisy, formuła histerezy</td></tr>
-    <tr><td>Kopia · Strona 3</td><td>F, G (per blok)</td><td>warunki środowiskowe (T/RH otoczenia)</td></tr>
-    <tr><td>Świadectwo Word</td><td>[wytworca] [typ] [nr_fabr] [nr_ewid] [uzytkownik] [data_wzorcowania] [temp/wilg_min/max]</td><td>dane z protokołu/PZ</td></tr>
-    <tr><td>Świadectwo Word</td><td>D239:K239 (z RH) / D246:G246 (temp)</td><td>tabela kalibracji per punkt (t, tm, Δt, U, RH…)</td></tr>
-    <tr><td>Protokół (moduł 3)</td><td>Strona 2: B:J, K/L, O · Strona 3: pomiary + F/G</td><td>tabela przyrządów + dane punktów</td></tr>
-  </table>
+<!-- ═══════════════════════════ 9 ═══════════════════════════ -->
+<h2 id="algorytm" class="chapter">9. Krok 2 — jak wybierane są punkty</h2>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  A["Wiersze obserwacji"] --> B["Odcinek = ten sam punkt nastawy<br/>(T, RH) komory"]
+  B --> B1{"Zmiana nastawy T ≤ 0,5 °C<br/>trzymana ≥ 5 min?"}
+  B1 -->|"tak — korekta operatora"| B
+  B1 -->|"nie / zmiana RH / rampa"| C["Koniec punktu<br/>(początek rampy)"]
+  C --> D{"Odczyty komory weszły w widełki?<br/>T ±0,4 °C, RH ±3 %"}
+  D -->|"tak"| E["Start okna = wejście + 2 h"]
+  D -->|"nie"| E2["Start okna = początek + 2 h"]
+  E & E2 --> F["Gwarantowany ogon ≥ 15 min<br/>koniec = zmiana nastawy − 5 min"]
+  F --> G{"Punkt zamówiony w PZ?<br/>T ±1,5 °C, RH ±4 %"}
+  G -->|"nie"| SKIP["Pominięty"]
+  G -->|"tak"| H{"Komora osiągnęła nastawę?<br/>(filtr 10 % / 1 °C / 2 %RH)"}
+  H -->|"nie, a punkt z PZ"| ORA
+  H -->|"tak"| I["Kandydaci: 5 kolejnych pełnych minut<br/>wynik = średnia K (z RH) albo L (temp.)"]
+  I --> J{"Kryterium spełnione?<br/>K ≤ 0,2 / 0,45 · L ≤ 0,1"}
+  J -->|"tak"| K["Najpóźniejsze okno ≤ najlepsze + zapas 0,05<br/>→ ZIELONE (najlepsze jasno: Alternatywa)"]
+  J -->|"nie"| ORA["Najlepsze możliwe okno<br/>→ POMARAŃCZOWE + komentarz z powodem"]
+  K & ORA --> P[("Punkt protokołu<br/>5 wierszy reprezentacyjnych")]
+</pre><div class="cap">Rys. 7. Wybór okna i reprezentantów (wartości domyślne z panelu).</div></div>
 
-  <div class="diagbox">
-  <div class="mermaid">
-flowchart LR
-  TXT["TXT"]:::in --> S3["Strona 3<br/>pomiary + srodowisko"]:::out
-  WYN[("wyniki/*")]:::in -->|"po czasie"| S3
-  PZ["PZ + Zestaw."]:::pz -->|"nr fabr./ewid."| S2["Strona 2<br/>B:J, K/L, O"]:::out
-  S3 -->|"kolejnosc kolumn"| S2
-  S2 --> KOP["Kopie arkuszy<br/>E4/E5/E6/G6/K4/K11-K18"]:::xf
-  S3 --> KOP
-  S2 --> DOC["Swiadectwo Word<br/>pola + tabela kalibracji"]:::xf
-  S3 --> DOC
-  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
-  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
-  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-  </div>
-  </div>
-</div>
+<h3>Kryterium stabilności K (rozrzut tdp higrometru)</h3>
+<table>
+<tr><th>Temperatura punktu</th><th>RH, przy którym K ≤ 0,2</th><th>Pozostałe przypadki</th></tr>
+<tr><td>~10 °C (5–15)</td><td>40 &lt; RH &lt; 75</td><td rowspan="3">K ≤ 0,45 (wartość maksymalna)</td></tr>
+<tr><td>~23 °C (15–30)</td><td>30 ≤ RH ≤ 75</td></tr>
+<tr><td>~35 °C (30–45)</td><td>40 ≤ RH ≤ 75</td></tr>
+<tr><td colspan="3">Punkt samej temperatury (RH zadane 0 albo brak danych higrometru): kryterium <b>L</b> (rozrzut temperatury czujników) ≤ 0,1 °C.</td></tr>
+</table>
 
-<!-- 11. KONFIGURACJA -->
-<div class="chapter">
-  <h2>11. Konfiguracja — pełny wykaz parametrów</h2>
-  <p>Parametry ustawia się w sekcji <b>„KONFIGURACJA — edytuj tutaj"</b> na początku każdego pliku.</p>
+<h3>Kolory w obserwacji</h3>
+<table>
+<tr><th>Kolor</th><th>Znaczenie</th></tr>
+<tr><td style="background:#E2EFDA">jasnozielony blok</td><td>5‑minutowe okno punktu</td></tr>
+<tr><td style="background:#A9D08E"><b>ciemnozielony, pogrubiony</b></td><td>5 wierszy reprezentacyjnych (idą do protokołu)</td></tr>
+<tr><td style="background:#FCE4D6">jasnopomarańczowy</td><td>Okno punktu, w którym kryterium nie jest spełnione (punkt zostaje, z komentarzem)</td></tr>
+<tr><td style="background:#F4B183"><b>pomarańczowy</b></td><td>Reprezentanci takiego punktu</td></tr>
+<tr><td style="background:#E2EFDA">jasnozielony bez pogrubienia + „Alternatywa…”</td><td>Najlepsze okno, gdy wybrano późniejsze (zapas)</td></tr>
+<tr><td>numer w kolumnie z prawej</td><td>Numer punktu protokołu (nawigacja); te same oznaczenia w plikach wyników i zestawieniu</td></tr>
+</table>
+<div class="note warn"><b>Zegary przyrządów spóźniają się</b> (~2 min): dlatego okno kończy się co najmniej 5 min przed zmianą nastawy
+(<code>OBS_ODSTEP_KONIEC</code>). Zmiana o 14:13 → ostatni reprezentant najpóźniej 14:08.</div>
+<div class="note">Odcinki, które wyglądają na <b>suszenie</b> (T 21–27 °C, RH &lt; 50 %) i nie są zamówione w PZ, nie trafiają do protokołu.
+Punkt powtórzony dla histerezy (np. drugi raz 20 °C / 45 %) zostaje, bo PZ go zamawia.</div>
 
-  <h3>Numer pomiaru — jak wskazać (na razie ręcznie w pliku)</h3>
-  <p>To, <b>który pomiar</b> zostanie przetworzony i skąd program bierze dane, wskazuje się
-  <b>otwierając skrypt w edytorze</b> (np. Notatnik / VS Code) i wpisując nazwę pliku
-  z numerem w sekcji KONFIGURACJA. Na razie robi się to ręcznie — bez okna dialogowego.</p>
-  <table>
-    <tr><th>Skrypt</th><th>Parametr do zmiany</th><th>Co wpisać (skąd brać dane)</th></tr>
-    <tr>
-      <td>generuj_obserwacje.py<br><span class="small">(obserwacja + protokół)</span></td>
-      <td class="mono">TXT_FILENAME</td>
-      <td>Nazwa pliku TXT multimetru (bez rozszerzenia), np.
-      <code>2026-07-17 07.46_145,165</code>. <b>Numer po znaku „_"</b> (tu <code>145,165</code>)
-      to numer pomiaru — program podstawia go w miejsce <code>xxx</code> w nazwach protokołu i kopii.
-      Kilka plików naraz (przerwany pomiar): <code>TXT_FILENAMES = ["plik1", "plik2"]</code>.</td>
-    </tr>
-    <tr>
-      <td>generuj_arkusze.py<br><span class="small">(arkusze + świadectwa)</span></td>
-      <td class="mono">PROTOKOL_PLIK</td>
-      <td>Nazwa protokołu <b>z numerem</b>, utworzonego wcześniej przez obserwację, np.
-      <code>145,165_LA_TH_2026 - protokół CC.xlsx</code>. Stąd program czyta Stronę 2 i 3.
-      Można też podać przez zmienną <code>CC_PROTOKOL</code>.</td>
-    </tr>
-    <tr>
-      <td>generuj_arkusze.py</td>
-      <td class="mono">SZABLON_PLIK</td>
-      <td>Nazwa szablonu arkusza obliczeniowego (RH (CC) / CC-04) — patrz rozdział 3.
-      Można też podać przez <code>CC_SZABLON</code>.</td>
-    </tr>
-  </table>
-  <div class="note"><b>Kolejność:</b> najpierw ustawiasz <code>TXT_FILENAME</code> i uruchamiasz
-  <b>generuj_obserwacje.py</b> → powstaje protokół z numerem w nazwie. Potem tę nazwę wpisujesz
-  w <code>PROTOKOL_PLIK</code> w <b>generuj_arkusze.py</b>. Numer wędruje: nazwa pliku TXT →
-  nazwa protokołu → nazwy kopii arkuszy i świadectw.</div>
+<!-- ═══════════════════════════ 10 ═══════════════════════════ -->
+<h2 id="protokol" class="chapter">10. Krok 2 — co trafia do protokołu</h2>
+<h3>Strona 3 — blok punktu (5 wierszy, od wiersza 20)</h3>
+<table>
+<tr><th style="width:22%">Kolumna</th><th>Zawartość</th></tr>
+<tr><td>A</td><td>Numer punktu</td></tr>
+<tr><td>B / C</td><td>Nastawa T / RH komory (nazwy zakładek arkuszy — z nominału PZ)</td></tr>
+<tr><td>E</td><td>wiersz 2: data · wiersz 3: start · wiersz 4: koniec okna</td></tr>
+<tr><td>F / G</td><td>Warunki środowiskowe (t, RH pomieszczenia) — krok 4 albo 3</td></tr>
+<tr><td>K–O (CC‑04) / L–M (CC)</td><td>Odczyty czujników wzorcowych i tdp z 5 wierszy reprezentacyjnych</td></tr>
+<tr><td>Q/R… (CC), S/T… (CC‑04)</td><td>Para kolumn t / RH każdego przyrządu (kolejność = Strona 2)</td></tr>
+<tr><td>wiersz 14 (CC‑04)</td><td>Narożnik komory przyrządu (LG/LD/PD/PG)</td></tr>
+<tr><td>wiersz 17</td><td>Odległość od czujnika wzorcowego (→ <i>Wyniki</i> arkusza)</td></tr>
+<tr><td>wiersz 19</td><td>Jednostki odczytu: °C / % · <b>mA / V = przetwornik</b></td></tr>
+</table>
+<p>Kolor komórek przyrządów decyduje o arkuszach: <span style="background:#CCFFCC">&nbsp;zielone&nbsp;</span> biorą udział, <span style="background:#BFBFBF">&nbsp;szare&nbsp;</span> nie
+(ustawienia <code>GEN_KOLOR_AKT</code>, <code>GEN_KOLOR_POM</code>). Wyszarzenie wszystkich bloków przyrządu = przyrząd bez arkusza i świadectwa.</p>
 
-  <h3>generuj_obserwacje.py</h3>
-  <table>
-    <tr><th>Parametr</th><th>Za co odpowiada</th></tr>
-    <tr><td class="mono">TXT_FILENAME</td><td>plik(i) TXT multimetru; lista = przerwany pomiar (sklejanie)</td></tr>
-    <tr><td class="mono">STABILIZACJA_PO_RH</td><td>czas (2 h) liczony od wejścia odczytów (T i RH) w widełki</td></tr>
-    <tr><td class="mono">PROG_WEJSCIA_TEMP</td><td>szerokość widełek temperatury (±0,4 °C, bezwzględnie)</td></tr>
-    <tr><td class="mono">PROG_WEJSCIA_RH_PROC</td><td>szerokość widełek wilgotności (±3%, względnie)</td></tr>
-    <tr><td class="mono">STABILIZACJA_MIN</td><td>reguła zapasowa (okno po 1h45m od początku punktu)</td></tr>
-    <tr><td class="mono">FILTR_NASTAWA_ODCZYT / MAX_ROZNICA_PROCENT</td><td>odrzucanie punktów poza nastawą i próg zgodności</td></tr>
-    <tr><td class="mono">PZ_FOLDER / ZESTAWIENIE_PLIK</td><td>źródła danych przyrządów i rozdzielczości</td></tr>
-  </table>
-  <h3>generuj_arkusze.py</h3>
-  <table>
-    <tr><th>Parametr</th><th>Za co odpowiada</th></tr>
-    <tr><td class="mono">PROTOKOL_PLIK / SZABLON_PLIK</td><td>protokół wejściowy i szablon arkusza</td></tr>
-    <tr><td class="mono">GENERUJ_EXCEL / GENERUJ_WORD</td><td>które etapy wykonać (Excel i/lub Word)</td></tr>
-    <tr><td class="mono">HIGROMETR_K18</td><td>higrometr w K18 (<code>S8000 / - / S8000-2 / OPTIDEW</code>); temp‑only → „-"</td></tr>
-    <tr><td class="mono">MAPOWANIE_TYPU_CC04</td><td>stałe K11–K17 per typ CC‑04 (LG/LD/PD/PG)</td></tr>
-    <tr><td class="mono">SZABLON_WORD_* (3)</td><td>szablony świadectwa wg wilgotności; wariant „(uzytkownik)"</td></tr>
-    <tr><td class="mono">NR_SW_POCZATKOWY</td><td>numer pierwszego świadectwa</td></tr>
-    <tr><td class="mono">PLIKI_LINKOWANE / LINKI_SERWEROWE</td><td>pliki wzorcowe i ich ścieżki sieciowe</td></tr>
-    <tr><td class="mono">CZYSC_AUTORECOVER</td><td>czyszczenie AutoRecover Excela (stabilność)</td></tr>
-  </table>
-</div>
+<h3>Strona 2 — tabela przyrządów (od wiersza 11)</h3>
+<table>
+<tr><th>Kol.</th><th>Pole</th><th>Źródło</th></tr>
+<tr><td>A</td><td>Nr</td><td>Kolejność = kolumny Strony 3</td></tr>
+<tr><td>B, D</td><td>Wytwórca, Typ</td><td>PZ (bez powtórzonego producenta; dopisek za producentem → Uwagi)</td></tr>
+<tr><td>C, H–J</td><td>Czujnik pomiarowy: wytwórca, typ, nr fabryczny, nr ewidencyjny</td><td>PZ („oraz czujnika …”)</td></tr>
+<tr><td>E, F</td><td>Nr fabryczny, nr ewidencyjny</td><td>PZ; nr ewid. także z nawiasu <code>36668832 (H1)</code> i etykiet <code>nr wew.</code>, <code>nr CLDK:</code>…</td></tr>
+<tr><td>K, L</td><td>Rozdzielczość t, RH</td><td>Zestawienie (producent + typ), a gdy brak — z cyfr po przecinku w danych; bez RH → <code>-</code></td></tr>
+<tr><td>M, N</td><td>Skalowanie przetwornika t, RH</td><td>Karta przetwornika (2a); nie dotyczy → <code>-</code></td></tr>
+<tr><td>O</td><td>Nr zlecenia</td><td>PZ</td></tr>
+<tr><td>P</td><td>Uwagi</td><td>Kanały przetwornika, zasilanie <code>Uz = …</code>, dopiski z PZ; puste → <code>-</code> na szarym tle</td></tr>
+</table>
+<h3>Przetworniki z wyjściem analogowym (sekcja 2a)</h3>
+<ul>
+  <li><b>Plik multimetru</b> (np. 1586A <code>dat00001.csv</code>, kolumny <code>Ch NNN (ADC)</code> → mA, <code>(VDC)</code> → V). Gdy nic nie wybrano, krok 2 sam szuka takich plików pokrywających się czasem z pomiarem.</li>
+  <li><b>Karta przetwornika</b>: nr fabryczny, rodzaj odczytu L10 (Prąd/Napięcie), multimetr K14, kanały K15 (t) / K16 (RH, <code>-</code> = brak wyjścia), zakres wyjścia M22÷O22, tmin/tmax L27/O27, RHmin/RHmax L28/O28, własny szablon.</li>
+  <li>W CC‑04 przetwornik może też być w samym pliku TXT (<code>Przetwornik U; Wejście pomiarowe Ch: 105</code>) — osobne kolumny w obserwacji i osobny przyrząd w protokole.</li>
+  <li>Krok 2 wpisuje skalowanie (Strona 2 M/N), kanały (Uwagi) i multimetr na Stronie 1 (D53/I53/I58).</li>
+</ul>
+<h3>Pozostałe efekty kroku 2</h3>
+<ul>
+  <li>Pliki kroku 1 dopasowane do punktów: nazwa <code>&lt;zlecenie&gt;_LA_TH_2026_&lt;serial&gt;_opracowanie danych.xlsx</code>, podpis <i>Opracował / Data</i>, zaznaczone wiersze punktów.</li>
+  <li>Zdjęcia (opcja <code>OBS_FOTO</code>): dla 5 wierszy każdego punktu najbliższe zdjęcie (czas z nazwy albo EXIF, ±1 min) → <code>foto/punkt_NN_&lt;nastawa&gt;/</code>.</li>
+  <li>Pomiar samej temperatury: na Stronie 1 higrometr wzorcowy i rotametr <code>-</code>; w punktach bez tdp „Dł. rurki” i „Forma kondensacji” <code>-</code>.</li>
+</ul>
 
-<!-- 11. PROCEDURA -->
-<div class="chapter">
-  <h2>12. Procedura krok po kroku</h2>
-  <ol>
-    <li>Wgraj logi czujników (DUT) do folderu <code>excel_do_analizy/</code>.</li>
-    <li>Wgraj pliki PZ (PDF) do folderu <code>PZ/</code>.</li>
-    <li>Umieść log(i) TXT multimetru w folderze roboczym i ustaw <code>TXT_FILENAME</code>.</li>
-    <li>Zaktualizuj dane w plikach <code>Pom. nr 9</code>, <code>Wzory.xls</code>, <code>Zestawienie</code>.</li>
-    <li>Uruchom <b>analizuj_excele.py</b> i sprawdź folder <code>wyniki/</code>.</li>
-    <li>Uruchom <b>generuj_obserwacje.py</b> — powstaje protokół; sprawdź podświetlone 5 wierszy
-      w każdym punkcie oraz tabelę przyrządów (Strona 2).</li>
-    <li>Ustaw w konfiguracji <code>PROTOKOL_PLIK</code>, <code>SZABLON_PLIK</code> oraz <code>HIGROMETR_K18</code>.</li>
-    <li>Uruchom <b>generuj_arkusze.py</b> — powstają kopie arkuszy Excel i świadectwa Word.</li>
-    <li>Sprawdź wygenerowane pliki; zamknij je w Office przed ewentualnym ponownym uruchomieniem.</li>
-  </ol>
-  <div class="note warn">Nie pomijaj kolejności — moduł 2 wymaga wyników modułu 1, a moduł 3 wymaga
-  protokołu z modułu 2.</div>
-</div>
+<!-- ═══════════════════════════ 11 ═══════════════════════════ -->
+<h2 id="krok3" class="chapter">11. Krok 3 — arkusze obliczeniowe i świadectwa</h2>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  R["Odczyt protokołu przez Excel<br/>Strona 2 = lista przyrządów, Strona 3 = bloki"] --> F1{"Przyrząd ma choć jeden<br/>aktywny (zielony) blok?"}
+  F1 -->|"nie"| SK["Pomijany — bez arkusza i świadectwa"]
+  F1 -->|"tak"| PO{"Dwa wiersze z tym samym<br/>nr fabrycznym: wyświetlacz + wyjście?"}
+  PO -->|"tak"| PL["Łączenie w JEDEN przyrząd"]
+  PO -->|"nie"| T
+  PL --> T["Typ przyrządu → szablon arkusza<br/>(rozdz. 12)"]
+  T --> K1["Kopia szablonu<br/>(poprzednia wersja → kopie_zapasowe)"]
+  K1 --> K2["Zakładki: aktywne bloki + puste dla punktów z PZ<br/>nazwy 't, RH' wg nominałów PZ, powtórka '(2)'"]
+  K2 --> K3["Komórki zakładek: odczyty, nagłówki,<br/>czujniki komory, przetwornik, podpisy"]
+  K3 --> K4["Przeliczenie (puste zakładki bez przeliczania)"]
+  K4 --> K5["Wyniki: wiersze wg punktów, sortowanie,<br/>histereza, odległość, podpisy"]
+  K5 --> K6["Warunki środowiskowe: F/G + zakres min–max"]
+  K6 --> K7[("Arkusz zapisany")]
+  K7 --> K8["Nowa sesja Excela: odczyt kalibracji<br/>(przy padzie — ponowna próba)"]
+  K8 --> K9["Linki z powrotem na \\plum4"]
+  K9 --> W["Świadectwa Word (rozdz. 13)"]
+</pre><div class="cap">Rys. 8. Przebieg kroku 3 dla każdego przyrządu.</div></div>
 
-<!-- 12. PROBLEMY -->
-<div class="chapter">
-  <h2>13. Rozwiązywanie problemów</h2>
-  <table>
-    <tr><th>Objaw</th><th>Przyczyna i rozwiązanie</th></tr>
-    <tr><td>PermissionError przy zapisie</td><td>plik wyjściowy otwarty w Excelu/Word — zamknij go i uruchom ponownie</td></tr>
-    <tr><td>Nie znaleziono pliku TXT</td><td>sprawdź nazwę; program sam dodaje <code>.txt</code> i dopasowuje po nazwie, a listę dostępnych plików wypisuje w logu</td></tr>
-    <tr><td>Brak danych środowiskowych</td><td>brak dostępu do <code>Wzory.xls</code> / <code>Pom. nr 9</code> lub nieaktualne dane czujnika — zaktualizuj</td></tr>
-    <tr><td>Przyrząd nie wypełniony na Stronie 2</td><td>brak dopasowania w PZ (przyrząd bez pliku loggera z numerem) — uzupełnij ręcznie</td></tr>
-    <tr><td>Excel „zawiesza się" przy starcie</td><td>nadmiar plików AutoRecover — pozostaw <code>CZYSC_AUTORECOVER = True</code></td></tr>
-    <tr><td>Pusty punkt (brak 5 wierszy)</td><td>komora nie osiągnęła nastawy / za krótki punkt — sprawdź dane i progi</td></tr>
-  </table>
-</div>
+<h3>Co krok 3 wpisuje do zakładki punktu</h3>
+<table>
+<tr><th style="width:20%">Komórki</th><th>Zawartość</th><th style="width:26%">Źródło</th></tr>
+<tr><td>C15:C19</td><td>Rs czujnika wzorcowego (5 wierszy)</td><td>Strona 3 (CC‑04: kolumna narożnika)</td></tr>
+<tr><td>D15:D19</td><td>tdp higrometru</td><td>Strona 3</td></tr>
+<tr><td>E15:F19</td><td>tm / RHm przyrządu (wyświetlacz)</td><td>Para kolumn przyrządu</td></tr>
+<tr><td>G15:H19</td><td>Itm/IRHm albo Utm/URHm (wyjście przetwornika)</td><td>Para kolumn z jednostką mA/V</td></tr>
+<tr><td>E4, G6, K4</td><td>Nr zlecenia, nr fabryczny, data pomiaru</td><td>Nazwa protokołu, Strona 2, Strona 3</td></tr>
+<tr><td>E5, E6</td><td>Wytwórca, typ</td><td>Strona 2</td></tr>
+<tr><td>H55, H57</td><td>Rozdzielczość RH, t (t także „dla 70 °C … / dla 20 °C …” — wartość dla temperatury zakładki)</td><td>Strona 2 L, K</td></tr>
+<tr><td>K10, L10</td><td>Rodzaj przyrządu (Termohigrometr / Przetwornik / TH/Przetwornik), Prąd/Napięcie</td><td>Jednostki wiersza 19, karta 2a</td></tr>
+<tr><td>K11–K13, K17</td><td>Czujnik wzorcowy, multimetr, kanał, oznaczenie komory</td><td>Ustawienia komory CC / mapa CC‑04</td></tr>
+<tr><td>K14–K16, M22/O22, L27/O27, L28/O28</td><td>Multimetr wyjścia, kanały t/RH, zakres wyjścia, zakresy t i RH</td><td>Karta przetwornika albo Strona 2 M/N + Uwagi + Strona 1 I53</td></tr>
+<tr><td>K18</td><td>Higrometr punktu rosy (punkt samej temperatury → <code>-</code>)</td><td>Ustawienia K18 wg komory</td></tr>
+<tr><td>O25</td><td>Forma kondensacji (woda / szron)</td><td>Strona 3</td></tr>
+<tr><td>B228/H228, B230/H230</td><td>Daty i podpisy obliczeń</td><td>Dziś, ustawienia podpisów</td></tr>
+</table>
+<div class="note"><b>Puste zakładki z PZ</b> (<code>GEN_PUNKTY_PZ</code>): punkt zamówiony dla przyrządu, którego nie ma w protokole, dostaje pustą zakładkę
+we właściwym miejscu i wiersz w <i>Wynikach</i> — do domierzenia. Nie jest przeliczana (inaczej Excel wisiał kilkanaście minut) i nie trafia do świadectwa,
+dopóki jej nie uzupełnisz (potem krok 3 z wyłączonym „Generuj arkusze Excel” albo krok 5).</div>
 
-<!-- 13. SLOWNIK -->
-<div class="chapter">
-  <h2>14. Słownik pojęć</h2>
-  <table>
-    <tr><th>Pojęcie</th><th>Znaczenie</th></tr>
-    <tr><td>Protokół CC / CC‑04</td><td>dwa warianty formularza wyników wzorcowania (różny układ kolumn i typów)</td></tr>
-    <tr><td>Strona 2 / Strona 3</td><td>arkusze protokołu: tabela przyrządów (2) i dane pomiarowe + środowiskowe (3)</td></tr>
-    <tr><td>DUT</td><td>przyrząd wzorcowany (Device Under Test)</td></tr>
-    <tr><td>PZ</td><td>Potwierdzenie zamówienia — dokument PDF z danymi przyrządów i zlecenia</td></tr>
-    <tr><td>Punkt histerezy „(2)"</td><td>powtórzony pomiar wilgotności po wysokiej wilgotności (wyznaczenie histerezy)</td></tr>
-    <tr><td>Rozdzielczość (K/L)</td><td>najmniejsza zmiana wskazania przyrządu dla temperatury (K) i wilgotności (L)</td></tr>
-    <tr><td>Widełki ±3%</td><td>zakres wokół nastawy RH, po wejściu w który liczony jest czas stabilizacji</td></tr>
-  </table>
-  <div class="note ok">Dokument opisuje program w wersji <b>1.2</b>. W razie pytań dot. konfiguracji
-  zajrzyj do sekcji „KONFIGURACJA" na początku odpowiedniego pliku modułu.</div>
-</div>
+<!-- ═══════════════════════════ 12 ═══════════════════════════ -->
+<h2 id="typy" class="chapter">12. Krok 3 — typy przyrządów i szablony</h2>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  S["Przyrząd ze Strony 2"] --> Q1{"Ten sam nr fabryczny w dwóch wierszach:<br/>rozdzielczość + skalowanie?"}
+  Q1 -->|"tak"| TP["Wyświetlacz + wyjście<br/>K10 = TH/Przetwornik<br/>E/F z wyświetlacza, G/H z wyjścia"]
+  Q1 -->|"nie"| Q2{"Jednostka w wierszu 19 Strony 3<br/>mA albo V?"}
+  Q2 -->|"nie"| TH["Termohigrometr / termometr<br/>K10 = Termohigrometr, E/F"]
+  Q2 -->|"tak"| Q3{"Wyjścia przetwornika<br/>(kanały K15 / K16)"}
+  Q3 -->|"tylko RH"| PRH["Przetwornik RH<br/>szablon Przetwornik RH (CC)"]
+  Q3 -->|"t lub t + RH"| PT["Przetwornik<br/>szablon Przetwornik (CC)<br/>albo własny z karty"]
+  TP --> X1[("TH + Przetwornik (CC).xlsx")]
+  TH --> X2[("RH (CC).xlsx")]
+  PRH --> X3[("Przetwornik RH (CC).xlsx")]
+  PT --> X4[("Przetwornik (CC).xlsx")]
+</pre><div class="cap">Rys. 9. Rozpoznanie typu przyrządu i wybór szablonu arkusza.</div></div>
+
+<h3>Układy arkusza <i>Wyniki</i></h3>
+<table>
+<tr><th style="width:24%">Szablon</th><th>Tabele</th><th>Histereza</th></tr>
+<tr><td>RH (CC) — standard</td><td>B:I ← wiersz 239 (punkty z RH, posortowane t↑, RH↑, powtórka na końcu grupy); O:R ← wiersz 246 (jeden reprezentant na temperaturę, RH najbliżej 50 %)</td><td>J23 z E219</td></tr>
+<tr><td>Przetwornik (CC)</td><td>253 (t + RH), 260 (t), 267 (RH) — zostają tabele pasujące do wyjść; nagłówki prąd/napięcie z zakładki</td><td>I253 / F260</td></tr>
+<tr><td>Przetwornik RH (CC)</td><td>Jedna tabela B:L z wiersza 253, kolumny temperatury <code>-</code></td><td>I253</td></tr>
+<tr><td>TH + Przetwornik (CC)</td><td>Trzy sekcje jedna pod drugą: wyświetlacz (239/246), wyjście w °C/% (253/260), wyjście w V/mA (274/279), z kryteriami zgodności tak/nie (Y59:Y62). Krok 3 zmienia tylko liczbę wierszy sekcji.</td><td>J55 z E219</td></tr>
+</table>
+<div class="diagbox"><pre class="mermaid">
+flowchart TB
+  subgraph W["Wyniki — TH + Przetwornik"]
+    direction TB
+    S1["Sekcja 1 · wyświetlacz<br/>B:I ← 239 (t, RH) · W:Z ← 246 (t) · M:T / AF:AI zgodność"]
+    S2["Sekcja 2 · wyjście w °C / %rh<br/>B:K ← 253 · W:AB ← 260"]
+    S3["Sekcja 3 · wyjście w V / mA<br/>B:I ← 274 · W:AD ← 279"]
+    ST["Stopka: histereza J55, odległość F56,<br/>kryteria Y59:Y62, podpisy i daty"]
+    S1 --> S2 --> S3 --> ST
+  end
+</pre><div class="cap">Rys. 10. Arkusz <i>Wyniki</i> przyrządu z wyświetlaczem i wyjściem — każda sekcja ma tyle wierszy, ile punktów.</div></div>
+<div class="note warn">Kryteria zgodności (Y59:Y62: 0,4 °C, 4 %rh, 0,02 V, 0,2 V) i podstawa oceny w świadectwie pochodzą z dokumentacji klienta
+wzoru (zlecenie 239). Dla innego klienta popraw je w szablonie albo w arkuszu.</div>
+
+<!-- ═══════════════════════════ 13 ═══════════════════════════ -->
+<h2 id="word" class="chapter">13. Krok 3 — świadectwa Word</h2>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  A["Arkusz po przeliczeniu"] --> B{"Typ przyrządu"}
+  B -->|"wyświetlacz + wyjście"| W1["TH + przetwornik (ang)<br/>5 tabel = sekcje Wyników, pass/fail"]
+  B -->|"przetwornik"| C{"Wyjścia i punkty"}
+  C -->|"tylko RH"| W2["przetwornik RH"]
+  C -->|"tylko t / brak punktów z RH"| W3["przetwornik T"]
+  C -->|"t + RH, wszystkie z RH"| W4["przetwornik TH"]
+  C -->|"t + RH, część tylko t"| W5["przetwornik TH + temp"]
+  B -->|"termohigrometr"| D{"Zakładki z wilgotnością"}
+  D -->|"żadna"| W6["tylko temp"]
+  D -->|"wszystkie"| W7["zakres"]
+  D -->|"część"| W8["zakres + temp"]
+  W2 & W3 & W4 & W5 & W6 & W7 & W8 --> U{"PZ ma UŻYTKOWNIKA?"}
+  U -->|"tak"| UV["wariant (uzytkownik)"]
+  U -->|"nie"| OK[("Świadectwo .docx")]
+  UV --> OK
+  W1 --> OK
+</pre><div class="cap">Rys. 11. Wybór szablonu świadectwa.</div></div>
+
+<h3>Pola wypełniane w szablonach</h3>
+<table>
+<tr><th style="width:30%">Pole</th><th>Wartość</th></tr>
+<tr><td><code>[nr_sw]</code>, <code>[nr_zl]</code></td><td>Numer świadectwa (kolejne od numeru początkowego), numer zlecenia</td></tr>
+<tr><td><code>[data]</code>, <code>[data_wzorcowania]</code></td><td>Data wystawienia; daty pomiaru z K4 zakładek: „05 ÷ 09 listopada 2026 r.” (3+ kolejne dni → zakres), w ang. „05 ÷ 09 November 2026”</td></tr>
+<tr><td><code>[wytworca]</code>, <code>[typ]</code>, <code>[nr_fabr]</code>, <code>[nr_ewid]</code></td><td>Strona 2 (albo PZ); brak nr ewid. → znika cały fragment „, nr ewid.: …”</td></tr>
+<tr><td><code>[zleceniodawca]</code>, <code>[użytkownik]</code></td><td>Bloki adresowe z PZ</td></tr>
+<tr><td><code>[temp_min]</code>…<code>[wilg_max]</code></td><td>Zakres warunków środowiskowych z bloków przyrządu</td></tr>
+<tr><td><code>[histereza]</code>, <code>[hist_t]</code>/<code>[hist_rh]</code></td><td>Przypis ¹⁾ o punkcie powtórzonym (punkt z PZ: „Punkt (20 °C, 45 %rh) powtórzony…”); brak powtórki → przypis znika</td></tr>
+<tr><td><code>[Podpis]</code></td><td>Podpisujący z prawej</td></tr>
+<tr><td>Przetwornik: <code>[symbol_wy]</code>, <code>[jedn_wy]</code>, <code>[wyjscie_przym]</code>, <code>[wy_min]</code>…, <code>[zasilanie]</code></td><td>I/U, mA/V, „prądowe/napięciowe”, zakresy wyjścia, t, RH; zasilanie <code>Uz = …</code> z Uwag (brak → „UZUPEŁNIJ” + ostrzeżenie)</td></tr>
+<tr><td>Wyświetlacz + wyjście: <code>[wyjscie_en]</code>, <code>[symbol_en]</code>, <code>[rok_produkcji]</code></td><td>voltage/current, V/I, rok produkcji z PZ („year of production”)</td></tr>
+<tr><td>Tabele wyników</td><td>Wartości z zakładek / <i>Wyników</i> z liczbą miejsc jak w komórce; wiersze dodawane/usuwane wg liczby punktów</td></tr>
+</table>
+<h3>Numeracja świadectw</h3>
+<p>Numer początkowy <code>GEN_NR_SW</code>; kolejne rosnąco wg <b>nr fabrycznego</b> (liczby jak liczby: 9 &lt; 10) albo — przełącznik
+<code>GEN_NR_SW_WG_EWID</code> — wg <b>nr ewidencyjnego</b> (U90337-18, -36, -41…); przyrządy bez nr ewid. na końcu.</p>
+<h3>Etapy</h3>
+<table>
+<tr><th>Generuj arkusze Excel</th><th>Generuj świadectwa Word</th><th>Efekt</th></tr>
+<tr><td>wł.</td><td>wł.</td><td>Pełny obieg</td></tr>
+<tr><td>wł.</td><td>wył.</td><td>Tylko arkusze</td></tr>
+<tr><td>wył.</td><td>wł.</td><td>Świadectwa z istniejących arkuszy (np. po uzupełnieniu pustych zakładek)</td></tr>
+</table>
+
+<!-- ═══════════════════════════ 14 ═══════════════════════════ -->
+<h2 id="krok4">14. Krok 4 — warunki środowiskowe</h2>
+<p>Wpisuje t i RH pomieszczenia z <code>Pom. nr &lt;N&gt; (&lt;model&gt;) - &lt;rok&gt;.xlsx</code> do Strony 3 protokołu (F/G) dla <b>każdego</b> punktu —
+na chwilę startu i końca. Najbliższy rekord czujnika, nie dalej niż tolerancja (2 min); poza nią komórka zostaje pusta. Bez Excela.
+Wypełnionych komórek nie zmienia, chyba że włączysz <i>Nadpisuj</i>. Uruchomiony przed krokiem 3 — krok 3 bierze gotowe F/G.</p>
+<div class="note">Krok 3 liczy warunki tylko dla bloków, które trafiły do jakiegoś arkusza. Punkt wyszarzony dla wszystkich przyrządów ma F/G tylko z kroku 4.</div>
+
+<!-- ═══════════════════════════ 15 ═══════════════════════════ -->
+<h2 id="krok5" class="chapter">15. Krok 5 — świadectwa z gotowych arkuszy</h2>
+<p>Dla arkuszy uzupełnionych ręcznie albo po domiarze: włóż je do <code>Etap_5_ark_obl_to_word/</code> (z protokołami albo bez — wtedy brane są protokoły
+tego zlecenia z folderu głównego). Świadectwa powstają obok arkuszy, tymi samymi funkcjami co w kroku 3.</p>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  A["Arkusz (zakładki, Wyniki)"] --> B["Dane przyrządu: E5/E6/G6, K10<br/>nr ewid., użytkownik, zasilanie, rok — z PZ"]
+  P["Protokoły: folder kroku 5<br/>+ folder główny (to samo zlecenie)"] --> C
+  A --> C{"Blok protokołu dla zakładki:<br/>ta sama data K4 i nastawa"}
+  C -->|"najpierw protokół, w którego<br/>Stronie 2 jest ten przyrząd"| D["t/RH z F/G bloku<br/>(puste → czujnik Pom. nr 9)"]
+  C -->|"brak"| E["Zakładka bez warunków — ostrzeżenie"]
+  B & D --> F["Szablon i pola jak w kroku 3"]
+  F --> G[("Świadectwo obok arkusza")]
+</pre><div class="cap">Rys. 12. Krok 5 — skąd biorą się dane świadectwa.</div></div>
+<ul>
+  <li>Zlecenie rozbite na kilka protokołów z tymi samymi punktami jednego dnia — blok wybierany z protokołu, w którym jest przyrząd.</li>
+  <li>Własny numer początkowy (<code>SW_NR_SW</code>) i numeracja wg nr ewid. (<code>SW_NR_SW_WG_EWID</code>).</li>
+  <li>Arkusz otwarty w Excelu → krok się nie zaczyna (zamknij go); linki arkuszy wracają na serwer, poprzednia wersja w kopiach zapasowych.</li>
+</ul>
+
+<!-- ═══════════════════════════ 16 ═══════════════════════════ -->
+<h2 id="bezpieczenstwo" class="chapter">16. Kopie zapasowe, otwarte pliki i Excel</h2>
+<div class="diagbox"><pre class="mermaid">
+flowchart TD
+  A["Krok ma nadpisać plik"] --> B{"Plik otwarty w Excelu<br/>(jest ~$plik)?"}
+  B -->|"tak"| C["Zapis i zamknięcie TYLKO tego skoroszytu<br/>(Excel i inne pliki zostają)"]
+  B -->|"nie"| D
+  C --> D["Kopia → kopie_zapasowe/<br/>nazwa (RRRR-MM-DD GG.MM.SS)"]
+  D --> E["Nadpisanie"]
+  D --> F["Starsze niż 20 kopii pliku — usuwane"]
+</pre><div class="cap">Rys. 13. Nadpisywanie plików (protokół, obserwacja, arkusze, świadectwa).</div></div>
+<table>
+<tr><th style="width:30%">Zasada</th><th>Opis</th></tr>
+<tr><td>Tylko własny Excel</td><td>Skrypty uruchamiają i zamykają wyłącznie swoje instancje; Excel użytkownika (z oknem, także zminimalizowany) nie jest ruszany.</td></tr>
+<tr><td>Zawieszone Excele</td><td>Krok 3 na starcie kończy procesy <code>EXCEL.EXE</code> bez okna działające &gt; 1 min (pozostałości przerwanych przebiegów) — <code>GEN_SPRZATAJ_EXCEL</code>.</td></tr>
+<tr><td>Autoodzyskiwanie</td><td>Stare pliki <code>.xar</code> są czyszczone (potrafią wywalać Excela przy starcie).</td></tr>
+<tr><td>Przeliczanie</td><td>Kopie wypełniane w trybie ręcznym; puste zakładki z PZ bez przeliczania; tryb automatyczny dopiero przed obliczeniami.</td></tr>
+<tr><td>Linki</td><td>Na czas pracy linki do Wzory/Obliczenia przepinane na lokalne kopie (bez czekania na serwer), na końcu przywracane na <code>\\plum4</code>. Arkusz otwarty w tym momencie jest najpierw zapisywany i zamykany.</td></tr>
+<tr><td>Pad Excela</td><td>Przy odczycie kalibracji: nowa sesja i ponowna próba. Krok kończy się kodem błędu, gdy coś się nie udało — panel nie pisze „OK”.</td></tr>
+<tr><td>Pasek zakładek</td><td>W każdym gotowym .xlsx ustawiany wprost w pliku (<code>tabRatio</code>, od pierwszej zakładki) — po otwarciu widać wszystkie zakładki.</td></tr>
+</table>
+
+<!-- ═══════════════════════════ 17 ═══════════════════════════ -->
+<h2 id="ustawienia" class="chapter">17. Wszystkie ustawienia</h2>
+<p>Każde pole panelu odpowiada zmiennej środowiskowej przekazywanej do kroku. Bez panelu obowiązuje wartość domyślna.
+<span class="tag z">zaawansowane</span> — strona <i>Zaawansowane</i>.</p>
+<!-- AUTO:ustawienia -->
+<h3 id="ust-przygotowanie">Przygotowanie <span class="muted">— Sprawdz pliki wejsciowe przed uruchomieniem</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Sciezki</span><br><b>Folder roboczy</b></td><td><code>CC_FOLDER</code></td><td>(folder projektu)</td><td>Folder z protokolami, szablonami i plikami TXT. Wszystkie sciezki wzgledne liczone sa od niego.</td></tr>
+<tr><td><span class='muted'>Wyglad plikow</span><br><b>Szerokosc paska zakladek w plikach wynikowych</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_TAB_RATIO</code></td><td>0.85</td><td>Domyslne 0,6 Excela chowa zakladki za strzalkami — po otwarciu pliku widac jedna zakladke i trzeba przeciagac suwak w lewo. Pasek zakladek dostaje tyle szerokosci kosztem paska przewijania.</td></tr>
+</tbody></table>
+<h3 id="ust-analiza">1 · Analiza logow <span class="muted">— Logi z przyrzadow  -&gt;  wyniki/&lt;serial&gt;_wynik.xlsx</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Pliki do przetworzenia</b></td><td><code>ANL_PLIKI</code></td><td>—</td><td>Nic nie zaznaczone = przetwarzane sa WSZYSTKIE pliki z folderu. Zaznacz wybrane, gdy w folderze leza tez logi z innego zlecenia.</td></tr>
+<tr><td><span class='muted'>Sciezki</span><br><b>Folder z logami przyrzadow</b></td><td><code>ANL_INPUT</code></td><td>excel_do_analizy</td><td>Tu wgrywasz surowe pliki z loggerow DUT (csv / xlsx / txt / pdf / log).</td></tr>
+<tr><td><span class='muted'>Diagnostyka</span><br><b>Tryb diagnostyczny (pelne bledy)</b> <span class="tag z">zaawansowane</span></td><td><code>ANL_DEBUG</code></td><td>wył.</td><td>Wypisuje pelny traceback przy bledzie parsowania pliku.</td></tr>
+<tr><td><span class='muted'>Sciezki</span><br><b>Folder wynikow</b> <span class="tag z">zaawansowane</span></td><td><code>ANL_OUTPUT</code></td><td>wyniki</td><td>Tu trafiaja znormalizowane pliki &lt;serial&gt;_wynik.xlsx czytane pozniej przez krok Obserwacja.</td></tr>
+</tbody></table>
+<h3 id="ust-obs">2 · Obserwacja <span class="muted">— TXT multimetru  -&gt;  arkusz obserwacji + protokol</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Arkusz obserwacji</span><br><b>Pomijaj puste kolumny w obserwacji</b></td><td><code>OBS_POMIJAJ_PUSTE_KOL</code></td><td>wł.</td><td>Kolumna bez ani jednej wartosci (nieuzyty kanal multimetru) nie trafia do arkusza — tabela jest ciagla, bez dziur. Analizy i protokolu to nie dotyczy: pracuja na danych z pliku TXT, nie na kolumnach arkusza. Odwolania wykresow sa przeliczane automatycznie.</td></tr>
+<tr><td><span class='muted'>Dane przyrzadow</span><br><b>Folder PZ (Potwierdzenia zamowienia)</b></td><td><code>CC_PZ_FOLDER</code></td><td>PZ</td><td>PDF-y PZ (PL/EN) — z nich wypelniana jest tabela przyrzadow na Stronie 2.</td></tr>
+<tr><td><span class='muted'>Dane przyrzadow</span><br><b>Zestawienie wzorcowanych przyrzadow</b></td><td><code>CC_ZESTAWIENIE</code></td><td>Zestawienie wzorcowanych przyrządów.xlsx</td><td>Zrodlo rozdzielczosci t/RH (kolumny K/L Strony 2).</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Pliki TXT multimetru</b></td><td><code>OBS_TXT_FILES</code></td><td>—</td><td>Zaznacz plik(i) pomiaru. Kilka plikow = przerwany pomiar — zostana sklejone chronologicznie z usunieciem duplikatow czasu.</td></tr>
+<tr><td><span class='muted'>Dopasowanie wynikow</span><br><b>Tolerancja dopasowania czasu</b></td><td><code>OBS_TOL</code></td><td>3.0</td><td>PROG ODRZUCENIA, nie okno wyszukiwania: skrypt zawsze bierze NAJBLIZSZY rekord z wyniki/, a ta wartosc decyduje, czy plik w ogole pasuje do tego wzorcowania. Loggery ustawiane sa na zapis co 1 min, wiec normalne odchylki to sekundy; 3 min daja zapas na przerwy w zapisie (Aranet/Efento potrafia pominac 2-3 probki). Za ciasna wartosc ODRZUCA caly plik. Ulamki dozwolone — 0,5 = 30 s.</td></tr>
+<tr><td><span class='muted'>Filtr nastawa/odczyt</span><br><b>Filtr: nastawa vs odczyt komory</b></td><td><code>OBS_FILTR</code></td><td>wł.</td><td>Odrzuca segmenty, w ktorych komora nie osiagnela nastawy (przejscia, suszenie) — nie trafiaja do protokolu.</td></tr>
+<tr><td><span class='muted'>Filtr nastawa/odczyt</span><br><b>Prog wzgledny nastawa/odczyt</b></td><td><code>OBS_PROG</code></td><td>10.0</td><td>Dozwolona roznica |nastawa-odczyt| / nastawa * 100.</td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Korekta nastawy T w punkcie</b></td><td><code>OBS_KOREKTA_T</code></td><td>0.5</td><td>Zmiana nastawy temperatury w trakcie punktu (np. 37 -&gt; 37,4, zeby lepiej trafic w punkt) do tej wartosci to nadal ten sam punkt. Zmiana nastawy RH zawsze zaczyna nowy punkt. 0 = kazda zmiana nastawy to nowy punkt.</td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Zapas sredniej ponad najlepsze okno</b></td><td><code>OBS_ZAPAS_KRYT</code></td><td>0.05</td><td>Z okien spelniajacych kryterium, ktorych srednia rozrzutu (K, a dla punktu temperatury L) jest najwyzej o tyle wieksza od najlepszej, bierzemy NAJPOZNIEJSZE — przyrzad ma wiecej czasu, by dojsc do nastaw. Najlepsze okno zostaje jasno zaznaczone jako alternatywa. 0 = najlepsza srednia.</td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Odstep reprezentantow od zmiany nastawy</b></td><td><code>OBS_ODSTEP_KONIEC</code></td><td>5 min</td><td>5 wierszy reprezentacyjnych nie moze konczyc sie tuz przed zmiana nastawy. Na takim styku komora zaczyna juz przechodzic do kolejnego punktu, a 15-minutowe rozrzuty lapia probki zza granicy — odczyty wychodza rozmazane, a zegary przyrzadow spozniaja sie czasem o ~2 min. Przy 5 min i zmianie o 14:13 ostatni reprezentant to najpozniej 14:08. 0 = bez odstepu (zachowanie sprzed poprawki).</td></tr>
+<tr><td><span class='muted'>Podpisy</span><br><b>Pomiary wykonal(a)</b></td><td><code>OBS_PODPIS</code></td><td>Artsiom Azhdzer</td><td>Trafia do arkusza obserwacji i na Strone 2 protokolu.</td></tr>
+<tr><td><span class='muted'>Podpisy</span><br><b>Protokol sprawdzil(a)</b></td><td><code>OBS_PODPIS_SPR</code></td><td>Marek Szpakowski</td><td>Strona 2 protokolu.</td></tr>
+<tr><td><span class='muted'>Przetworniki (wyjscie analogowe)</span><br><b>Pliki multimetru z wyjsciami przetwornikow</b></td><td><code>OBS_PRZETW_PLIKI</code></td><td>—</td><td>Eksport multimetru (np. 1586A: &#x27;dat00001.csv&#x27;) z kolumnami &#x27;Ch 001 (ADC)&#x27; — prad w A, przeliczany na mA — albo &#x27;Ch NNN (VDC)&#x27;. Skopiuj plik do folderu roboczego. Odczyty sa dopasowywane po czasie do punktow obserwacji; ktory kanal nalezy do ktorego przyrzadu — w tabeli ponizej.</td></tr>
+<tr><td><span class='muted'>Przetworniki (wyjscie analogowe)</span><br><b>Przetworniki w tym pomiarze</b></td><td><code>PRZETWORNIKI</code></td><td>—</td><td>Jedna karta na przetwornik. Pola nazwane jak w zakladce arkusza obliczeniowego (w nawiasie — komorka, do ktorej trafia wartosc). Krok 2 wpisze z nich skalowanie i kanaly do protokolu, krok 3 — parametry kopii arkusza; odczyty wyjsc ida do G/H (Itm/IRHm) zamiast E/F.</td></tr>
+<tr><td><span class='muted'>Szablony</span><br><b>Szablon obserwacji CC</b></td><td><code>OBS_TEMPLATE</code></td><td>xxx_LA_TH_2026 - obserwacje CC.xlsx</td><td>Szablon arkusza obserwacji dla komory CC.</td></tr>
+<tr><td><span class='muted'>Szablony</span><br><b>Szablon obserwacji CC-04</b></td><td><code>OBS_CC04_TEMPLATE</code></td><td>szablon_LA_TH_2026 - obserwacje.xlsx</td><td>Szablon arkusza obserwacji dla komory CC-04.</td></tr>
+<tr><td><span class='muted'>Szablony</span><br><b>Szablon protokolu CC</b></td><td><code>OBS_PROT_CC</code></td><td>xxx_LA_TH_2026 - protokół CC.xlsx</td><td></td></tr>
+<tr><td><span class='muted'>Szablony</span><br><b>Szablon protokolu CC-04</b></td><td><code>OBS_PROT_CC04</code></td><td>xxx_LA_TH_2026 - protokół CC-04.xlsx</td><td></td></tr>
+<tr><td><span class='muted'>Zdjecia</span><br><b>Zbieraj zdjecia punktow pomiarowych</b></td><td><code>OBS_FOTO</code></td><td>wył.</td><td>Dla kazdego wybranego punktu kopiuje zdjecia z czasow jego 5 wierszy reprezentacyjnych (tych podswietlonych w obserwacji). Czas zdjecia czytany jest z nazwy pliku, a gdy jej nie ma — z daty modyfikacji.</td></tr>
+<tr><td><span class='muted'>Zdjecia</span><br><b>Folder zrodlowy ze zdjeciami</b></td><td><code>OBS_FOTO_ZRODLO</code></td><td>\\83b\Zdjęcia</td><td>Stad kopiujemy. Zwykle folder z aparatu / dysku sieciowego z danego dnia wzorcowania.</td></tr>
+<tr><td><span class='muted'>Dopasowanie wynikow</span><br><b>Max roznica odczyt przyrzadu vs nastawa</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_MAX_ROZN_PRZYRZAD</code></td><td>5.0</td><td>Zabezpieczenie przed przypisaniem pliku wynikow z DRUGIEJ komory: przyrzad musi pokazywac mniej wiecej nastawe naszej komory.</td></tr>
+<tr><td><span class='muted'>Dopasowanie wynikow</span><br><b>Korekta zegara loggera</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_KOREKTA_ZEGARA</code></td><td>wł.</td><td>Tanie loggery bywaja rozjechane w czasie o godziny. Skrypt porownuje profil temperatury loggera z profilem komory i koryguje przesuniecie (same wartosci pomiarow zostaja nietkniete).</td></tr>
+<tr><td><span class='muted'>Dopasowanie wynikow</span><br><b>Korekta zegara — max przesuniecie</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_KZ_MAX</code></td><td>360</td><td></td></tr>
+<tr><td><span class='muted'>Dopasowanie wynikow</span><br><b>Korekta zegara — rozdzielczosc</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_KZ_KROK</code></td><td>5</td><td></td></tr>
+<tr><td><span class='muted'>Filtr nastawa/odczyt</span><br><b>Tolerancja bezwzgledna — temperatura</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_TOL_ABS_T</code></td><td>1.0</td><td>Odczyt w tych granicach od nastawy jest zgodny, nawet gdy prog wzgledny go odrzuca (wazne przy malych nastawach).</td></tr>
+<tr><td><span class='muted'>Filtr nastawa/odczyt</span><br><b>Tolerancja bezwzgledna — wilgotnosc</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_TOL_ABS_RH</code></td><td>2.0</td><td></td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Rozgrzewka (gdy odczyty nie wejda w widelki)</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_STAB_MIN</code></td><td>120 min</td><td>Gdy odczyty komory nigdy nie trafia w widelki nastawy, okno analizy liczone jest od tego czasu od poczatku punktu.</td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Stabilizacja po wejsciu w widelki</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_STAB_PO_RH</code></td><td>120 min</td><td>Ile czasu odliczyc od momentu, gdy odczyty komory weszly w widelki wokol nastaw.</td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Widelki wejscia — temperatura</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_PROG_T</code></td><td>0.4</td><td>|T odczytana - T zadana| ponizej tej wartosci = komora weszla w nastawe.</td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Widelki wejscia — wilgotnosc</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_PROG_RH</code></td><td>3.0</td><td>Wzgledna roznica RH odczytanej od zadanej.</td></tr>
+<tr><td><span class='muted'>Okno analizy</span><br><b>Gwarantowany ogon pomiarowy</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_MIN_OKNO</code></td><td>15 min</td><td>Gdy punkt trzymany jest krotko, start okna jest cofany tak, by na koncu punktu zostalo co najmniej tyle minut.</td></tr>
+<tr><td><span class='muted'>Wybor punktow z PZ</span><br><b>Wybieraj punkty wg &#x27;Zakres wzorcowania&#x27; z PZ</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_PZ_PUNKTY</code></td><td>wł.</td><td>Jeden wsad komory obsluguje czesto kilka zlecen. Gdy wlaczone, do protokolu trafiaja wylacznie punkty zamowione w PZ.</td></tr>
+<tr><td><span class='muted'>Wybor punktow z PZ</span><br><b>Tolerancja punktu — temperatura</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_TOL_PUNKT_T</code></td><td>1.5</td><td>Dopuszczalna roznica nastawy komory od punktu z PZ.</td></tr>
+<tr><td><span class='muted'>Wybor punktow z PZ</span><br><b>Tolerancja punktu — wilgotnosc</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_TOL_PUNKT_RH</code></td><td>4.0</td><td></td></tr>
+<tr><td><span class='muted'>Wykrywanie suszenia</span><br><b>Suszenie — T od</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_SUSZ_T_MIN</code></td><td>21.0</td><td>Zakres temperatury charakterystyczny dla suszenia komory.</td></tr>
+<tr><td><span class='muted'>Wykrywanie suszenia</span><br><b>Suszenie — T do</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_SUSZ_T_MAX</code></td><td>27.0</td><td></td></tr>
+<tr><td><span class='muted'>Wykrywanie suszenia</span><br><b>Suszenie — RH ponizej</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_SUSZ_RH_MAX</code></td><td>50.0</td><td></td></tr>
+<tr><td><span class='muted'>Zdjecia</span><br><b>Folder docelowy zdjec</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_FOTO_CEL</code></td><td>foto</td><td>Tu trafiaja skopiowane zdjecia, w podfolderach &#x27;punkt_NN_&lt;nastawa&gt;&#x27;. Sciezka wzgledna liczona od folderu roboczego.</td></tr>
+<tr><td><span class='muted'>Zdjecia</span><br><b>Tolerancja czasu zdjecia</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_FOTO_TOL</code></td><td>1 min</td><td>Max odchylka czasu zdjecia od wiersza pomiarowego.</td></tr>
+</tbody></table>
+<h3 id="ust-ark">3 · Arkusze i Word <span class="muted">— Protokol  -&gt;  kopie arkuszy Excel + swiadectwa Word</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Czujniki wzorcowe komor</span><br><b>Komora CC — czujnik wzorcowy</b></td><td><code>GEN_CC_CZUJNIK</code></td><td>Pt100-11</td><td>Numer czujnika wpisywany do kazdej zakladki roboczej kopii. Zmien po wymianie czujnika w komorze — wartosc z szablonu arkusza zostanie nadpisana.</td></tr>
+<tr><td><span class='muted'>Czujniki wzorcowe komor</span><br><b>Komora CC-04 — czujniki w naroznikach</b></td><td><code>GEN_MAP_CC04</code></td><td>4 wierszy</td><td>Narożnik czytany z wiersza 14 Strony 3 (S:T14, U:V14, ...) decyduje, ktory czujnik trafi do zakladek roboczych kopii.</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Plik protokolu</b></td><td><code>CC_PROTOKOL</code></td><td>—</td><td>Wypelniony protokol CC / CC-04 (wynik kroku 2). Strona 2 = lista kopii do zrobienia, Strona 3 = punkty pomiarowe.</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Szablon arkusza obliczeniowego</b></td><td><code>CC_SZABLON</code></td><td>—</td><td>Wzor ark. obl. — z niego powstaje kopia dla kazdego przyrzadu.</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Szablon arkusza obliczeniowego — przetwornik</b></td><td><code>CC_SZABLON_PRZETW</code></td><td>xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik (CC).xlsx</td><td>Dla przyrzadow wzorcowanych przez wyjscie pradowe/napieciowe: &#x27;Wyniki&#x27; zbieraja wiersz 253 zakladek (Itm/IRHm, tm/RHm). Inny szablon dla konkretnego przetwornika — kolumna &#x27;Szablon arkusza&#x27; w tabeli Przetworniki (krok 2). Nowy szablon z aktualnego standardowego: python cc_szablon_przetwornika.py</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Szablon arkusza obliczeniowego — przetwornik tylko RH</b></td><td><code>CC_SZABLON_PRZETW_RH</code></td><td>xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - Przetwornik RH (CC).xlsx</td><td>Przetwornik z jednym wyjsciem — wilgotnosci: &#x27;Wyniki&#x27; dokladnie jak w recznie przygotowanych (tabela z wiersza 253, kolumny temperatury &#x27;-&#x27;); krok 3 zmienia tylko formuly wg punktow. Z innego wzoru: python cc_szablon_przetwornika.py --rh &lt;plik z &#x27;Wynikami&#x27;&gt;</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Szablon arkusza obliczeniowego — wyswietlacz + wyjscie</b></td><td><code>CC_SZABLON_TH_PRZETW</code></td><td>xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - TH + Przetwornik (CC).xlsx</td><td>Przyrzad wzorcowany jednoczesnie z wyswietlacza i z wyjscia analogowego (na Stronie 2 dwa wiersze z tym samym nr fabrycznym: jeden z rozdzielczoscia, drugi ze skalowaniem). Powstaje JEDEN arkusz: w zakladkach E/F z wyswietlacza, G/H z wyjscia; &#x27;Wyniki&#x27; jak we wzorze — krok 3 zmienia tylko liczbe wierszy. Z innego wzoru: python cc_szablon_przetwornika.py --th &lt;plik wzorcowy&gt;</td></tr>
+<tr><td><span class='muted'>Etapy</span><br><b>Generuj arkusze Excel</b></td><td><code>GEN_EXCEL</code></td><td>wł.</td><td>Wylaczone = korzysta z juz istniejacych kopii (przydatne, gdy chcesz wygenerowac sam Word).</td></tr>
+<tr><td><span class='muted'>Etapy</span><br><b>Generuj swiadectwa Word</b></td><td><code>GEN_WORD</code></td><td>wł.</td><td>Etap 7 — dokumenty .docx.</td></tr>
+<tr><td><span class='muted'>Etapy</span><br><b>Usuwaj puste bloki Strony 3</b></td><td><code>GEN_PUSTE</code></td><td>wł.</td><td>Kopia dostaje tylko te zakladki, dla ktorych sa dane E/F.</td></tr>
+<tr><td><span class='muted'>Etapy</span><br><b>Zakladki dla wszystkich punktow z PZ</b></td><td><code>GEN_PUNKTY_PZ</code></td><td>wł.</td><td>Punkt z PZ przyrzadu bez pomiarow w protokole (brak odczytow albo szare) dostaje pusta zakladke i wiersz w Wynikach — do domierzenia. Do swiadectwa wchodzi dopiero po uzupelnieniu.</td></tr>
+<tr><td><span class='muted'>Etapy</span><br><b>Pomijaj przyrzady bez pomiarow</b></td><td><code>GEN_POMIJAJ_PUSTE</code></td><td>wł.</td><td>Przyrzad wyszarzony w calosci na Stronie 3 nie dostaje ani kopii Excel, ani swiadectwa Word. Tak wybierasz pojedynczy przyrzad: wyszarz pomiary pozostalych.</td></tr>
+<tr><td><span class='muted'>Naglowki</span><br><b>Numer pierwszego swiadectwa</b></td><td><code>GEN_NR_SW</code></td><td>1047</td><td>Kolejne swiadectwa dostaja numery rosnaco (1047, 1048, ...) — wg nr fabrycznego albo nr ewidencyjnego (przelacznik ponizej).</td></tr>
+<tr><td><span class='muted'>Naglowki</span><br><b>Numeruj swiadectwa wg nr ewidencyjnego</b></td><td><code>GEN_NR_SW_WG_EWID</code></td><td>wył.</td><td>Wlaczone = numery swiadectw rosnaco wg nr ewidencyjnego (U90337-18, U90337-36, U90337-41, ...). Wylaczone = rosnaco wg nr fabrycznego. Przyrzady bez nr ewidencyjnego dostaja numery na koncu.</td></tr>
+<tr><td><span class='muted'>Naglowki</span><br><b>Higrometr K18 — komora CC</b></td><td><code>GEN_K18_CC</code></td><td>S8000-02</td><td>Higrometr punktu rosy wpisywany do K18 kazdej zakladki. Dla punktow tylko-temperatura zawsze wpisywane jest &#x27;-&#x27;.</td></tr>
+<tr><td><span class='muted'>Naglowki</span><br><b>Higrometr K18 — komora CC-04</b></td><td><code>GEN_K18_CC04</code></td><td>S8000</td><td></td></tr>
+<tr><td><span class='muted'>Podpisy</span><br><b>Podpisujacy z lewej (B230)</b></td><td><code>GEN_PODPIS_1</code></td><td>Artsiom Azhdzer</td><td></td></tr>
+<tr><td><span class='muted'>Podpisy</span><br><b>Podpisujacy z prawej (H230)</b></td><td><code>GEN_PODPIS_2</code></td><td>Marek Szpakowski</td><td></td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — tylko temperatura</b></td><td><code>GEN_WORD_TEMP</code></td><td>xxx_yyy_LA_TH_2026 - tylko temp.docx</td><td>Uzywany, gdy zadna zakladka nie ma aktywnej wilgotnosci.</td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — zakres (z RH)</b></td><td><code>GEN_WORD_RH</code></td><td>xxx_yyy_LA_TH_2026 - zakres.docx</td><td>Uzywany, gdy WSZYSTKIE zakladki maja aktywna wilgotnosc.</td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — zakres + temperatura</b></td><td><code>GEN_WORD_MIX</code></td><td>xxx_yyy_LA_TH_2026 - zakres + temp.docx</td><td>Uzywany, gdy czesc zakladek ma wilgotnosc, a czesc nie (dwie tabele). Warianty &#x27;(uzytkownik)&#x27; dobierane sa automatycznie na podstawie PZ.</td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — przetwornik (tylko RH)</b></td><td><code>GEN_WORD_PRZETW_RH</code></td><td>xxx_yyy_LA_TH_2026 - przetwornik RH.docx</td><td>Swiadectwo przetwornika z jednym wyjsciem — wilgotnosci (prad lub napiecie). Kolumna Im/Um, zakres wyjscia i zasilanie Uz wpisywane automatycznie.</td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — przetwornik (tylko t)</b></td><td><code>GEN_WORD_PRZETW_T</code></td><td>xxx_yyy_LA_TH_2026 - przetwornik T.docx</td><td>Przetwornik z wyjsciem temperatury (albo bez punktow z wilgotnoscia).</td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — przetwornik (t + RH)</b></td><td><code>GEN_WORD_PRZETW_TH</code></td><td>xxx_yyy_LA_TH_2026 - przetwornik TH.docx</td><td>Przetwornik z wyjsciami t i RH, wszystkie punkty z wilgotnoscia.</td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — przetwornik (t + RH oraz same t)</b></td><td><code>GEN_WORD_PRZETW_MIX</code></td><td>xxx_yyy_LA_TH_2026 - przetwornik TH + temp.docx</td><td>Przetwornik t + RH, gdy czesc punktow jest tylko temperaturowa — dwie tabele. Warianty &#x27;(uzytkownik)&#x27; wszystkich szablonow przetwornikow dobierane sa wg PZ.</td></tr>
+<tr><td><span class='muted'>Szablony Word</span><br><b>Szablon Word — wyswietlacz + wyjscie analogowe</b></td><td><code>GEN_WORD_TH_PRZETW</code></td><td>xxx_yyy_LA_TH_2026 - TH + przetwornik (ang).docx</td><td>Przyrzad wzorcowany z wyswietlacza i z wyjscia naraz (jeden arkusz &#x27;TH + Przetwornik&#x27;): piec tabel wynikow jak sekcje &#x27;Wynikow&#x27; arkusza, ze zgodnoscia pass/fail. Z innego wydanego swiadectwa: python cc_szablon_przetwornika.py --word &lt;swiadectwo.docx&gt;</td></tr>
+<tr><td><span class='muted'>Czujniki wzorcowe komor</span><br><b>Komora CC — multimetr</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_CC_PRZYRZAD</code></td><td>K2001</td><td>Przyrzad odczytowy komory CC.</td></tr>
+<tr><td><span class='muted'>Czujniki wzorcowe komor</span><br><b>Komora CC — wejscie pomiarowe Ch</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_CC_WEJSCIE</code></td><td>-</td><td>Komora CC ma jeden tor pomiarowy, wiec zwykle &#x27;-&#x27;.</td></tr>
+<tr><td><span class='muted'>Czujniki wzorcowe komor</span><br><b>Komora CC — oznaczenie</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_CC_KOMORA</code></td><td>CC</td><td>Oznaczenie komory wpisywane do zakladek roboczych kopii.</td></tr>
+<tr><td><span class='muted'>Filtr kolorow Strony 3</span><br><b>Filtruj dane Strony 3 wg koloru</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_FILTR_KOLOR</code></td><td>wł.</td><td></td></tr>
+<tr><td><span class='muted'>Filtr kolorow Strony 3</span><br><b>Kolor komorek aktywnych</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_KOLOR_AKT</code></td><td>#CCFFCC</td><td>Komorki w tym kolorze sa brane do kopii.</td></tr>
+<tr><td><span class='muted'>Filtr kolorow Strony 3</span><br><b>Kolor komorek pomijanych</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_KOLOR_POM</code></td><td>#BFBFBF</td><td></td></tr>
+<tr><td><span class='muted'>Filtr kolorow Strony 3</span><br><b>Bierz komorki w pozostalych kolorach</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_INNE_KOLORY</code></td><td>wył.</td><td></td></tr>
+<tr><td><span class='muted'>Naglowki</span><br><b>Higrometr K18 — domyslny</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_K18_DOM</code></td><td>S8000</td><td>Uzywany, gdy typ komory nie pasuje ani do CC, ani do CC-04.</td></tr>
+<tr><td><span class='muted'>Pliki linkowane</span><br><b>Pliki linkowane (oddzielone srednikiem)</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_LINKOWANE</code></td><td>Obliczenia tdp, RH, C.xls;Wzory.xls</td><td>Musza byc otwarte w tej samej sesji Excela, inaczej formuly kalibracyjne (D246/F246/G246) nie policza sie.</td></tr>
+<tr><td><span class='muted'>Pliki linkowane</span><br><b>Sciezka serwerowa — Obliczenia tdp, RH, C.xls</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_LINK_OBLICZENIA</code></td><td>\\plum4\LabPomiarowe\Obliczenia tdp, RH, C.xls</td><td>Przywracana w kopii na koncu, po odczytaniu kalibracji.</td></tr>
+<tr><td><span class='muted'>Pliki linkowane</span><br><b>Sciezka serwerowa — Wzory.xls</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_LINK_WZORY</code></td><td>\\plum4\LabPomiarowe\Wzory.xls</td><td></td></tr>
+<tr><td><span class='muted'>Stabilnosc Excela</span><br><b>Sprzataj pliki autoodzyskiwania Excela</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_AUTOREC</code></td><td>wł.</td><td>Stare pliki .xar potrafia urosnac do setek MB i wywalac Excela przy starcie.</td></tr>
+<tr><td><span class='muted'>Stabilnosc Excela</span><br><b>Zamykaj zawieszone Excele bez okna</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_SPRZATAJ_EXCEL</code></td><td>wł.</td><td>Przed startem konczy procesy EXCEL.EXE bez zadnego widocznego okna, dzialajace dluzej niz minute — pozostalosci po przerwanych przebiegach, ktore blokuja pliki. Excel z otwartym oknem (takze zminimalizowany) nie jest ruszany.</td></tr>
+<tr><td><span class='muted'>Stabilnosc Excela</span><br><b>Usuwaj autoodzyskiwanie starsze niz</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_AUTOREC_DNI</code></td><td>1</td><td>0 = czysc wszystko. Wartosc 1 chroni dzisiejsze odzyskiwanie recznej pracy.</td></tr>
+<tr><td><span class='muted'>Stabilnosc Excela</span><br><b>Ostrzegaj od tylu kopiowanych zakladek</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_PROG_OSTRZ</code></td><td>10</td><td></td></tr>
+</tbody></table>
+<h3 id="ust-srod">4 · Warunki środowiskowe <span class="muted">— Pom. nr 9  -&gt;  Strona 3 protokolu: t i RH pomieszczenia dla kazdego punktu</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Czujnik pomieszczenia</span><br><b>Numer pomieszczenia srodowiskowego</b></td><td><code>GEN_NR_POM</code></td><td>9</td><td>Szuka pliku &#x27;Pom. nr &lt;N&gt; (&lt;model&gt;) - &lt;rok&gt;.xlsx&#x27; — najpierw lokalnie, potem na \\PLUM4.</td></tr>
+<tr><td><span class='muted'>Czujnik pomieszczenia</span><br><b>Model czujnika srodowiskowego</b></td><td><code>GEN_MODEL_CZUJ</code></td><td>MX1101-02</td><td></td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Protokol</b></td><td><code>SR_PROTOKOL</code></td><td>—</td><td>Protokol CC / CC-04, w ktorym maja sie pojawic warunki srodowiskowe (Strona 3, kolumny F/G). Wypelniane sa WSZYSTKIE punkty — takze te, w ktorych zaden przyrzad nie mial odczytow.</td></tr>
+<tr><td><span class='muted'>Czujnik pomieszczenia</span><br><b>Tolerancja czasu czujnika srodowiskowego</b> <span class="tag z">zaawansowane</span></td><td><code>GEN_TOL_CZUJ</code></td><td>2.0</td><td>Czujnik Pom. nr 9 zapisuje co 60 s bez przerw, wiec najblizszy rekord jest w granicach ~30 s. Gdy nic nie miesci sie w tolerancji, komorki F/G zostaja PUSTE — lepiej uzupelnic recznie niz wpisac warunki z zupelnie innej chwili.</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Nadpisuj juz wypelnione komorki</b> <span class="tag z">zaawansowane</span></td><td><code>SR_NADPISUJ</code></td><td>wył.</td><td>Wylaczone: komorki z wpisana juz wartoscia zostaja bez zmian (np. poprawione recznie). Wlacz, gdy plik czujnika zostal uzupelniony i chcesz przeliczyc wszystko od nowa.</td></tr>
+</tbody></table>
+<h3 id="ust-swiad">5 · Świadectwa z arkuszy <span class="muted">— Gotowe arkusze obliczeniowe z folderu  -&gt;  swiadectwa Word (jak w kroku 3)</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Folder z arkuszami obliczeniowymi</b></td><td><code>SW_FOLDER</code></td><td>Etap_5_ark_obl_to_word</td><td>Tu wkladasz gotowe arkusze obliczeniowe (kopie z kroku 3, uzupelnione). Protokoly z pomiarow (do warunkow srodowiskowych) — w tym folderze albo w folderze glownym (tam brane tylko protokoly tego samego zlecenia, np. 232_...). Swiadectwa powstaja w tym samym folderze.</td></tr>
+<tr><td><span class='muted'>Numeracja</span><br><b>Numer pierwszego swiadectwa</b></td><td><code>SW_NR_SW</code></td><td>1047</td><td>Kolejne swiadectwa dostaja numery rosnaco (1047, 1048, ...) — kolejnosc wg przelacznika ponizej.</td></tr>
+<tr><td><span class='muted'>Numeracja</span><br><b>Numeruj swiadectwa wg nr ewidencyjnego</b></td><td><code>SW_NR_SW_WG_EWID</code></td><td>wył.</td><td>Wlaczone = numery swiadectw rosnaco wg nr ewidencyjnego z PZ. Wylaczone = rosnaco wg nr fabrycznego (jak w kroku 3).</td></tr>
+</tbody></table>
+<!-- /AUTO:ustawienia -->
+
+<!-- ═══════════════════════════ 18 ═══════════════════════════ -->
+<h2 id="problemy" class="chapter">18. Rozwiązywanie problemów</h2>
+<table>
+<tr><th style="width:27%">Objaw</th><th style="width:33%">Przyczyna</th><th>Co zrobić</th></tr>
+<tr><td>Krok kończy się <code>RPC … niedostępny</code> / <code>Zdalne wywołanie procedury nie powiodło się</code></td><td>Dwa kroki naraz (jeden zamknął Excela drugiego) albo pad Excela przy dużym pliku</td><td>Uruchamiaj jeden krok naraz. Arkusze zwykle są już zapisane — krok 3 z wyłączonym „Generuj arkusze Excel” zrobi świadectwa.</td></tr>
+<tr><td>Krok 3 długo stoi na „tryb automatyczny”</td><td>(Dawniej) puste zakładki z UDF-ami</td><td>Obecnie wyłączone przeliczanie pustych zakładek. Gdy wisi &gt; 5 min — przerwij, sprawdź log.</td></tr>
+<tr><td>Przyrząd z logiem nie trafił do protokołu</td><td>Plik niezaznaczony w kroku 1; numer w nazwie nie pasuje do PZ; plik z innej komory; zegar loggera daleko</td><td>Zobacz ostrzeżenia kroku 1/2 („NIE trafią do protokołu”), zaznacz plik, popraw nazwę, włącz korektę zegara.</td></tr>
+<tr><td>Punkt nie został wybrany / wybrany za wcześnie</td><td>Nie ma go w PZ (tolerancje 1,5 °C / 4 %); korekta nastawy &gt; 0,5 °C; rampa</td><td>Sprawdź „Zakres wzorcowania” w PZ i tolerancje w <i>Zaawansowane → Wybór punktów</i>.</td></tr>
+<tr><td>Reprezentanci za blisko zmiany punktu</td><td>Zegar przyrządu spóźnia się</td><td><code>OBS_ODSTEP_KONIEC</code> (domyślnie 5 min).</td></tr>
+<tr><td>Punkt pomarańczowy</td><td>Kryterium K/L nie spełnione albo komora nie trzymała nastawy</td><td>Komentarz w obserwacji podaje powód; punkt jest w protokole — oceń go ręcznie.</td></tr>
+<tr><td>Strona 2 pusta albo bez nr ewid.</td><td>PZ nie rozpoznany (układ, skrót), numer inny niż w nazwie pliku</td><td>Sprawdź log „[PZ] Wczytano …”, nazwę pliku wyników.</td></tr>
+<tr><td>„Plik otwarty w Excelu”</td><td>Wynik poprzedniego przebiegu otwarty</td><td>Kroki 2–3 same go zapiszą i zamkną; krok 5 prosi o zamknięcie.</td></tr>
+<tr><td>Obok arkusza plik <code>.xlsx._xltmp_</code></td><td>(Dawniej) arkusz otwarty przy przywracaniu linków</td><td>Obecnie sprzątany; stary można usunąć.</td></tr>
+<tr><td>Data w obserwacji bez sekund w dolnych wierszach</td><td>(Dawniej) formaty szablonu do wiersza 7421</td><td>Uruchom krok 2 ponownie.</td></tr>
+<tr><td>W świadectwie „UZUPEŁNIJ”</td><td>Brak zasilania Uz w Uwagach / roku produkcji w PZ</td><td>Popraw w dokumencie albo uzupełnij Uwagi i wygeneruj ponownie.</td></tr>
+<tr><td>Zły czujnik wzorcowy (K11) w arkuszu</td><td>Ustawienia komory / mapa narożników CC‑04 nieaktualne</td><td>Krok 3 → <i>Czujniki wzorcowe komór</i>.</td></tr>
+<tr><td>Wartości w arkuszu <code>#ARG!</code> / puste po otwarciu</td><td>Brak lokalnych <code>Wzory.xls</code>/<code>Obliczenia…</code> albo nieaktualne</td><td>Strona <i>Przygotowanie</i>, odśwież pliki.</td></tr>
+</table>
+
+<!-- ═══════════════════════════ 19 ═══════════════════════════ -->
+<h2 id="slownik">19. Słownik pojęć</h2>
+<table>
+<tr><th style="width:24%">Pojęcie</th><th>Znaczenie</th></tr>
+<tr><td>PZ</td><td>Potwierdzenie zamówienia (PDF, PL/EN): przyrządy, punkty („Zakres wzorcowania”), zleceniodawca, użytkownik.</td></tr>
+<tr><td>DUT</td><td>Przyrząd wzorcowany.</td></tr>
+<tr><td>Punkt</td><td>Para nastaw komory (t, RH) — jedna zakładka arkusza i jeden blok Strony 3.</td></tr>
+<tr><td>Okno / reprezentanci</td><td>5 kolejnych pełnych minut w stabilnej części punktu / ich 5 wierszy idących do protokołu.</td></tr>
+<tr><td>K / L</td><td>Rozrzut tdp higrometru / rozrzut temperatury czujników — kryteria stabilności.</td></tr>
+<tr><td>Histereza</td><td>Punkt powtórzony (zakładka „… (2)”); różnica RHm obu pomiarów.</td></tr>
+<tr><td>Przetwornik</td><td>Przyrząd wzorcowany przez wyjście analogowe (mA / V) mierzone multimetrem.</td></tr>
+<tr><td>Wyświetlacz + wyjście</td><td>Przyrząd wzorcowany jednocześnie z wyświetlacza i z wyjścia — jeden arkusz, K10 „TH/Przetwornik”.</td></tr>
+<tr><td>Narożnik (CC‑04)</td><td>LG / LD / PD / PG — miejsce przyrządu i jego czujnik wzorcowy.</td></tr>
+<tr><td>Pliki linkowane</td><td><code>Wzory.xls</code>, <code>Obliczenia tdp, RH, C.xls</code> — funkcje obliczeń arkusza.</td></tr>
+</table>
+<p class="muted small">Tabele ustawień i statystyki generuje <code>DOKUMENTACJA\aktualizuj_dokumentacje.py</code> z kodu programu.</p>
 
 </div>
 <script>
-  mermaid.initialize({startOnLoad:true, theme:'default',
-    flowchart:{htmlLabels:false, useMaxWidth:true},
-    themeVariables:{fontFamily:'Segoe UI, sans-serif', fontSize:'12px'}});
+  mermaid.initialize({ startOnLoad: true, theme: 'default', securityLevel: 'loose',
+                       flowchart: { htmlLabels: true, useMaxWidth: true, nodeSpacing: 30, rankSpacing: 36 },
+                       themeVariables: { fontSize: '13px' }, fontFamily: 'Segoe UI' });
 </script>
 </body>
 </html>

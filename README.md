@@ -1,187 +1,58 @@
 # Generator arkuszy i protokołów wzorcowania (CC / CC‑04)
 
-Zestaw skryptów **Python** automatyzujący pełny obieg wzorcowania termohigrometrów
-w akredytowanym laboratorium pomiarowym: od surowych logów czujników, przez analizę
+Zestaw skryptów **Python** automatyzujący pełny obieg wzorcowania termohigrometrów, termometrów
+i przetworników w akredytowanym laboratorium pomiarowym: od surowych logów przyrządów, przez analizę
 stabilności i protokoły, po arkusze obliczeniowe **Excel** i świadectwa **Word** — spięty
 desktopowym panelem **PySide6** i spakowany w jeden plik `ProtokolCC.exe`.
 
-> 📊 **Pełna interaktywna infografika:** [`DOKUMENTACJA/infografika-projektu.html`](DOKUMENTACJA/infografika-projektu.html)
-> (opisy każdej funkcji i ustawienia + diagramy). Otwórz w przeglądarce.
+> 📘 **Instrukcja użytkownika** (19 rozdziałów, 13 schematów, wszystkie ustawienia):
+> [`DOKUMENTACJA/instrukcja-uzytkownika.html`](DOKUMENTACJA/instrukcja-uzytkownika.html) · [PDF](DOKUMENTACJA/instrukcja-uzytkownika.pdf)
+>
+> 🛠️ **Dokumentacja techniczna** (architektura, kontrakty danych, Excel COM, spis funkcji):
+> [`DOKUMENTACJA/infografika-projektu.html`](DOKUMENTACJA/infografika-projektu.html)
+>
+> Tabele ustawień, modułów i funkcji generuje z kodu `DOKUMENTACJA/aktualizuj_dokumentacje.py` —
+> uruchom go po zmianach (aktualizuje też tabelę modułów poniżej).
 
 ---
 
-## 🗺️ Architektura — zależności modułów
+## 🗺️ Obieg — pięć kroków
 
 ```mermaid
 flowchart LR
-  subgraph IN["Wejscia (dane surowe)"]
-    TXT["Plik TXT multimetru"]
-    LOG["Logi czujnikow DUT<br/>csv / xlsx / txt / pdf / log"]
-    PZ["PZ - Potwierdzenie zamowienia<br/>PDF (PL / EN)"]
-    ZEST["Zestawienie<br/>wzorcowanych przyrzadow.xlsx"]
-  end
-  ANAL["analizuj_excele.py<br/>sniff_format - 11 parserow"]
-  WYN["wyniki/&lt;serial&gt;_wynik.xlsx<br/>Czas | Temp | Wilg"]
-  PZD["pz_dane.py<br/>wczytaj_pz + wczytaj_zestawienie"]
-  OBS["generuj_obserwacje.py<br/>analiza stabilnosci + protokol"]
-  PROTO["Protokol CC / CC-04<br/>Strona 2 przyrzady + Strona 3 pomiary"]
-  ARK["generuj_arkusze.py<br/>kopie arkuszy + swiadectwa"]
-  KOP["Kopie Excel"]
-  DOC["Swiadectwa Word .docx"]
-  GUI["app_gui.py + app_entry.py<br/>panel PySide6 / dyspozytor exe"]
-
-  LOG --> ANAL --> WYN
-  TXT --> OBS
-  WYN --> OBS
-  PZ --> PZD
-  ZEST --> PZD
-  PZD --> OBS
-  OBS --> PROTO
-  PROTO --> ARK
-  PZD --> ARK
-  ARK --> KOP
-  ARK --> DOC
-  GUI -.uruchamia.-> OBS
-  GUI -.uruchamia.-> ARK
-
+  LOG["Logi przyrządów<br/>csv · xlsx · txt · pdf · log"] --> K1["1 · Analiza logów<br/>analizuj_excele.py"]
+  K1 --> WYN[("wyniki/<br/>zlecenie_serial.xlsx")]
+  TXT["TXT multimetru<br/>CC / CC-04"] --> K2["2 · Obserwacja<br/>generuj_obserwacje.py"]
+  PZ["PZ (PDF)"] --> K2
+  WYN --> K2
+  K2 --> OBS[("Obserwacja")]
+  K2 --> PROT[("Protokół<br/>Strona 1·2·3")]
+  POM["Pom. nr 9"] --> K4["4 · Warunki<br/>wypelnij_warunki.py"]
+  K4 --> PROT
+  PROT --> K3["3 · Arkusze i Word<br/>generuj_arkusze.py"]
+  PZ --> K3
+  K3 --> ARK[("Arkusze obliczeniowe")]
+  K3 --> SW[("Świadectwa .docx")]
+  ARK -. uzupełnione .-> K5["5 · Świadectwa z arkuszy<br/>generuj_swiadectwa.py"]
+  K5 --> SW
   classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
   classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
   classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
-  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-  classDef gui fill:#fce7f3,stroke:#db2777,color:#831843;
-  class TXT,LOG,PZ,ZEST in
-  class ANAL,OBS,ARK xf
-  class WYN,PROTO,KOP,DOC out
-  class PZD pz
-  class GUI gui
+  class LOG,TXT,PZ,POM in
+  class K1,K2,K3,K4,K5 xf
+  class WYN,OBS,PROT,ARK,SW out
 ```
 
-**Kluczowa zależność kolejności:** `analizuj_excele` musi wygenerować `wyniki/*` zanim
-`generuj_obserwacje` dopasuje je czasowo do Strony 3. PZ wczytywany jest na starcie
-obserwacji, a dopasowanie *przyrząd ↔ kolumna pomiarowa* idzie po **nr fabrycznym lub
-nr ewidencyjnym** = serial z nazwy pliku wyniku.
+| Krok | Wejście | Wynik |
+|---|---|---|
+| **1 · Analiza logów** | logi w `excel_do_analizy/` (11+ formatów) | `wyniki/<zlecenie>_<serial>…xlsx` — `Czas \| t \| RH`, zestawienie |
+| **2 · Obserwacja** | TXT multimetru, `wyniki/`, PZ, Zestawienie, (pliki 1586A przetworników) | obserwacja z oknami punktów, protokół (Strona 1–3) |
+| **3 · Arkusze i Word** | protokół, szablony, Wzory/Obliczenia, Pom. nr 9 | arkusz obliczeniowy na przyrząd, świadectwa Word |
+| **4 · Warunki** | protokół, Pom. nr 9 | t/RH pomieszczenia (F/G) dla każdego punktu |
+| **5 · Świadectwa z arkuszy** | uzupełnione arkusze w `Etap_5_ark_obl_to_word/` | świadectwa obok arkuszy |
 
----
-
-## 🔄 Pipeline danych — przepływ działań (end‑to‑end)
-
-```mermaid
-flowchart TD
-  A["Logi DUT + srodowiskowe"] --> B{{"analizuj_excele - sniff_format"}}
-  B -->|"11 formatow"| C["wyniki/&lt;serial&gt;_wynik.xlsx"]
-  D["TXT multimetru (1..N plikow)"] --> E["combine_txt - sklejenie + dedup po czasie"]
-  E --> F["Arkusz obserwacji + analyze_and_highlight<br/>segmenty, okno 5-min, 5 reprezentantow"]
-  F --> G["generuj_protokol"]
-  C --> H["_wypelnij_wyniki_srodowiskowe<br/>dopasowanie 5 wierszy po czasie"]
-  H --> G
-  PZ["PZ/*.pdf"] --> I["pz_dane.wczytaj_pz<br/>klucz: nr_fabr + nr_ewid"]
-  ZEST["Zestawienie.xlsx"] --> J["wczytaj_zestawienie - rozdzielczosc t/RH"]
-  I --> K["wypelnij_strone2_z_pz"]
-  J --> K
-  G --> L["Protokol: Strona 3 (pomiary)"]
-  K --> M["Protokol: Strona 2 (tabela przyrzadow)"]
-  L --> N["generuj_arkusze._main_impl"]
-  M --> N
-  N --> O["7 etapow: kopie -> zakladki -> C/D/E/F -> naglowki (K11-K18) -> Wyniki -> srodowisko -> Word"]
-  O --> P["Kopie Excel"]
-  O --> Q["Swiadectwa Word .docx"]
-
-  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
-  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
-  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-  class A,D,PZ,ZEST in
-  class B,E,F,G,H,N,O xf
-  class C,L,P,Q out
-  class I,J,K,M pz
-```
-
----
-
-## 🌳 Pełny obieg pracy — od plików do świadectw (mega‑schemat)
-
-Jedno drzewo spinające cały proces: co i gdzie wgrać ręcznie, które pliki wzorcowe zaktualizować,
-a potem kolejno **analiza → obserwacja/protokół → arkusze/świadectwa** ze wszystkimi etapami.
-
-```mermaid
-flowchart TD
-  subgraph F0["FAZA 0 - Przygotowanie reczne (zanim uruchomisz cokolwiek)"]
-    direction TB
-    P1["Wgraj pliki z przyrzadow (loggery DUT)<br/>-> folder excel_do_analizy/"]:::in
-    P2["Wgraj PZ - Potwierdzenie zamowienia (PDF)<br/>-> folder PZ/"]:::in
-    P6["Umiesc plik(i) TXT multimetru<br/>w folderze roboczym"]:::in
-    P3["Zaktualizuj czujnik srodowiskowy<br/>Pom. nr 9 (MX1101-02) - 2026.xlsx"]:::in
-    P4["Zaktualizuj pliki wzorcowe / linkowane<br/>Wzory.xls + Obliczenia tdp, RH, C.xls"]:::in
-    P5["Zaktualizuj rozdzielczosci<br/>Zestawienie wzorcowanych przyrzadow.xlsx"]:::in
-  end
-
-  subgraph F1["1 - analizuj_excele.py - normalizacja logow"]
-    direction TB
-    A1{{"sniff_format() - wykrycie formatu z 1 KB"}}:::xf
-    A2["11 parserow: tempmate/PDF, PuTTY/.log, Rotronic,<br/>ALMEMO, Comet/TFA, xTHERM, HOBO, Aranet, CSV/TXT/Excel"]:::xf
-    A3["save_result() - Czas | Temperatura | Wilgotnosc"]:::xf
-    A4[("wyniki/&lt;serial&gt;_wynik.xlsx")]:::out
-    A1 --> A2 --> A3 --> A4
-  end
-
-  subgraph F2["2 - generuj_obserwacje.py - obserwacja + protokol"]
-    direction TB
-    B1["resolve_txt_files() - tolerancyjny wybor TXT"]:::xf
-    B2["combine_txt() - sklejenie N plikow + dedup po czasie"]:::xf
-    B3["Arkusz obserwacji (A2:U / A2:L)"]:::out
-    B4["analyze_and_highlight()<br/>segmenty stabilne (B,C >= 1h45m)<br/>filtr suszenia / histerezy<br/>okno 5-min (min K/L) + 5 reprezentantow"]:::xf
-    B5["wczytaj_pz() + wczytaj_zestawienie()"]:::pz
-    B6["generuj_protokol()"]:::xf
-    B8["_wypelnij_wyniki_srodowiskowe()<br/>dopasowanie 5 wierszy po czasie<br/>-> Q/R (CC) lub S/T (CC-04)"]:::xf
-    B7["PROTOKOL - Strona 3 (pomiary + srodowisko)"]:::out
-    B9["wypelnij_strone2_z_pz()<br/>match serial -> PZ, rozdzielczosc K/L"]:::pz
-    B10["PROTOKOL - Strona 2 (tabela przyrzadow)"]:::out
-    B1 --> B2 --> B3 --> B4 --> B6
-    B5 --> B6
-    B6 --> B8 --> B7
-    B6 --> B7
-    B5 --> B9 --> B10
-  end
-
-  subgraph F3["3 - generuj_arkusze.py - kopie arkuszy + swiadectwa (7 etapow)"]
-    direction TB
-    C0["_main_impl() -> wczytaj_wszystko_xlwings()<br/>Strona 2 (lista) + Strona 3 (zakladki, C/D, E/F, F24)"]:::xf
-    C1["Etap 1 - kopie szablonu (per przyrzad)"]:::xf
-    C2["Etap 2 - liczba i nazwy zakladek"]:::xf
-    C34["Etap 3-4 - C15:C19, D15:D19, E15:E19, F15:F19"]:::xf
-    C5["Etap 5 - naglowki: E4/G6/K4/E5/E6/H57,<br/>K11-K13/K17 (CC-04), K18 higrometr, podpisy"]:::xf
-    C6["Etap 6 - Wyniki: F24, sort tabel,<br/>_aktualizuj_formule_histerezy (J23)"]:::xf
-    C7["Etap 7 - warunki srodowiskowe<br/>czujnik + Wzory.xls -> F/G + min/max"]:::xf
-    C8["_odczytaj_kalibracje_xlwings()<br/>D239:K239 (RH) / D246:G246 (temp)"]:::xf
-    C9["utworz_kopie_word()<br/>szablon wg klasy, placeholdery,<br/>[uzytkownik], tabele kalibracji"]:::pz
-    C10[("Kopie Excel - arkusze obliczeniowe")]:::out
-    C11[("Swiadectwa Word - .docx")]:::out
-    C0 --> C1 --> C2 --> C34 --> C5 --> C6 --> C7 --> C8 --> C9
-    C7 --> C10
-    C9 --> C11
-  end
-
-  P1 --> A1
-  P6 --> B1
-  A4 --> B8
-  P2 --> B5
-  P5 --> B5
-  B7 --> C0
-  B10 --> C0
-  P3 --> C7
-  P4 --> C7
-  P4 --> C0
-  P2 -.fallback.-> C9
-
-  classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
-  classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
-  classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
-  classDef pz fill:#f3e8ff,stroke:#9333ea,color:#581c87;
-```
-
-**Kolejność:** FAZA 0 (ręcznie) → `analizuj_excele` (→ `wyniki/*`) → `generuj_obserwacje`
-(protokół: Strona 2 z PZ + Strona 3 z pomiarów) → `generuj_arkusze` (kopie Excel + świadectwa Word).
-Pliki `Wzory.xls` / `Pom. nr 9` wchodzą dopiero w **Etap 7** arkuszy; `Zestawienie` i `PZ` — przy budowie Strony 2.
+Typy przyrządów w kroku 3: **termohigrometr / termometr**, **przetwornik** (wyjście mA/V: t, RH, t + RH),
+**przyrząd z wyświetlaczem i wyjściem** (jeden arkusz `TH + Przetwornik`, świadectwo z pięcioma tabelami).
 
 ---
 
@@ -189,50 +60,37 @@ Pliki `Wzory.xls` / `Pom. nr 9` wchodzą dopiero w **Etap 7** arkuszy; `Zestawie
 
 Okno prowadzi przez obieg krok po kroku (lewa listwa), a każdy krok ma własny formularz:
 
-| Krok | Co robisz |
+| Strona | Co robisz |
 |---|---|
-| **Przygotowanie** | Lista kontrolna: dla każdego pliku wejściowego widać **jego wiek** — `Wzory.xls` sprzed 40 dni dostaje pomarańczowe „ZAKTUALIZUJ przed uruchomieniem". Przycisk `Otworz` otwiera plik/folder. |
-| **1 · Analiza logów** | Podgląd plików wgranych do `excel_do_analizy/` (data, rozmiar) + uruchomienie. |
-| **2 · Obserwacja** | **Zaznaczanie plików TXT multimetru** z listy (posortowanej od najnowszego); kilka zaznaczeń = przerwany pomiar. Podpisy, szablony, PZ, progi filtra. |
-| **3 · Arkusze i Word** | Protokół, szablon, numer świadectwa, higrometr K18, podpisy, szablony Word, etapy. |
-| **Zaawansowane** | Reszta ustawień pogrupowana wg kroku: okno analizy, korekta zegara, filtr kolorów Strony 3, ścieżki serwerowe, mapowanie CC‑04. |
+| **Przygotowanie** | Lista kontrolna plików wejściowych z ich **wiekiem** — `Wzory.xls` sprzed wielu dni dostaje pomarańczowe „ZAKTUALIZUJ przed uruchomieniem”. |
+| **1 · Analiza logów** | Zaznaczanie plików z `excel_do_analizy/` (wybór zapamiętywany, nowe pliki niezaznaczone). |
+| **2 · Obserwacja** | Zaznaczanie plików TXT multimetru; podpisy, szablony, PZ, filtr, zdjęcia; **2a · Przetworniki** — pliki 1586A i karty przetworników. |
+| **3 · Arkusze i Word** | Protokół, szablony, etapy, numer i numeracja świadectw, higrometr K18, podpisy, czujniki komór, szablony Word. |
+| **4 · Warunki środowiskowe** | Protokół i czujnik pomieszczenia. |
+| **5 · Świadectwa z arkuszy** | Folder arkuszy, numer początkowy, numeracja. |
+| **Zaawansowane** | Okno analizy, suszenie, korekta zegara, filtr kolorów, pliki linkowane, stabilność Excela. |
 
-Na dole okna zawsze widoczne są dwie zakładki:
+Na dole: **Log** (na żywo, kolorowany, zapisywany do pliku) i **Utworzone pliki** (co powstało/zmieniło się,
+jakie ma zakładki). Każdy krok uruchamia się **własnym przyciskiem**; przed startem panel pokazuje listę
+zastrzeżeń (brak plików, niezaznaczone logi, istniejący protokół…). Nadpisywane pliki trafiają do
+`kopie_zapasowe/`, a plik otwarty w Excelu jest najpierw zapisywany i zamykany. **Jeden krok naraz** —
+dwa przebiegi kroku 3 zamykają sobie nawzajem Excele.
 
-- **Log** — żywe wyjście workera, z kolorowaniem (`!!! BLAD` czerwony, `UWAGA` pomarańczowy,
-  `[OK]` zielony) i zapisem do pliku,
-- **Utworzone pliki** — różnica stanu folderu przed/po przebiegu: co powstało, co się
-  zmieniło, ile waży i **jakie zakładki są w środku** (dwuklik otwiera plik).
+## ▶️ Uruchamianie — jeden exe, sześć trybów
 
-Każdy krok uruchamia się **własnym przyciskiem** — przycisku „Uruchom cały obieg” nie ma
-(jedno kliknięcie tworzyło protokół od nowa i kasowało ręczne poprawki). Nadpisywane pliki
-trafiają najpierw do `kopie_zapasowe/`. Gdy protokół lub obserwacja wybranego pomiaru już istnieje,
-krok 2 przed startem pyta „Nadpisać?” (domyślnie „Nie”) i wymienia pliki z datą ostatniej zmiany. Przed startem panel sprawdza dane wejściowe (brak zaznaczonego TXT, brak
-protokołu, brak `Wzory.xls`…) i pokazuje listę zastrzeżeń do zatwierdzenia.
-
-## ▶️ Uruchamianie — jeden exe, cztery tryby
-
-Panel GUI uruchamia skrypty‑workery jako podprocesy. W zamrożonym `.exe` ten sam plik pełni
-rolę i GUI, i workera — o trybie decyduje zmienna `CC_WORKER`.
+Panel uruchamia kroki jako podprocesy. W zamrożonym `.exe` ten sam plik pełni rolę panelu i kroku —
+o trybie decyduje `CC_WORKER`: puste = panel, `analiza`, `obserwacje`, `arkusze`, `warunki`, `swiadectwa`.
 
 ```mermaid
 sequenceDiagram
   participant U as Uzytkownik
-  participant E as ProtokolCC.exe
-  participant AE as app_entry.main()
-  participant G as app_gui (GUI)
-  participant W as worker (generuj_*)
-  U->>E: dwuklik (brak CC_WORKER)
-  E->>AE: start
-  AE->>G: CC_WORKER puste -> uruchom GUI
-  U->>G: klik "Uruchom caly obieg" albo pojedynczy krok
-  G->>G: _zapisz() -> cc_ustawienia.json, walidacja wejscia
-  G->>G: cc_config.do_env(wartosci) -> 65 zmiennych
-  G->>E: QProcess.start + CC_WORKER=analiza/obserwacje/arkusze
-  E->>AE: start (worker)
-  AE->>W: CC_WORKER ustawione -> import generuj_*, main()
-  W-->>G: stdout przez potok QProcess -> zywy log
-  W-->>G: kod wyjscia (0 = OK)
+  participant G as Panel (app_gui)
+  participant W as Krok (worker)
+  U->>G: Uruchom krok N
+  G->>G: cc_ustawienia.json + kontrola danych
+  G->>W: QProcess, env = cc_config.do_env(...) + CC_WORKER
+  W-->>G: stdout na zywo (Log)
+  W-->>G: kod wyjscia (0 = OK, 1 = BLAD)
 ```
 
 ---
@@ -273,18 +131,25 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 
 ## 📦 Moduły
 
-| Plik | Linie | Funkcje | Rola | Biblioteki |
-|---|---:|---:|---|---|
-| `generuj_arkusze.py` | 3402 | 97 | Kopie arkuszy obliczeniowych Excel + świadectwa Word | xlwings, openpyxl, python‑docx |
-| `generuj_obserwacje.py` | 1549 | 41 | Arkusz obserwacji + protokół (CC / CC‑04) z pliku TXT | openpyxl, xlwings (COM) |
-| `analizuj_excele.py` | 1093 | 28 | Uniwersalny parser loggerów → `wyniki/*.xlsx` | pandas, openpyxl, pypdf |
-| `pz_dane.py` | 346 | 16 | Parser PZ (PDF, PL/EN) + Zestawienie rozdzielczości | pypdf, openpyxl |
-| `app_gui.py` | ~740 | 35 | Panel sterujący PySide6 — kroki obiegu, log, wyniki | PySide6 |
-| `cc_config.py` | ~500 | 12 | Rejestr **74 ustawień** + zapis `cc_ustawienia.json` + odczyt env | — (stdlib) |
-| `cc_widgets.py` | ~560 | 30 | Widgety panelu: pola, lista plików, log, wyniki, checklista | PySide6 |
-| `cc_widok.py` | ~135 | 4 | Widok paska zakładek w gotowych `.xlsx` (podmiana `xl/workbook.xml` w ZIP) | — (stdlib) |
-| `app_entry.py` | 85 | 3 | Dyspozytor zamrożonego exe (GUI ↔ worker) | — |
-| `testy/` | ~1200 | 886 testów | Rejestr, kontrakt panel↔skrypty, widgety, panel, pełny obieg | unittest (stdlib) |
+<!-- AUTO:moduly_md -->
+| Plik | Linie | Funkcje | Rola |
+|---|---:|---:|---|
+| `analizuj_excele.py` | 1807 | 50 | Universal Excel/CSV parser for temperature & humidity data loggers. |
+| `app_entry.py` | 95 | 3 | punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe). |
+| `app_gui.py` | 1147 | 51 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
+| `cc_config.py` | 712 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
+| `cc_excel.py` | 360 | 19 | wlasne instancje Excela: uruchomienie i PEWNE zamkniecie. |
+| `cc_kopia.py` | 57 | 2 | kopia zapasowa pliku PRZED jego nadpisaniem. |
+| `cc_szablon_przetwornika.py` | 536 | 21 | szablon arkusza obliczeniowego dla PRZETWORNIKA. |
+| `cc_widgets.py` | 1385 | 79 | elementy interfejsu panelu (app_gui.py). |
+| `cc_widok.py` | 145 | 4 | jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx. |
+| `generuj_arkusze.py` | 5258 | 161 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
+| `generuj_obserwacje.py` | 4601 | 141 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
+| `generuj_swiadectwa.py` | 369 | 15 | krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych. |
+| `pz_dane.py` | 1616 | 61 | wspolny modul do wczytywania danych przyrzadow z: |
+| `wypelnij_warunki.py` | 177 | 4 | krok 4: warunki srodowiskowe w protokole. |
+| `testy/` | — | 923 testów | 50 plików `test_*.py` (unittest) |
+<!-- /AUTO:moduly_md -->
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
 
@@ -299,7 +164,7 @@ Wynik zawsze znormalizowany: **`Czas | Temperatura [°C] | Wilgotność [%RH]`**
 
 ## 🔌 Kontrakt env‑var (GUI ↔ workery)
 
-**Nie ma już potrzeby edytowania skryptów w Notatniku.** Wszystkie 74 ustawień
+**Nie ma już potrzeby edytowania skryptów w Notatniku.** Wszystkie ustawienia (94)
 opisuje rejestr w [`cc_config.py`](cc_config.py) (typ, wartość domyślna, etykieta,
 opis, krok obiegu, poziom podstawowy/zaawansowany). Panel buduje z niego formularze
 automatycznie, zapisuje wybory do `cc_ustawienia.json` i przekazuje je workerowi
@@ -308,7 +173,7 @@ uruchomienie `python generuj_obserwacje.py` bez panelu działa jak dawniej.
 
 | Prefiks | Zakres | Przykłady |
 |---|---|---|
-| `CC_WORKER` | tryb exe | `analiza` / `obserwacje` / `arkusze` / (puste = GUI) |
+| `CC_WORKER` | tryb exe | `analiza` / `obserwacje` / `arkusze` / `warunki` / `swiadectwa` / (puste = GUI) |
 | `CC_*` | wspólne | `CC_FOLDER`, `CC_PROTOKOL`, `CC_SZABLON`, `CC_PZ_FOLDER`, `CC_ZESTAWIENIE` |
 | `ANL_*` | krok 1 — analiza | `ANL_PLIKI`, `ANL_INPUT`, `ANL_OUTPUT`, `ANL_DEBUG` |
 | `OBS_*` | krok 2 — obserwacja | `OBS_TXT_FILES`, `OBS_PODPIS`, `OBS_STAB_PO_RH`, `OBS_PROG_T`, `OBS_KOREKTA_ZEGARA`, `OBS_FOTO`, `OBS_FOTO_ZRODLO`, `OBS_FOTO_CEL`, … |
@@ -344,7 +209,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**886 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**923 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
