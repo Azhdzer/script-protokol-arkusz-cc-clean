@@ -3681,9 +3681,8 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
     # Sprawdzaj obecnosc wilgotnosci per zakladka przez F15:F19 — to samo zrodlo,
     # ktorego uzywa _odczytaj_kalibracje_xlwings. Nie polegamy na E239 (val_c
     # z Wyniki), bo formula E239 moze dac 0 lub byc niesprawdzona w momencie
-    # odczytu. Przy okazji wyciagamy nominal RH (pierwszy niepusty F15) do
-    # uzycia jako klucz sortowania i dedup — jest to wartosc wpisana przez
-    # skrypt, wiec zawsze poprawna.
+    # odczytu. Nominal RH do sortowania: z nazwy zakladki, a gdy jej brak —
+    # pierwszy niepusty odczyt F15 (_nominal_rh_wiersza).
     wb = ws_w.book
     sheet_names = {s.name for s in wb.sheets}
     for w in valid:
@@ -3698,12 +3697,7 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
             _adres_rh, rhm_vals = _zakres_rh_zakladki(wb.sheets[arkusz])
             non_puste = [v for v in rhm_vals if not _brak_wartosci(v)]
             w["ma_rh"] = bool(non_puste)
-            try:
-                # Przetwornik (H15:H19) ma tu mA/V — nominal RH bierzemy z nazwy zakladki.
-                w["rh_ref"] = (_rh_z_nazwy_zakladki(arkusz) if _adres_rh != "F15:F19"
-                               else (float(non_puste[0]) if non_puste else None))
-            except (TypeError, ValueError):
-                w["rh_ref"] = None
+            w["rh_ref"] = _nominal_rh_wiersza(arkusz, _adres_rh, non_puste)
         else:
             w["ma_rh"] = _czy_liczba(w["val_c"])
             try:
@@ -3731,6 +3725,23 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
             _wyczysc_wiersz(ws_w, FIRST_ROW + i, t["kolumny"])
 
     return last_row - LAST_ROW_DEFAULT
+
+
+def _nominal_rh_wiersza(arkusz, adres_rh, odczyty):
+    """
+    Nominal RH wiersza 'Wynikow' do sortowania w grupie temperatury: z nazwy zakladki
+    ('40, 25' -> 25.0), a gdy nazwa go nie ma — pierwszy odczyt RHm (F15:F19).
+    Odczyty bywaja niemiarodajne (same 1, mA/V przetwornika w H15:H19) — wtedy
+    o kolejnosci decydowala rzeczywista temperatura i 40/25 przy 40,1 °C trafialo
+    za 40/60 i 40/95 zmierzone przy 40,0 °C.
+    """
+    rh = _rh_z_nazwy_zakladki(arkusz)
+    if rh is None and adres_rh == "F15:F19" and odczyty:
+        try:
+            rh = float(odczyty[0])
+        except (TypeError, ValueError):
+            rh = None
+    return rh
 
 
 def _klucz_wiersza_rh(w):

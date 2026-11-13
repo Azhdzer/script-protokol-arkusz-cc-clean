@@ -53,7 +53,7 @@
 <section id="przeglad">
 <h2>Przegląd</h2>
 <!-- AUTO:statystyki -->
-<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 265</b><span>linii kodu</span></div><div class="stat"><b>627</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>923</b><span>testów (50 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 10.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 276</b><span>linii kodu</span></div><div class="stat"><b>628</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>925</b><span>testów (50 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 13.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
 <!-- /AUTO:statystyki -->
 <p>Python 3 + PySide6 (panel), openpyxl (zapis bez Excela), xlwings / pywin32 (Excel COM — przeliczanie formuł, linki,
 wstawianie wierszy), python-docx (świadectwa), pandas (parsery logów), pypdf (PZ). Jeden plik <code>ProtokolCC.exe</code> (PyInstaller).</p>
@@ -279,7 +279,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td><code>cc_szablon_przetwornika.py</code></td><td class='r'>536</td><td class='r'>21</td><td>szablon arkusza obliczeniowego dla PRZETWORNIKA.</td></tr>
 <tr><td><code>cc_widgets.py</code></td><td class='r'>1385</td><td class='r'>79</td><td>elementy interfejsu panelu (app_gui.py).</td></tr>
 <tr><td><code>cc_widok.py</code></td><td class='r'>145</td><td class='r'>4</td><td>jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx.</td></tr>
-<tr><td><code>generuj_arkusze.py</code></td><td class='r'>5258</td><td class='r'>161</td><td>Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</td></tr>
+<tr><td><code>generuj_arkusze.py</code></td><td class='r'>5269</td><td class='r'>162</td><td>Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</td></tr>
 <tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4601</td><td class='r'>141</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
 <tr><td><code>generuj_swiadectwa.py</code></td><td class='r'>369</td><td class='r'>15</td><td>krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych.</td></tr>
 <tr><td><code>pz_dane.py</code></td><td class='r'>1616</td><td class='r'>61</td><td>wspolny modul do wczytywania danych przyrzadow z:</td></tr>
@@ -564,7 +564,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>82</td><td><code>popraw_workbook_xml</code></td><td>Zwraca tresc &#x27;xl/workbook.xml&#x27; z wymuszonym widokiem paska zakladek.</td></tr>
 <tr><td class='r muted'>109</td><td><code>wymus_widok</code></td><td>Ustawia widok paska zakladek w gotowym pliku .xlsx.</td></tr>
 </tbody></table></details>
-<details><summary><code>generuj_arkusze.py</code> — 161 funkcji, 5258 linii <span class='muted'>· Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</span></summary>
+<details><summary><code>generuj_arkusze.py</code> — 162 funkcji, 5269 linii <span class='muted'>· Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>48</td><td><code>_warn</code></td><td>Ostrzezenie — wyroznia sie w logu, ale wykonanie trwa dalej.</td></tr>
 <tr><td class='r muted'>52</td><td><code>_err</code></td><td>Blad krytyczny — akcja nie wykonala sie.</td></tr>
@@ -695,38 +695,39 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>3620</td><td><code>_arkusz_wiersza</code></td><td></td></tr>
 <tr><td class='r muted'>3672</td><td><code>_czy_liczba</code></td><td></td></tr>
 <tr><td class='r muted'>3675</td><td><code>_temp_zaokr</code></td><td></td></tr>
-<tr><td class='r muted'>3736</td><td><code>_klucz_wiersza_rh</code></td><td>Kolejnosc wierszy tabel z wilgotnoscia: temperatura (zaokraglona) rosnaco,</td></tr>
-<tr><td class='r muted'>3769</td><td><code>_wiersze_formul</code></td><td>Wynik range.formula -&gt; lista wierszy (lista list), takze dla jednej kolumny/wiersza.</td></tr>
-<tr><td class='r muted'>3778</td><td><code>_kolumny_sekcji</code></td><td>Wiersz-wzor sekcji -&gt; [(indeks_kolumny, rodzaj &#x27;rh&#x27;/&#x27;t&#x27;, komorka_zakladki albo None)].</td></tr>
-<tr><td class='r muted'>3795</td><td><code>_sekcje_wynikow</code></td><td>Sekcje &#x27;Wynikow&#x27; wyswietlacz + wyjscie: ciagi wierszy z odwolaniami do zakladek.</td></tr>
-<tr><td class='r muted'>3813</td><td><code>_numer_kolumny</code></td><td></td></tr>
-<tr><td class='r muted'>3820</td><td><code>_wiersz_r1c1</code></td><td>Formuly R1C1 wiersza `wiersz` sekcji (od kolumny A do ostatniej kolumny sekcji):</td></tr>
-<tr><td class='r muted'>3840</td><td><code>_listy_wierszy_wynikow</code></td><td>(punkty z RH posortowane, reprezentanci temperatur posortowani) — jak tabele</td></tr>
-<tr><td class='r muted'>3865</td><td><code>_kolejnosc_wierszy_wynikow</code></td><td>wpisy {&#x27;arkusz&#x27;,&#x27;val_b&#x27;,&#x27;ma_rh&#x27;,&#x27;rh_ref&#x27;,&#x27;powtorka&#x27;} -&gt; (nazwy z RH, nazwy temperatur).</td></tr>
-<tr><td class='r muted'>3869</td><td><code>_t</code></td><td></td></tr>
-<tr><td class='r muted'>3880</td><td><code>_wyniki_polaczone</code></td><td>&#x27;Wyniki&#x27; szablonu wyswietlacz + wyjscie: kazda sekcja dostaje tyle wierszy, ile</td></tr>
-<tr><td class='r muted'>3921</td><td><code>_wiersz_stopki</code></td><td>Wiersz &#x27;ODLEGŁOŚĆ OD CZUJNIKA WZORCOWEGO&#x27; w kolumnie A &#x27;Wynikow&#x27; (None gdy brak).</td></tr>
-<tr><td class='r muted'>3943</td><td><code>data_po_angielsku</code></td><td>&#x27;05 ÷ 09 listopada 2026 r.&#x27; -&gt; &#x27;05 ÷ 09 November 2026&#x27;.</td></tr>
-<tr><td class='r muted'>3951</td><td><code>placeholdery_th_przetw</code></td><td>Teksty swiadectwa wyswietlacz + wyjscie (ang.): daty, rodzaj wyjscia, zakresy.</td></tr>
-<tr><td class='r muted'>3965</td><td><code>_tekst_liczby_en</code></td><td></td></tr>
-<tr><td class='r muted'>3970</td><td><code>_czytaj_tabele_wynikow_polaczonych</code></td><td>Sekcje &#x27;Wynikow&#x27; wyswietlacz + wyjscie jako teksty jak w komorkach:</td></tr>
-<tr><td class='r muted'>3988</td><td><code>_t</code></td><td></td></tr>
-<tr><td class='r muted'>4000</td><td><code>_komorki_wiersza</code></td><td>Komorki wiersza tabeli Word bez powtorzen scalen (gridSpan).</td></tr>
-<tr><td class='r muted'>4010</td><td><code>_ustaw_tekst_komorki</code></td><td>Tekst komorki w formacie pierwszego runu; `przypis` — indeks gorny po tekscie.</td></tr>
-<tr><td class='r muted'>4030</td><td><code>_dopasuj_wiersze_tabeli</code></td><td>Tyle wierszy danych, ile punktow — ostatni wiersz (dolna ramka) zostaje ostatni.</td></tr>
-<tr><td class='r muted'>4046</td><td><code>_tabele_wynikow_swiadectwa</code></td><td>Tabele wynikow szablonu: wiersz jednostek (3.) konczy sie &#x27;pass/fail&#x27;.</td></tr>
-<tr><td class='r muted'>4057</td><td><code>_wypelnij_swiadectwo_th_przetw</code></td><td>Tabele wynikow + przypis o histerezie (punkt powtorzony) wg sekcji &#x27;Wynikow&#x27;.</td></tr>
-<tr><td class='r muted'>4088</td><td><code>_dostosuj_xlwings</code></td><td>Otwiera kopie xlsx przez xlwings (COM Excel):</td></tr>
-<tr><td class='r muted'>4570</td><td><code>_odczytaj_kalibracje_xlwings</code></td><td>Czyta dane kalibracyjne z zakladek roboczych po pelnym przeliczeniu formul.</td></tr>
-<tr><td class='r muted'>4654</td><td><code>_brak_wartosci</code></td><td></td></tr>
-<tr><td class='r muted'>4811</td><td><code>utworz_kopie</code></td><td>Dla każdego rekordu z Strona 2:</td></tr>
-<tr><td class='r muted'>4951</td><td><code>_main_impl</code></td><td></td></tr>
-<tr><td class='r muted'>5122</td><td><code>_excel_options_subkey</code></td><td>Zwraca podklucz rejestru Excel\Options dla zainstalowanej wersji Office.</td></tr>
-<tr><td class='r muted'>5135</td><td><code>_czytaj_autorecover</code></td><td>Globalne ustawienie AutoRecover Excela: True/False (None = nie udalo sie odczytac).</td></tr>
-<tr><td class='r muted'>5151</td><td><code>_ustaw_autorecover</code></td><td>Ustawia globalne AutoRecover Excela (rejestr). Cicho ignoruje bledy.</td></tr>
-<tr><td class='r muted'>5164</td><td><code>_rozmiar_sciezki</code></td><td>Rozmiar pliku lub calego folderu w bajtach (bledy -&gt; 0).</td></tr>
-<tr><td class='r muted'>5181</td><td><code>_wyczysc_autorecover_folder</code></td><td>Usuwa stare pliki autoodzyskiwania Excela z %AppData%\Microsoft\Excel,</td></tr>
-<tr><td class='r muted'>5229</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>3730</td><td><code>_nominal_rh_wiersza</code></td><td>Nominal RH wiersza &#x27;Wynikow&#x27; do sortowania w grupie temperatury: z nazwy zakladki</td></tr>
+<tr><td class='r muted'>3747</td><td><code>_klucz_wiersza_rh</code></td><td>Kolejnosc wierszy tabel z wilgotnoscia: temperatura (zaokraglona) rosnaco,</td></tr>
+<tr><td class='r muted'>3780</td><td><code>_wiersze_formul</code></td><td>Wynik range.formula -&gt; lista wierszy (lista list), takze dla jednej kolumny/wiersza.</td></tr>
+<tr><td class='r muted'>3789</td><td><code>_kolumny_sekcji</code></td><td>Wiersz-wzor sekcji -&gt; [(indeks_kolumny, rodzaj &#x27;rh&#x27;/&#x27;t&#x27;, komorka_zakladki albo None)].</td></tr>
+<tr><td class='r muted'>3806</td><td><code>_sekcje_wynikow</code></td><td>Sekcje &#x27;Wynikow&#x27; wyswietlacz + wyjscie: ciagi wierszy z odwolaniami do zakladek.</td></tr>
+<tr><td class='r muted'>3824</td><td><code>_numer_kolumny</code></td><td></td></tr>
+<tr><td class='r muted'>3831</td><td><code>_wiersz_r1c1</code></td><td>Formuly R1C1 wiersza `wiersz` sekcji (od kolumny A do ostatniej kolumny sekcji):</td></tr>
+<tr><td class='r muted'>3851</td><td><code>_listy_wierszy_wynikow</code></td><td>(punkty z RH posortowane, reprezentanci temperatur posortowani) — jak tabele</td></tr>
+<tr><td class='r muted'>3876</td><td><code>_kolejnosc_wierszy_wynikow</code></td><td>wpisy {&#x27;arkusz&#x27;,&#x27;val_b&#x27;,&#x27;ma_rh&#x27;,&#x27;rh_ref&#x27;,&#x27;powtorka&#x27;} -&gt; (nazwy z RH, nazwy temperatur).</td></tr>
+<tr><td class='r muted'>3880</td><td><code>_t</code></td><td></td></tr>
+<tr><td class='r muted'>3891</td><td><code>_wyniki_polaczone</code></td><td>&#x27;Wyniki&#x27; szablonu wyswietlacz + wyjscie: kazda sekcja dostaje tyle wierszy, ile</td></tr>
+<tr><td class='r muted'>3932</td><td><code>_wiersz_stopki</code></td><td>Wiersz &#x27;ODLEGŁOŚĆ OD CZUJNIKA WZORCOWEGO&#x27; w kolumnie A &#x27;Wynikow&#x27; (None gdy brak).</td></tr>
+<tr><td class='r muted'>3954</td><td><code>data_po_angielsku</code></td><td>&#x27;05 ÷ 09 listopada 2026 r.&#x27; -&gt; &#x27;05 ÷ 09 November 2026&#x27;.</td></tr>
+<tr><td class='r muted'>3962</td><td><code>placeholdery_th_przetw</code></td><td>Teksty swiadectwa wyswietlacz + wyjscie (ang.): daty, rodzaj wyjscia, zakresy.</td></tr>
+<tr><td class='r muted'>3976</td><td><code>_tekst_liczby_en</code></td><td></td></tr>
+<tr><td class='r muted'>3981</td><td><code>_czytaj_tabele_wynikow_polaczonych</code></td><td>Sekcje &#x27;Wynikow&#x27; wyswietlacz + wyjscie jako teksty jak w komorkach:</td></tr>
+<tr><td class='r muted'>3999</td><td><code>_t</code></td><td></td></tr>
+<tr><td class='r muted'>4011</td><td><code>_komorki_wiersza</code></td><td>Komorki wiersza tabeli Word bez powtorzen scalen (gridSpan).</td></tr>
+<tr><td class='r muted'>4021</td><td><code>_ustaw_tekst_komorki</code></td><td>Tekst komorki w formacie pierwszego runu; `przypis` — indeks gorny po tekscie.</td></tr>
+<tr><td class='r muted'>4041</td><td><code>_dopasuj_wiersze_tabeli</code></td><td>Tyle wierszy danych, ile punktow — ostatni wiersz (dolna ramka) zostaje ostatni.</td></tr>
+<tr><td class='r muted'>4057</td><td><code>_tabele_wynikow_swiadectwa</code></td><td>Tabele wynikow szablonu: wiersz jednostek (3.) konczy sie &#x27;pass/fail&#x27;.</td></tr>
+<tr><td class='r muted'>4068</td><td><code>_wypelnij_swiadectwo_th_przetw</code></td><td>Tabele wynikow + przypis o histerezie (punkt powtorzony) wg sekcji &#x27;Wynikow&#x27;.</td></tr>
+<tr><td class='r muted'>4099</td><td><code>_dostosuj_xlwings</code></td><td>Otwiera kopie xlsx przez xlwings (COM Excel):</td></tr>
+<tr><td class='r muted'>4581</td><td><code>_odczytaj_kalibracje_xlwings</code></td><td>Czyta dane kalibracyjne z zakladek roboczych po pelnym przeliczeniu formul.</td></tr>
+<tr><td class='r muted'>4665</td><td><code>_brak_wartosci</code></td><td></td></tr>
+<tr><td class='r muted'>4822</td><td><code>utworz_kopie</code></td><td>Dla każdego rekordu z Strona 2:</td></tr>
+<tr><td class='r muted'>4962</td><td><code>_main_impl</code></td><td></td></tr>
+<tr><td class='r muted'>5133</td><td><code>_excel_options_subkey</code></td><td>Zwraca podklucz rejestru Excel\Options dla zainstalowanej wersji Office.</td></tr>
+<tr><td class='r muted'>5146</td><td><code>_czytaj_autorecover</code></td><td>Globalne ustawienie AutoRecover Excela: True/False (None = nie udalo sie odczytac).</td></tr>
+<tr><td class='r muted'>5162</td><td><code>_ustaw_autorecover</code></td><td>Ustawia globalne AutoRecover Excela (rejestr). Cicho ignoruje bledy.</td></tr>
+<tr><td class='r muted'>5175</td><td><code>_rozmiar_sciezki</code></td><td>Rozmiar pliku lub calego folderu w bajtach (bledy -&gt; 0).</td></tr>
+<tr><td class='r muted'>5192</td><td><code>_wyczysc_autorecover_folder</code></td><td>Usuwa stare pliki autoodzyskiwania Excela z %AppData%\Microsoft\Excel,</td></tr>
+<tr><td class='r muted'>5240</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
 <details><summary><code>generuj_obserwacje.py</code> — 141 funkcji, 4601 linii <span class='muted'>· Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</span></summary>
 <table class="fn"><tbody>

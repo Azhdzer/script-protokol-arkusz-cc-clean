@@ -146,12 +146,12 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `cc_szablon_przetwornika.py` | 536 | 21 | szablon arkusza obliczeniowego dla PRZETWORNIKA. |
 | `cc_widgets.py` | 1385 | 79 | elementy interfejsu panelu (app_gui.py). |
 | `cc_widok.py` | 145 | 4 | jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx. |
-| `generuj_arkusze.py` | 5258 | 161 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
+| `generuj_arkusze.py` | 5269 | 162 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
 | `generuj_obserwacje.py` | 4601 | 141 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
 | `generuj_swiadectwa.py` | 369 | 15 | krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych. |
 | `pz_dane.py` | 1616 | 61 | wspolny modul do wczytywania danych przyrzadow z: |
 | `wypelnij_warunki.py` | 177 | 4 | krok 4: warunki srodowiskowe w protokole. |
-| `testy/` | — | 923 testów | 50 plików `test_*.py` (unittest) |
+| `testy/` | — | 925 testów | 50 plików `test_*.py` (unittest) |
 <!-- /AUTO:moduly_md -->
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
@@ -212,7 +212,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**923 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**925 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).

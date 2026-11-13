@@ -166,6 +166,22 @@ class TestKolejnoscJakWeWzorze(unittest.TestCase):
                               "60, 95"])
         self.assertEqual(t, ["-25, -", "5, -", "10, 45", "20, 45", "40, 45", "60, 45"])
 
+    def test_kolejnosc_wg_nominalu_rh_gdy_odczyty_rhm_niemiarodajne(self):
+        # Zlecenie 243, 84467803: RHm w zakladkach = 1, 40/25 zmierzone przy 40,1 °C.
+        # Wiersz 40/25 ma byc przed 40/60 i 40/95, nie za nimi.
+        pomiary = [("40, 60", 40.0), ("40, 95", 40.0), ("40, 25", 40.1),
+                   ("60, 25", 59.9), ("60, 60", 59.9), ("25, 60 (2)", 24.9)]
+        wpisy = [{"val_b": t, "rh_ref": A._nominal_rh_wiersza(n, "F15:F19", [1, 1, 1, 1, 1]),
+                  "powtorka": A._to_jest_powtorka_kolizji(n), "n": n} for n, t in pomiary]
+        self.assertEqual([w["n"] for w in sorted(wpisy, key=A._klucz_wiersza_rh)],
+                         ["25, 60 (2)", "40, 25", "40, 60", "40, 95", "60, 25", "60, 60"])
+
+    def test_nominal_rh_z_odczytu_gdy_nazwa_bez_rh(self):
+        self.assertEqual(A._nominal_rh_wiersza("40, 25", "F15:F19", [1]), 25.0)
+        self.assertEqual(A._nominal_rh_wiersza("40", "F15:F19", [33.5]), 33.5)
+        self.assertIsNone(A._nominal_rh_wiersza("40", "H15:H19", [4.2]))
+        self.assertIsNone(A._nominal_rh_wiersza("40", "F15:F19", []))
+
 
 class TestBudowaSzablonu(unittest.TestCase):
 
