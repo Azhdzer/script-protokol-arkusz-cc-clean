@@ -104,6 +104,47 @@ class TestPierwszyOdcinekPliku(unittest.TestCase):
         self.assertEqual(nastawy(data, w)[0], (23.0, 28.0))
 
 
+class TestOstatniOdcinekPliku(unittest.TestCase):
+    """
+    Zlecenie 243: kopia pliku TXT zrobiona w trakcie pomiaru — ostatni punkt
+    (histereza 40 °C / 60 %, poz. 6) stal na nastawie 108 min, krocej niz 2 h,
+    i znikal z obserwacji, choc PZ go zamawia.
+    """
+
+    def test_urwany_ostatni_odcinek_w_widelkach_jest_oknem(self):
+        odcinki = [(40.0, 93.0, 93.0, 180), (40.0, 59.5, 59.5, 108)]
+        data, w = okna(odcinki)
+        self.assertEqual(nastawy(data, w)[-1], (40.0, 59.5))
+        si, ei = w[-1]
+        self.assertEqual(ei, len(data))
+        self.assertEqual(data[ei - 1][0] - data[si][0], G.MIN_OKNO_ANALIZY)
+
+    def test_urwany_odcinek_w_trakcie_dochodzenia_odpada(self):
+        """Odczyty jeszcze nie w widelkach — to nie gotowy punkt."""
+        odcinki = [(40.0, 93.0, 93.0, 180), (40.0, 59.5, 75.0, 108)]
+        data, w = okna(odcinki)
+        self.assertNotIn((40.0, 59.5), nastawy(data, w))
+
+    def test_za_krotko_w_widelkach_odpada(self):
+        odcinki = [(40.0, 93.0, 93.0, 180), (40.0, 59.5, 59.5, 20)]
+        data, w = okna(odcinki)
+        self.assertNotIn((40.0, 59.5), nastawy(data, w))
+
+    def test_ten_sam_odcinek_w_srodku_pliku_odpada(self):
+        odcinki = [(40.0, 93.0, 93.0, 180), (40.0, 59.5, 59.5, 108), (60.0, 25.0, 25.0, 180)]
+        data, w = okna(odcinki)
+        self.assertNotIn((40.0, 59.5), nastawy(data, w))
+
+    def test_histereza_z_pz_trafia_w_urwany_odcinek(self):
+        odcinki = [(40.0, 25.0, 25.0, 180), (40.0, 59.5, 59.5, 180),
+                   (40.0, 93.0, 93.0, 180), (40.0, 59.5, 59.5, 108)]
+        data, w = okna(odcinki)
+        with redirect_stdout(io.StringIO()):
+            wybrane = G._wybierz_okna_wg_pz(data, w, [(40, 25), (40, 60), (40, 95), (40, 60)])
+        self.assertEqual(len(wybrane), 4)
+        self.assertEqual(wybrane[-1][0], w[-1])
+
+
 class TestSuszenieCzyPunkt(unittest.TestCase):
 
     def test_niska_wilgotnosc_na_poczatku_serii_to_punkt(self):

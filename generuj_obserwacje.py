@@ -1371,10 +1371,13 @@ def _prepare_data_cc04(rows):
 # operator wlacza zapis, gdy punkt jest ustabilizowany. Odczyty sa wtedy
 # w widelkach od pierwszych minut pliku.
 PIERWSZY_STABILNY_OD_STARTU = datetime.timedelta(minutes=5)
+# Ostatni, urwany segment pliku jest punktem, gdy odczyty komory sa w widelkach
+# co najmniej tyle czasu az do konca zapisu.
+MIN_W_WIDELKACH_KONIEC_PLIKU = datetime.timedelta(minutes=30)
 
 
 def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
-                       prog_temp, prog_rh, pierwszy_w_pliku=False):
+                       prog_temp, prog_rh, pierwszy_w_pliku=False, ostatni_w_pliku=False):
     """
     Zwraca start_idx okna analizy w segmencie stabilnym data[i:j] albo None.
 
@@ -1395,6 +1398,9 @@ def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
          zapisu, wiec stabilizacja minela, zanim plik sie zaczal. Zlecenie 201:
          23 °C / 28 % (wzorzec 30,0 %) przez 97 min od startu pliku — krotsze niz
          2 h, wiec ten pierwszy punkt w ogole nie stawal sie oknem.
+         WYJATEK 2 — ostatni segment pliku, w ktorym odczyty sa w widelkach co
+         najmniej MIN_W_WIDELKACH_KONIEC_PLIKU az do konca zapisu: zapis urwal sie
+         (kopia pliku w trakcie pomiaru), gdy komora trzymala punkt (zlecenie 243).
     """
     seg_dt0    = data[i][0]
     seg_end_dt = data[j - 1][0]
@@ -1417,15 +1423,33 @@ def _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz, min_stable, min_po,
 
     za_krotki = seg_end_dt - seg_dt0 < min_stable
     if za_krotki:
+        minut = (seg_end_dt - seg_dt0).total_seconds() / 60
         stabilny_od_startu = pierwszy_w_pliku and any(
             _w_widelkach(ki) for ki in range(i, j)
             if data[ki][0] is not None
             and data[ki][0] - seg_dt0 <= PIERWSZY_STABILNY_OD_STARTU)
-        if not stabilny_od_startu or seg_end_dt - seg_dt0 < MIN_OKNO_ANALIZY:
+        # Ostatni segment: zapis urwal sie (kopia pliku zrobiona w trakcie pomiaru),
+        # gdy komora trzymala punkt. Zlecenie 243: histereza 40 °C / 60 % (poz. 6)
+        # — 108 min na nastawie do konca pliku, odczyty od ~95 min w widelkach.
+        w_widelkach_do_konca = None
+        if ostatni_w_pliku:
+            ki = j - 1
+            while ki >= i and (data[ki][0] is None or _w_widelkach(ki)):
+                ki -= 1
+            if ki + 1 < j and data[ki + 1][0] is not None:
+                w_widelkach_do_konca = seg_end_dt - data[ki + 1][0]
+        if stabilny_od_startu and seg_end_dt - seg_dt0 >= MIN_OKNO_ANALIZY:
+            print(f"  [Start pliku] Pierwszy segment T={seg_t} RH={seg_c} trwa tylko "
+                  f"{minut:.0f} min, ale komora byla "
+                  f"w nastawie od poczatku zapisu — traktuje go jako punkt.")
+        elif (w_widelkach_do_konca is not None
+              and w_widelkach_do_konca >= MIN_W_WIDELKACH_KONIEC_PLIKU):
+            print(f"  [Koniec pliku] UWAGA: ostatni segment T={seg_t} RH={seg_c} trwa tylko "
+                  f"{minut:.0f} min (zapis sie konczy), odczyty komory w widelkach od "
+                  f"{w_widelkach_do_konca.total_seconds() / 60:.0f} min — traktuje go jako "
+                  f"punkt. Sprawdz, czy plik TXT jest kompletny (kopia w trakcie pomiaru?).")
+        else:
             return None                       # punkt zbyt krotki — pomijamy
-        print(f"  [Start pliku] Pierwszy segment T={seg_t} RH={seg_c} trwa tylko "
-              f"{(seg_end_dt - seg_dt0).total_seconds() / 60:.0f} min, ale komora byla "
-              f"w nastawie od poczatku zapisu — traktuje go jako punkt.")
 
     entry_dt = None
     for ki in range(i, j):
@@ -1521,7 +1545,7 @@ def _find_all_analysis_windows(data, min_stable, idx_t_odcz=5, idx_rh_odcz=6,
 
         start_idx = _oblicz_start_okna(data, i, j, idx_t_odcz, idx_rh_odcz,
                                        min_stable, min_po, prog_temp, prog_rh,
-                                       pierwszy_w_pliku=pierwszy)
+                                       pierwszy_w_pliku=pierwszy, ostatni_w_pliku=j >= n)
         pierwszy = False
         if start_idx is not None:
             windows.append((start_idx, j))

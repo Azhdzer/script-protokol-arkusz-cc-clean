@@ -53,7 +53,7 @@
 <section id="przeglad">
 <h2>Przegląd</h2>
 <!-- AUTO:statystyki -->
-<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 276</b><span>linii kodu</span></div><div class="stat"><b>628</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>925</b><span>testów (50 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 13.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 300</b><span>linii kodu</span></div><div class="stat"><b>628</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>930</b><span>testów (50 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 16.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
 <!-- /AUTO:statystyki -->
 <p>Python 3 + PySide6 (panel), openpyxl (zapis bez Excela), xlwings / pywin32 (Excel COM — przeliczanie formuł, linki,
 wstawianie wierszy), python-docx (świadectwa), pandas (parsery logów), pypdf (PZ). Jeden plik <code>ProtokolCC.exe</code> (PyInstaller).</p>
@@ -280,7 +280,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td><code>cc_widgets.py</code></td><td class='r'>1385</td><td class='r'>79</td><td>elementy interfejsu panelu (app_gui.py).</td></tr>
 <tr><td><code>cc_widok.py</code></td><td class='r'>145</td><td class='r'>4</td><td>jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx.</td></tr>
 <tr><td><code>generuj_arkusze.py</code></td><td class='r'>5269</td><td class='r'>162</td><td>Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</td></tr>
-<tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4601</td><td class='r'>141</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
+<tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4625</td><td class='r'>141</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
 <tr><td><code>generuj_swiadectwa.py</code></td><td class='r'>369</td><td class='r'>15</td><td>krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych.</td></tr>
 <tr><td><code>pz_dane.py</code></td><td class='r'>1616</td><td class='r'>61</td><td>wspolny modul do wczytywania danych przyrzadow z:</td></tr>
 <tr><td><code>wypelnij_warunki.py</code></td><td class='r'>177</td><td class='r'>4</td><td>krok 4: warunki srodowiskowe w protokole.</td></tr>
@@ -729,7 +729,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>5192</td><td><code>_wyczysc_autorecover_folder</code></td><td>Usuwa stare pliki autoodzyskiwania Excela z %AppData%\Microsoft\Excel,</td></tr>
 <tr><td class='r muted'>5240</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>generuj_obserwacje.py</code> — 141 funkcji, 4601 linii <span class='muted'>· Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</span></summary>
+<details><summary><code>generuj_obserwacje.py</code> — 141 funkcji, 4625 linii <span class='muted'>· Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>205</td><td><code>parse_measurement_id</code></td><td>Zwraca część nazwy pliku po &#x27;YYYY-MM-DD HH.MM &#x27; (np. &#x27;119_141_147_149_151_164&#x27;).</td></tr>
 <tr><td class='r muted'>214</td><td><code>open_txt</code></td><td>Otwiera plik TXT próbując kolejnych kodowań.</td></tr>
@@ -783,95 +783,95 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>1314</td><td><code>_prepare_data</code></td><td>Przetwarza wiersze str na listę krotek (dt, temp, rh, k, l, d, e).</td></tr>
 <tr><td class='r muted'>1334</td><td><code>_prepare_data_cc04</code></td><td>CC-04: krotka (dt, Tzad, RHzad, roztdp, l1, l2, l3, l4, Todcz, RHodcz)</td></tr>
 <tr><td class='r muted'>1350</td><td><code>g</code></td><td></td></tr>
-<tr><td class='r muted'>1376</td><td><code>_oblicz_start_okna</code></td><td>Zwraca start_idx okna analizy w segmencie stabilnym data[i:j] albo None.</td></tr>
-<tr><td class='r muted'>1408</td><td><code>_w_widelkach</code></td><td></td></tr>
-<tr><td class='r muted'>1462</td><td><code>_zmiana_trzymana</code></td><td>Zmiana nastawy T w wierszu j jest korekta (nie krokiem rampy), gdy nastawa</td></tr>
-<tr><td class='r muted'>1478</td><td><code>_find_all_analysis_windows</code></td><td>Dla każdego segmentu stabilnego B+C wyznacza okno analizy (start_idx, end_idx),</td></tr>
-<tr><td class='r muted'>1534</td><td><code>_wybierz_okno</code></td><td>kandydaci: [(srednia, [5 indeksow]), ...] w kolejnosci czasu.</td></tr>
-<tr><td class='r muted'>1553</td><td><code>_find_best_minute_reps</code></td><td>Bezposrednia optymalizacja po wyniku score_fn.</td></tr>
-<tr><td class='r muted'>1613</td><td><code>_kandydaci</code></td><td></td></tr>
-<tr><td class='r muted'>1637</td><td><code>_szerokosc_danych</code></td><td>Ile kolumn arkusz NAPRAWDE ma — liczone po naglowkach w wierszu 1.</td></tr>
-<tr><td class='r muted'>1656</td><td><code>_apply_fill</code></td><td></td></tr>
-<tr><td class='r muted'>1661</td><td><code>_apply_bold</code></td><td></td></tr>
-<tr><td class='r muted'>1672</td><td><code>_rozne_procent</code></td><td>True, gdy odczyt komory rozni sie od nastawy o wiecej niz prog_proc [%].</td></tr>
-<tr><td class='r muted'>1686</td><td><code>_poza_nastawa</code></td><td>True, gdy komora NIE osiagnela nastawy: odczyt jest poza progiem WZGLEDNYM</td></tr>
-<tr><td class='r muted'>1700</td><td><code>_reps_ostatnie_minuty</code></td><td>Awaryjny wybor reprezentantow: po jednym wierszu na minute, k OSTATNICH minut</td></tr>
-<tr><td class='r muted'>1721</td><td><code>_fallback_reprezentanci</code></td><td>Wybor reprezentantow BEZ twardych kryteriow (K/L, filtr nastawy) — dla punktow,</td></tr>
-<tr><td class='r muted'>1735</td><td><code>_oznacz_blok</code></td><td>Koloruje 5-minutowy blok (fill_light) + reprezentantow (fill_dark, pogrubienie).</td></tr>
-<tr><td class='r muted'>1762</td><td><code>_oznacz_alternatywe</code></td><td>Najlepsze wg kryterium okno, gdy wybrano pozniejsze: jasna zielen, bez pogrubienia,</td></tr>
-<tr><td class='r muted'>1779</td><td><code>_process_segment</code></td><td>Analizuje jeden segment i koloruje go w arkuszu obserwacji:</td></tr>
-<tr><td class='r muted'>1850</td><td><code>score_fn</code></td><td></td></tr>
-<tr><td class='r muted'>1961</td><td><code>_oznacz_numery_punktow</code></td><td>Znaczniki nawigacyjne: NUMER punktu (1,2,3...) w kolumnie z prawej, przy pierwszym</td></tr>
-<tr><td class='r muted'>1979</td><td><code>_mediana_odczytow</code></td><td>Mediana ODCZYTU komory w oknie (None, gdy brak danych).</td></tr>
-<tr><td class='r muted'>1986</td><td><code>okna_suszenia</code></td><td>Okna, ktore wygladaja na SUSZENIE, a nie na punkt pomiarowy.</td></tr>
-<tr><td class='r muted'>2015</td><td><code>_wybierz_okna_wg_pz</code></td><td>Wybiera z wykrytych okien te, ktore odpowiadaja punktom ZAMOWIONYM w PZ.</td></tr>
-<tr><td class='r muted'>2095</td><td><code>analyze_and_highlight</code></td><td>Dla każdego segmentu stabilnego B+C (&gt;= STABILIZACJA_MIN):</td></tr>
-<tr><td class='r muted'>2142</td><td><code>_t_key</code></td><td>Zwraca klucz z t_map najblizszy t_val (tolerancja &lt; 1.0 C), lub t_val jesli brak.</td></tr>
-<tr><td class='r muted'>2232</td><td><code>_zaladuj_wyniki_xlsx</code></td><td>Wczytuje zunifikowany plik wynikow. Kolumny wykrywane po NAGLOWKU (wiersz 1):</td></tr>
-<tr><td class='r muted'>2269</td><td><code>_to_f</code></td><td></td></tr>
-<tr><td class='r muted'>2306</td><td><code>prefiks_zlecenia</code></td><td>&#x27;221_LA_TH_2026&#x27; — dokladnie ten sam przedrostek, co w nazwie protokolu.</td></tr>
-<tr><td class='r muted'>2315</td><td><code>_nadpisz_szablonem</code></td><td>Kopia zapasowa celu i nadpisanie go szablonem. Gdy cel (protokol / obserwacja</td></tr>
-<tr><td class='r muted'>2337</td><td><code>nazwa_pliku_zestawienia</code></td><td></td></tr>
-<tr><td class='r muted'>2344</td><td><code>logi_bez_wyniku</code></td><td>Logi z folderu kroku 1, ktorych przyrzad jest w PZ, a w &#x27;wyniki&#x27; nie ma jego pliku.</td></tr>
-<tr><td class='r muted'>2364</td><td><code>_pliki_wynikow</code></td><td>Pliki wynikow POJEDYNCZYCH przyrzadow z WYNIKI_FOLDER (posortowane).</td></tr>
-<tr><td class='r muted'>2385</td><td><code>_czas</code></td><td></td></tr>
-<tr><td class='r muted'>2408</td><td><code>_szerokosc_tabeli_wynikow</code></td><td>Liczba kolumn DANYCH (Czas, Temperatura, Wilgotnosc...) — kolejne niepuste</td></tr>
-<tr><td class='r muted'>2423</td><td><code>podpisz_arkusz_wynikow</code></td><td>Podpis &#x27;Opracowal / Data&#x27; w dwoch wierszach na gorze, z prawej strony tabeli —</td></tr>
-<tr><td class='r muted'>2457</td><td><code>_zaladuj_wyniki_xlsx_cache</code></td><td>_zaladuj_wyniki_xlsx z pamiecia (ten sam plik czytany raz).</td></tr>
-<tr><td class='r muted'>2468</td><td><code>_policz_potrzebne_przyrzady</code></td><td>Ile PAR kolumn przyrzadow bedzie potrzebnych w Stronie 3 — liczone tak samo jak</td></tr>
-<tr><td class='r muted'>2503</td><td><code>_wykryj_przesuniecie_zegara</code></td><td>Wykrywa przesuniecie ZEGARA loggera wzgledem multimetru, porownujac jego profil</td></tr>
-<tr><td class='r muted'>2555</td><td><code>_czas_txt</code></td><td>&#x27;12 s&#x27; / &#x27;3,5 min&#x27; — odchylka czasu w czytelnej postaci.</td></tr>
-<tr><td class='r muted'>2564</td><td><code>_odchylki_dopasowania</code></td><td>Zwraca (srednia, maksymalna) odchylke czasu [s] dopasowanych wierszy.</td></tr>
-<tr><td class='r muted'>2587</td><td><code>_ostrzez_o_odchylce</code></td><td>Glosno ostrzega, gdy najgorsze dopasowanie jest daleko od czasu pomiaru.</td></tr>
-<tr><td class='r muted'>2605</td><td><code>_dopasuj_plik_do_punktow</code></td><td>Dopasowuje jeden plik wynikow do punktow pomiarowych.</td></tr>
-<tr><td class='r muted'>2615</td><td><code>_dop</code></td><td></td></tr>
-<tr><td class='r muted'>2629</td><td><code>_odch</code></td><td></td></tr>
-<tr><td class='r muted'>2673</td><td><code>_miejsca_po_przecinku</code></td><td>Ile miejsc po przecinku wynika z rozdzielczosci: 1-&gt;0, 0.1-&gt;1, 0.01-&gt;2, 0.001-&gt;3.</td></tr>
-<tr><td class='r muted'>2683</td><td><code>_zaokr_do_rozdz</code></td><td>Zaokragla wartosc do rozdzielczosci przyrzadu (np. 0.1 -&gt; jedno miejsce po przecinku).</td></tr>
-<tr><td class='r muted'>2692</td><td><code>_format_rozdz</code></td><td>Format liczbowy Excela wg rozdzielczosci: 0.1 -&gt; &#x27;0.0&#x27;, 0.01 -&gt; &#x27;0.00&#x27;, 1 -&gt; &#x27;0&#x27;.</td></tr>
-<tr><td class='r muted'>2700</td><td><code>_minuty_punktu</code></td><td>Pelne minuty punktu — cele doboru wierszy przyrzadow.</td></tr>
-<tr><td class='r muted'>2718</td><td><code>_znajdz_5_wierszy</code></td><td>Dla listy 5 docelowych dat/czasow zwraca liste 5 najblizszych wpisow</td></tr>
-<tr><td class='r muted'>2733</td><td><code>_oznacz_wyniki_xlsx</code></td><td>Koloruje w pliku wynikow (krok 1) wiersze wybrane przez obserwacje.</td></tr>
-<tr><td class='r muted'>2798</td><td><code>_wypelnij_wyniki_srodowiskowe</code></td><td>Wpisuje dane srodowiskowe (Temperatura+Wilgotnosc) z plikow WYNIKI_FOLDER do</td></tr>
-<tr><td class='r muted'>2877</td><td><code>_wpisz</code></td><td>Wpisuje jedna kolumne (temp z val_idx) + opc. wilgotnosc do blokow punktow.</td></tr>
-<tr><td class='r muted'>3004</td><td><code>wypelnij_podpisy_strona2</code></td><td>Wpisuje date i podpis w bloku po prawej stronie Strony 2:</td></tr>
-<tr><td class='r muted'>3022</td><td><code>_ostrzez_o_brakujacych_plikach</code></td><td>Przyrzad z PZ wzorcowany w komorze, dla ktorego nie ma pliku wynikow, nie</td></tr>
-<tr><td class='r muted'>3050</td><td><code>_rozdz_rh</code></td><td>Rozdzielczosc RH do kolumny L: z Zestawienia, potem z odczytow wilgotnosci.</td></tr>
-<tr><td class='r muted'>3063</td><td><code>_skalowanie_nie_dotyczy</code></td><td>M, N &#x27;Skalowanie przetwornika (jesli dotyczy)&#x27;: pusta komorka -&gt; &#x27;-&#x27;.</td></tr>
-<tr><td class='r muted'>3071</td><td><code>wypelnij_strone2_z_pz</code></td><td>Wypelnia tabele przyrzadow na Stronie 2 protokolu na podstawie PZ.</td></tr>
-<tr><td class='r muted'>3127</td><td><code>_set</code></td><td></td></tr>
-<tr><td class='r muted'>3162</td><td><code>_wyszarz_punkty_spoza_zamowienia</code></td><td>Wyszarza odczyty przyrzadu w punktach, ktorych NIE zamowiono wlasnie dla niego.</td></tr>
-<tr><td class='r muted'>3220</td><td><code>_delete_rows_via_excel</code></td><td>Usuwa row_count wierszy od row_from przez Excel COM (przesuwa reszte w gore —</td></tr>
-<tr><td class='r muted'>3262</td><td><code>_insert_blocks_via_excel</code></td><td>Otwiera plik w Excelu przez COM i wykonuje n_extra razy operacje</td></tr>
-<tr><td class='r muted'>3317</td><td><code>_rozszerz_kolumny_przyrzadow</code></td><td>Dokłada PARY kolumn przyrzadow w Stronie 3, gdy przyrzadow jest wiecej niz w szablonie</td></tr>
-<tr><td class='r muted'>3417</td><td><code>_ustaw_komorke</code></td><td>Wpisuje wartosc, uwzgledniajac SCALENIA: gdy (row,col) lezy w scalonym zakresie,</td></tr>
-<tr><td class='r muted'>3430</td><td><code>_kolumna_roku_s3</code></td><td>Kolumna na ROK w naglowku Strony 3 = pierwsza kolumna ZA etykieta &#x27;/LA/TH/&#x27;.</td></tr>
-<tr><td class='r muted'>3448</td><td><code>_zapisz_bezpiecznie</code></td><td>Zapisuje skoroszyt; gdy plik jest OTWARTY w Excelu (zablokowany) — daje czytelny</td></tr>
-<tr><td class='r muted'>3471</td><td><code>_round_hm</code></td><td>Zaokrągla datetime do pelnej minuty i zwraca string HH:MM.</td></tr>
-<tr><td class='r muted'>3480</td><td><code>_wsp_korelacji</code></td><td>Wspolczynnik korelacji Pearsona (None, gdy za malo danych lub brak zmiennosci).</td></tr>
-<tr><td class='r muted'>3493</td><td><code>rola_przetwornika</code></td><td>&#x27;t&#x27; albo &#x27;rh&#x27; — co mierzy wyjscie przetwornika w kolumnie `idx`. Naglowek pliku</td></tr>
-<tr><td class='r muted'>3520</td><td><code>urzadzenia_przetwornikow</code></td><td>Przyrzady wzorcowane przez wyjscia analogowe. Kanaly dzielimy na temperature</td></tr>
-<tr><td class='r muted'>3535</td><td><code>nr</code></td><td></td></tr>
-<tr><td class='r muted'>3567</td><td><code>opis_kanalow_przetwornika</code></td><td>Tekst do &#x27;Uwag&#x27; na Stronie 2 — jak wpisywany recznie:</td></tr>
-<tr><td class='r muted'>3585</td><td><code>jednostka_przetwornika</code></td><td>&#x27;V&#x27; / &#x27;mA&#x27; dla wyjscia przetwornika, &#x27;-&#x27; gdy tego wyjscia nie ma.</td></tr>
-<tr><td class='r muted'>3593</td><td><code>_wpisz_przetwornik</code></td><td>Wskazania multimetru z wyjsc przetwornika -&gt; para kolumn przyrzadu (t, RH).</td></tr>
-<tr><td class='r muted'>3616</td><td><code>_serial_przetwornika</code></td><td>Nr fabryczny przetwornika: jedyny przyrzad z PZ wzorcowany w komorze, inaczej &#x27;&#x27;.</td></tr>
-<tr><td class='r muted'>3623</td><td><code>_uwagi_bez_tresci</code></td><td>Puste &#x27;Uwagi&#x27; (kol. P) przyrzadu -&gt; &#x27;-&#x27; na szarym tle, jak inne pola bez danych.</td></tr>
-<tr><td class='r muted'>3632</td><td><code>_wypelnij_przetworniki_strona2</code></td><td>Wiersz przetwornika na Stronie 2: dane przyrzadu jak zwykle (z PZ), ale</td></tr>
-<tr><td class='r muted'>3673</td><td><code>multimetr_z_naglowka</code></td><td>&#x27;Multimetr wzorcowy Pt100: 1586A-02&#x27; -&gt; &#x27;1586A-02&#x27; (None, gdy brak).</td></tr>
-<tr><td class='r muted'>3684</td><td><code>_wypelnij_strone1_przetworniki</code></td><td>Przetworniki mierzone multimetrem -&gt; Strona 1, p. 1.5 (D53, I53, I58).</td></tr>
-<tr><td class='r muted'>3701</td><td><code>generuj_protokol</code></td><td>Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.</td></tr>
-<tr><td class='r muted'>3911</td><td><code>_subst</code></td><td>Podmienia Pt100-XX w wartosci komorki lub wpisuje nazwe jesli brak wzorca.</td></tr>
-<tr><td class='r muted'>4053</td><td><code>_podpisz_i_nazwij</code></td><td>Dopisuje podpis do pliku i nadaje mu nazwe zlecenia. Zwraca nowa nazwe albo None.</td></tr>
-<tr><td class='r muted'>4079</td><td><code>opracuj_pliki_wynikow</code></td><td>Ostatni krok obrobki plikow z kroku 1: podpis &#x27;Opracowal / Data&#x27; i nazwa zlecenia.</td></tr>
-<tr><td class='r muted'>4118</td><td><code>sciezka_zestawienia</code></td><td>Zestawienie zbiorcze do zaznaczania: swieze z kroku 1 (&#x27;zestawienie_pomiarow.xlsx&#x27;),</td></tr>
-<tr><td class='r muted'>4129</td><td><code>oznacz_zestawienie_punkty</code></td><td>W pliku wyniki/zestawienie_pomiarow.xlsx (wszystkie przyrzady na wspolnej osi czasu)</td></tr>
-<tr><td class='r muted'>4215</td><td><code>_czas_z_nazwy_foto</code></td><td>Czas zdjecia z NAZWY pliku (np. &#x27;2026-07-23_16.12.51.jpg&#x27;). None gdy brak.</td></tr>
-<tr><td class='r muted'>4228</td><td><code>_indeks_zdjec</code></td><td>Indeks zdjec: posortowana lista (czas, sciezka). Czas z nazwy pliku, a gdy nazwa</td></tr>
-<tr><td class='r muted'>4258</td><td><code>_najblizsze_zdjecie</code></td><td>Zwraca (czas, sciezka, odchylka) zdjecia najblizszego czasowi `cel`.</td></tr>
-<tr><td class='r muted'>4272</td><td><code>_nazwa_folderu_punktu</code></td><td>Nazwa podfolderu punktu, np. &#x27;punkt_01_50,0C&#x27; albo &#x27;punkt_07_23,0C_60RH&#x27;.</td></tr>
-<tr><td class='r muted'>4285</td><td><code>kopiuj_foto_punktow</code></td><td>Kopiuje zdjecia odpowiadajace WYBRANYM punktom: dla kazdego z 5 wierszy</td></tr>
-<tr><td class='r muted'>4355</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>1379</td><td><code>_oblicz_start_okna</code></td><td>Zwraca start_idx okna analizy w segmencie stabilnym data[i:j] albo None.</td></tr>
+<tr><td class='r muted'>1414</td><td><code>_w_widelkach</code></td><td></td></tr>
+<tr><td class='r muted'>1486</td><td><code>_zmiana_trzymana</code></td><td>Zmiana nastawy T w wierszu j jest korekta (nie krokiem rampy), gdy nastawa</td></tr>
+<tr><td class='r muted'>1502</td><td><code>_find_all_analysis_windows</code></td><td>Dla każdego segmentu stabilnego B+C wyznacza okno analizy (start_idx, end_idx),</td></tr>
+<tr><td class='r muted'>1558</td><td><code>_wybierz_okno</code></td><td>kandydaci: [(srednia, [5 indeksow]), ...] w kolejnosci czasu.</td></tr>
+<tr><td class='r muted'>1577</td><td><code>_find_best_minute_reps</code></td><td>Bezposrednia optymalizacja po wyniku score_fn.</td></tr>
+<tr><td class='r muted'>1637</td><td><code>_kandydaci</code></td><td></td></tr>
+<tr><td class='r muted'>1661</td><td><code>_szerokosc_danych</code></td><td>Ile kolumn arkusz NAPRAWDE ma — liczone po naglowkach w wierszu 1.</td></tr>
+<tr><td class='r muted'>1680</td><td><code>_apply_fill</code></td><td></td></tr>
+<tr><td class='r muted'>1685</td><td><code>_apply_bold</code></td><td></td></tr>
+<tr><td class='r muted'>1696</td><td><code>_rozne_procent</code></td><td>True, gdy odczyt komory rozni sie od nastawy o wiecej niz prog_proc [%].</td></tr>
+<tr><td class='r muted'>1710</td><td><code>_poza_nastawa</code></td><td>True, gdy komora NIE osiagnela nastawy: odczyt jest poza progiem WZGLEDNYM</td></tr>
+<tr><td class='r muted'>1724</td><td><code>_reps_ostatnie_minuty</code></td><td>Awaryjny wybor reprezentantow: po jednym wierszu na minute, k OSTATNICH minut</td></tr>
+<tr><td class='r muted'>1745</td><td><code>_fallback_reprezentanci</code></td><td>Wybor reprezentantow BEZ twardych kryteriow (K/L, filtr nastawy) — dla punktow,</td></tr>
+<tr><td class='r muted'>1759</td><td><code>_oznacz_blok</code></td><td>Koloruje 5-minutowy blok (fill_light) + reprezentantow (fill_dark, pogrubienie).</td></tr>
+<tr><td class='r muted'>1786</td><td><code>_oznacz_alternatywe</code></td><td>Najlepsze wg kryterium okno, gdy wybrano pozniejsze: jasna zielen, bez pogrubienia,</td></tr>
+<tr><td class='r muted'>1803</td><td><code>_process_segment</code></td><td>Analizuje jeden segment i koloruje go w arkuszu obserwacji:</td></tr>
+<tr><td class='r muted'>1874</td><td><code>score_fn</code></td><td></td></tr>
+<tr><td class='r muted'>1985</td><td><code>_oznacz_numery_punktow</code></td><td>Znaczniki nawigacyjne: NUMER punktu (1,2,3...) w kolumnie z prawej, przy pierwszym</td></tr>
+<tr><td class='r muted'>2003</td><td><code>_mediana_odczytow</code></td><td>Mediana ODCZYTU komory w oknie (None, gdy brak danych).</td></tr>
+<tr><td class='r muted'>2010</td><td><code>okna_suszenia</code></td><td>Okna, ktore wygladaja na SUSZENIE, a nie na punkt pomiarowy.</td></tr>
+<tr><td class='r muted'>2039</td><td><code>_wybierz_okna_wg_pz</code></td><td>Wybiera z wykrytych okien te, ktore odpowiadaja punktom ZAMOWIONYM w PZ.</td></tr>
+<tr><td class='r muted'>2119</td><td><code>analyze_and_highlight</code></td><td>Dla każdego segmentu stabilnego B+C (&gt;= STABILIZACJA_MIN):</td></tr>
+<tr><td class='r muted'>2166</td><td><code>_t_key</code></td><td>Zwraca klucz z t_map najblizszy t_val (tolerancja &lt; 1.0 C), lub t_val jesli brak.</td></tr>
+<tr><td class='r muted'>2256</td><td><code>_zaladuj_wyniki_xlsx</code></td><td>Wczytuje zunifikowany plik wynikow. Kolumny wykrywane po NAGLOWKU (wiersz 1):</td></tr>
+<tr><td class='r muted'>2293</td><td><code>_to_f</code></td><td></td></tr>
+<tr><td class='r muted'>2330</td><td><code>prefiks_zlecenia</code></td><td>&#x27;221_LA_TH_2026&#x27; — dokladnie ten sam przedrostek, co w nazwie protokolu.</td></tr>
+<tr><td class='r muted'>2339</td><td><code>_nadpisz_szablonem</code></td><td>Kopia zapasowa celu i nadpisanie go szablonem. Gdy cel (protokol / obserwacja</td></tr>
+<tr><td class='r muted'>2361</td><td><code>nazwa_pliku_zestawienia</code></td><td></td></tr>
+<tr><td class='r muted'>2368</td><td><code>logi_bez_wyniku</code></td><td>Logi z folderu kroku 1, ktorych przyrzad jest w PZ, a w &#x27;wyniki&#x27; nie ma jego pliku.</td></tr>
+<tr><td class='r muted'>2388</td><td><code>_pliki_wynikow</code></td><td>Pliki wynikow POJEDYNCZYCH przyrzadow z WYNIKI_FOLDER (posortowane).</td></tr>
+<tr><td class='r muted'>2409</td><td><code>_czas</code></td><td></td></tr>
+<tr><td class='r muted'>2432</td><td><code>_szerokosc_tabeli_wynikow</code></td><td>Liczba kolumn DANYCH (Czas, Temperatura, Wilgotnosc...) — kolejne niepuste</td></tr>
+<tr><td class='r muted'>2447</td><td><code>podpisz_arkusz_wynikow</code></td><td>Podpis &#x27;Opracowal / Data&#x27; w dwoch wierszach na gorze, z prawej strony tabeli —</td></tr>
+<tr><td class='r muted'>2481</td><td><code>_zaladuj_wyniki_xlsx_cache</code></td><td>_zaladuj_wyniki_xlsx z pamiecia (ten sam plik czytany raz).</td></tr>
+<tr><td class='r muted'>2492</td><td><code>_policz_potrzebne_przyrzady</code></td><td>Ile PAR kolumn przyrzadow bedzie potrzebnych w Stronie 3 — liczone tak samo jak</td></tr>
+<tr><td class='r muted'>2527</td><td><code>_wykryj_przesuniecie_zegara</code></td><td>Wykrywa przesuniecie ZEGARA loggera wzgledem multimetru, porownujac jego profil</td></tr>
+<tr><td class='r muted'>2579</td><td><code>_czas_txt</code></td><td>&#x27;12 s&#x27; / &#x27;3,5 min&#x27; — odchylka czasu w czytelnej postaci.</td></tr>
+<tr><td class='r muted'>2588</td><td><code>_odchylki_dopasowania</code></td><td>Zwraca (srednia, maksymalna) odchylke czasu [s] dopasowanych wierszy.</td></tr>
+<tr><td class='r muted'>2611</td><td><code>_ostrzez_o_odchylce</code></td><td>Glosno ostrzega, gdy najgorsze dopasowanie jest daleko od czasu pomiaru.</td></tr>
+<tr><td class='r muted'>2629</td><td><code>_dopasuj_plik_do_punktow</code></td><td>Dopasowuje jeden plik wynikow do punktow pomiarowych.</td></tr>
+<tr><td class='r muted'>2639</td><td><code>_dop</code></td><td></td></tr>
+<tr><td class='r muted'>2653</td><td><code>_odch</code></td><td></td></tr>
+<tr><td class='r muted'>2697</td><td><code>_miejsca_po_przecinku</code></td><td>Ile miejsc po przecinku wynika z rozdzielczosci: 1-&gt;0, 0.1-&gt;1, 0.01-&gt;2, 0.001-&gt;3.</td></tr>
+<tr><td class='r muted'>2707</td><td><code>_zaokr_do_rozdz</code></td><td>Zaokragla wartosc do rozdzielczosci przyrzadu (np. 0.1 -&gt; jedno miejsce po przecinku).</td></tr>
+<tr><td class='r muted'>2716</td><td><code>_format_rozdz</code></td><td>Format liczbowy Excela wg rozdzielczosci: 0.1 -&gt; &#x27;0.0&#x27;, 0.01 -&gt; &#x27;0.00&#x27;, 1 -&gt; &#x27;0&#x27;.</td></tr>
+<tr><td class='r muted'>2724</td><td><code>_minuty_punktu</code></td><td>Pelne minuty punktu — cele doboru wierszy przyrzadow.</td></tr>
+<tr><td class='r muted'>2742</td><td><code>_znajdz_5_wierszy</code></td><td>Dla listy 5 docelowych dat/czasow zwraca liste 5 najblizszych wpisow</td></tr>
+<tr><td class='r muted'>2757</td><td><code>_oznacz_wyniki_xlsx</code></td><td>Koloruje w pliku wynikow (krok 1) wiersze wybrane przez obserwacje.</td></tr>
+<tr><td class='r muted'>2822</td><td><code>_wypelnij_wyniki_srodowiskowe</code></td><td>Wpisuje dane srodowiskowe (Temperatura+Wilgotnosc) z plikow WYNIKI_FOLDER do</td></tr>
+<tr><td class='r muted'>2901</td><td><code>_wpisz</code></td><td>Wpisuje jedna kolumne (temp z val_idx) + opc. wilgotnosc do blokow punktow.</td></tr>
+<tr><td class='r muted'>3028</td><td><code>wypelnij_podpisy_strona2</code></td><td>Wpisuje date i podpis w bloku po prawej stronie Strony 2:</td></tr>
+<tr><td class='r muted'>3046</td><td><code>_ostrzez_o_brakujacych_plikach</code></td><td>Przyrzad z PZ wzorcowany w komorze, dla ktorego nie ma pliku wynikow, nie</td></tr>
+<tr><td class='r muted'>3074</td><td><code>_rozdz_rh</code></td><td>Rozdzielczosc RH do kolumny L: z Zestawienia, potem z odczytow wilgotnosci.</td></tr>
+<tr><td class='r muted'>3087</td><td><code>_skalowanie_nie_dotyczy</code></td><td>M, N &#x27;Skalowanie przetwornika (jesli dotyczy)&#x27;: pusta komorka -&gt; &#x27;-&#x27;.</td></tr>
+<tr><td class='r muted'>3095</td><td><code>wypelnij_strone2_z_pz</code></td><td>Wypelnia tabele przyrzadow na Stronie 2 protokolu na podstawie PZ.</td></tr>
+<tr><td class='r muted'>3151</td><td><code>_set</code></td><td></td></tr>
+<tr><td class='r muted'>3186</td><td><code>_wyszarz_punkty_spoza_zamowienia</code></td><td>Wyszarza odczyty przyrzadu w punktach, ktorych NIE zamowiono wlasnie dla niego.</td></tr>
+<tr><td class='r muted'>3244</td><td><code>_delete_rows_via_excel</code></td><td>Usuwa row_count wierszy od row_from przez Excel COM (przesuwa reszte w gore —</td></tr>
+<tr><td class='r muted'>3286</td><td><code>_insert_blocks_via_excel</code></td><td>Otwiera plik w Excelu przez COM i wykonuje n_extra razy operacje</td></tr>
+<tr><td class='r muted'>3341</td><td><code>_rozszerz_kolumny_przyrzadow</code></td><td>Dokłada PARY kolumn przyrzadow w Stronie 3, gdy przyrzadow jest wiecej niz w szablonie</td></tr>
+<tr><td class='r muted'>3441</td><td><code>_ustaw_komorke</code></td><td>Wpisuje wartosc, uwzgledniajac SCALENIA: gdy (row,col) lezy w scalonym zakresie,</td></tr>
+<tr><td class='r muted'>3454</td><td><code>_kolumna_roku_s3</code></td><td>Kolumna na ROK w naglowku Strony 3 = pierwsza kolumna ZA etykieta &#x27;/LA/TH/&#x27;.</td></tr>
+<tr><td class='r muted'>3472</td><td><code>_zapisz_bezpiecznie</code></td><td>Zapisuje skoroszyt; gdy plik jest OTWARTY w Excelu (zablokowany) — daje czytelny</td></tr>
+<tr><td class='r muted'>3495</td><td><code>_round_hm</code></td><td>Zaokrągla datetime do pelnej minuty i zwraca string HH:MM.</td></tr>
+<tr><td class='r muted'>3504</td><td><code>_wsp_korelacji</code></td><td>Wspolczynnik korelacji Pearsona (None, gdy za malo danych lub brak zmiennosci).</td></tr>
+<tr><td class='r muted'>3517</td><td><code>rola_przetwornika</code></td><td>&#x27;t&#x27; albo &#x27;rh&#x27; — co mierzy wyjscie przetwornika w kolumnie `idx`. Naglowek pliku</td></tr>
+<tr><td class='r muted'>3544</td><td><code>urzadzenia_przetwornikow</code></td><td>Przyrzady wzorcowane przez wyjscia analogowe. Kanaly dzielimy na temperature</td></tr>
+<tr><td class='r muted'>3559</td><td><code>nr</code></td><td></td></tr>
+<tr><td class='r muted'>3591</td><td><code>opis_kanalow_przetwornika</code></td><td>Tekst do &#x27;Uwag&#x27; na Stronie 2 — jak wpisywany recznie:</td></tr>
+<tr><td class='r muted'>3609</td><td><code>jednostka_przetwornika</code></td><td>&#x27;V&#x27; / &#x27;mA&#x27; dla wyjscia przetwornika, &#x27;-&#x27; gdy tego wyjscia nie ma.</td></tr>
+<tr><td class='r muted'>3617</td><td><code>_wpisz_przetwornik</code></td><td>Wskazania multimetru z wyjsc przetwornika -&gt; para kolumn przyrzadu (t, RH).</td></tr>
+<tr><td class='r muted'>3640</td><td><code>_serial_przetwornika</code></td><td>Nr fabryczny przetwornika: jedyny przyrzad z PZ wzorcowany w komorze, inaczej &#x27;&#x27;.</td></tr>
+<tr><td class='r muted'>3647</td><td><code>_uwagi_bez_tresci</code></td><td>Puste &#x27;Uwagi&#x27; (kol. P) przyrzadu -&gt; &#x27;-&#x27; na szarym tle, jak inne pola bez danych.</td></tr>
+<tr><td class='r muted'>3656</td><td><code>_wypelnij_przetworniki_strona2</code></td><td>Wiersz przetwornika na Stronie 2: dane przyrzadu jak zwykle (z PZ), ale</td></tr>
+<tr><td class='r muted'>3697</td><td><code>multimetr_z_naglowka</code></td><td>&#x27;Multimetr wzorcowy Pt100: 1586A-02&#x27; -&gt; &#x27;1586A-02&#x27; (None, gdy brak).</td></tr>
+<tr><td class='r muted'>3708</td><td><code>_wypelnij_strone1_przetworniki</code></td><td>Przetworniki mierzone multimetrem -&gt; Strona 1, p. 1.5 (D53, I53, I58).</td></tr>
+<tr><td class='r muted'>3725</td><td><code>generuj_protokol</code></td><td>Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.</td></tr>
+<tr><td class='r muted'>3935</td><td><code>_subst</code></td><td>Podmienia Pt100-XX w wartosci komorki lub wpisuje nazwe jesli brak wzorca.</td></tr>
+<tr><td class='r muted'>4077</td><td><code>_podpisz_i_nazwij</code></td><td>Dopisuje podpis do pliku i nadaje mu nazwe zlecenia. Zwraca nowa nazwe albo None.</td></tr>
+<tr><td class='r muted'>4103</td><td><code>opracuj_pliki_wynikow</code></td><td>Ostatni krok obrobki plikow z kroku 1: podpis &#x27;Opracowal / Data&#x27; i nazwa zlecenia.</td></tr>
+<tr><td class='r muted'>4142</td><td><code>sciezka_zestawienia</code></td><td>Zestawienie zbiorcze do zaznaczania: swieze z kroku 1 (&#x27;zestawienie_pomiarow.xlsx&#x27;),</td></tr>
+<tr><td class='r muted'>4153</td><td><code>oznacz_zestawienie_punkty</code></td><td>W pliku wyniki/zestawienie_pomiarow.xlsx (wszystkie przyrzady na wspolnej osi czasu)</td></tr>
+<tr><td class='r muted'>4239</td><td><code>_czas_z_nazwy_foto</code></td><td>Czas zdjecia z NAZWY pliku (np. &#x27;2026-07-23_16.12.51.jpg&#x27;). None gdy brak.</td></tr>
+<tr><td class='r muted'>4252</td><td><code>_indeks_zdjec</code></td><td>Indeks zdjec: posortowana lista (czas, sciezka). Czas z nazwy pliku, a gdy nazwa</td></tr>
+<tr><td class='r muted'>4282</td><td><code>_najblizsze_zdjecie</code></td><td>Zwraca (czas, sciezka, odchylka) zdjecia najblizszego czasowi `cel`.</td></tr>
+<tr><td class='r muted'>4296</td><td><code>_nazwa_folderu_punktu</code></td><td>Nazwa podfolderu punktu, np. &#x27;punkt_01_50,0C&#x27; albo &#x27;punkt_07_23,0C_60RH&#x27;.</td></tr>
+<tr><td class='r muted'>4309</td><td><code>kopiuj_foto_punktow</code></td><td>Kopiuje zdjecia odpowiadajace WYBRANYM punktom: dla kazdego z 5 wierszy</td></tr>
+<tr><td class='r muted'>4379</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
 <details><summary><code>generuj_swiadectwa.py</code> — 15 funkcji, 369 linii <span class='muted'>· krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych.</span></summary>
 <table class="fn"><tbody>
