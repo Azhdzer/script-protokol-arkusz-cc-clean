@@ -106,6 +106,12 @@ _RE_TS_NA_POCZATKU = re.compile(
 #   'pomiar_000007263.xlsx' -> '000007263'. Tylko gdy dalej stoi cos z cyfra.
 _RE_SLOWO_NA_POCZATKU = re.compile(
     r'^(?:pomiary?|dane|eksport|export|measurement|data)[\s_-]+(?=\S*\d)', re.I)
+# Eksport Milesight (EM320-TH, Node-RED): '<EUI>-Historical Data-<data>_<godz>',
+# czesto z numerem operatora z przodu i dopiskiem kopii z tylu:
+#   '21 - 24E124785075A40A-Historical Data-2026-11-17_12-33'      -> '24E124785075A40A'
+#   '10 - 24E1247850753597-Historical Data-2026-11-17_12-38 (1)'  -> '24E1247850753597'
+_RE_MILESIGHT = re.compile(
+    r'^(?:\d{1,4}\s*-\s*)?([0-9A-F]{16})-Historical[\s_]*Data\b', re.I)
 
 
 def serial_z_nazwy_pliku(fname):
@@ -118,6 +124,7 @@ def serial_z_nazwy_pliku(fname):
       '221_LA_TH_2026_10705098_opracowanie danych.xlsx'  -> '10705098'
       '37025105_2_wynik.xlsx'                            -> '37025105'
       'pomiar_000007263.xlsx'                            -> '000007263'
+      '21 - 24E124785075A40A-Historical Data-2026-11-17_12-33.xlsx' -> '24E124785075A40A'
       '233, 240_LA_TH_2026_000007263_opracowanie danych.xlsx' -> '000007263'
     Data/godzine programy loggerow dokleja w roznych miejscach — LogSoft na
     KONCU, eksport Testo na POCZATKU. Koncowka '_2', '_3' to numer KOLEJNEGO
@@ -137,6 +144,9 @@ def serial_z_nazwy_pliku(fname):
         return _RE_SLOWO_NA_POCZATKU.sub('', serial).strip() or serial
     base = os.path.splitext(os.path.basename(str(fname)))[0]
     base = re.sub(r'_wynik$', '', base, flags=re.I).strip()
+    m_ms = _RE_MILESIGHT.match(base)
+    if m_ms:
+        return m_ms.group(1).upper()
     base = _RE_TS_W_NAZWIE.sub('', base).strip()
     # Przedrostek odcinamy tylko wtedy, gdy cos po nim zostaje — inaczej z nazwy
     # zlozonej z samej daty zrobilby sie pusty klucz.

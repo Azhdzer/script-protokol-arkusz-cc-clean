@@ -137,7 +137,7 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 <!-- AUTO:moduly_md -->
 | Plik | Linie | Funkcje | Rola |
 |---|---:|---:|---|
-| `analizuj_excele.py` | 1807 | 50 | Universal Excel/CSV parser for temperature & humidity data loggers. |
+| `analizuj_excele.py` | 1950 | 57 | Universal Excel/CSV parser for temperature & humidity data loggers. |
 | `app_entry.py` | 95 | 3 | punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe). |
 | `app_gui.py` | 1147 | 51 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
 | `cc_config.py` | 712 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
@@ -149,9 +149,9 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | `generuj_arkusze.py` | 5269 | 162 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
 | `generuj_obserwacje.py` | 4625 | 141 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
 | `generuj_swiadectwa.py` | 369 | 15 | krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych. |
-| `pz_dane.py` | 1616 | 61 | wspolny modul do wczytywania danych przyrzadow z: |
+| `pz_dane.py` | 1626 | 61 | wspolny modul do wczytywania danych przyrzadow z: |
 | `wypelnij_warunki.py` | 177 | 4 | krok 4: warunki srodowiskowe w protokole. |
-| `testy/` | — | 930 testów | 50 plików `test_*.py` (unittest) |
+| `testy/` | — | 940 testów | 51 plików `test_*.py` (unittest) |
 <!-- /AUTO:moduly_md -->
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
@@ -212,7 +212,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**930 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**940 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -372,6 +372,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 - **Podpisy obserwacji CC-04:** przy 21 kolumnach danych blok podpisów trafiał w stare komórki X:Y i ich
   czyszczenie zdzierało z daty format i ramkę (`46328` zamiast daty). Teraz czyszczenie idzie przed zapisem,
   a blok przenosi pełny wygląd i szerokość kolumn z szablonu (wcześniej data bywała `########`).
+- **Eksport Milesight EM320-TH „Historical Data” `.xlsx` (zlecenie 249):** cały wiersz CSV
+  (`Time,Temp/℃,RH/%` → `2026-11-11 09:35:11,26.7,31`) leży w jednej komórce kolumny A — krok 1
+  rozkłada go na kolumny. Pliki rozbite ręcznie „Tekstem jako kolumny” (data i godzina w osobnych
+  kolumnach, nagłówek o kolumnę za wąski albo został w A1) są wyrównywane. Numer przyrządu = EUI
+  z nazwy pliku: `21 - 24E124785075A40A-Historical Data-2026-11-17_12-33 (1).xlsx` → `24E124785075A40A`.
+  Pliki blokady Excela `~$…` w folderze danych są pomijane.
 - **Raport Tempmate M1 w `.xls` (zlecenie 234):** krok 1 szuka tabeli po wierszu `No. | Time | Temperature°C`
   (blok `Summary` uchodził za nagłówek), nazwa wyniku z `Serial Number`. Pusty arkusz (`Graph`) jest pomijany
   zamiast kończyć się błędem. Wiersze zdarzeń (`Low Voltage`) i dziury w zapisie → ostrzeżenie w logu,

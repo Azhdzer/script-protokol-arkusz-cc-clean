@@ -25,7 +25,7 @@ Usage:
 import os, re, sys, io, warnings, traceback
 from pathlib import Path
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date, time as dtime
 
 # PDF (raporty tempmate. i podobne loggery) — opcjonalna zaleznosc.
 try:
@@ -982,20 +982,26 @@ def parse_csv_generic(filepath, output_dir):
     if df is None:
         raise ValueError("Cannot parse CSV file with any separator/encoding")
 
-    t_cols    = find_cols(df.columns, TIME_KW)
-    temp_cols = find_cols(df.columns, TEMP_KW)
-    hum_cols  = find_cols(df.columns, HUM_KW)
-
-    if not t_cols:
+    if not find_cols(df.columns, TIME_KW):
         # Ostatnia proba: plik zaczyna sie od bloku opisowego loggera, a naglowek
         # danych stoi nizej. Pliki czytane dotad poprawnie tu nie trafiaja.
         df_nizej = read_csv_z_blokiem_opisowym(filepath)
         if df_nizej is not None:
             df = df_nizej
-            t_cols    = find_cols(df.columns, TIME_KW)
-            temp_cols = find_cols(df.columns, TEMP_KW)
-            hum_cols  = find_cols(df.columns, HUM_KW)
 
+    zapisz_tabele_tekstowa(df, filepath.name, output_dir)
+
+
+def zapisz_tabele_tekstowa(df, source_name, output_dir, suffix=''):
+    """
+    Tabela z naglowkiem (czas / temperatura / wilgotnosc) -> plik wynikow.
+
+    Wspolne dla CSV i dla CSV spakowanego w jednej kolumnie Excela: kolumny
+    rozpoznawane slowami kluczowymi, z pozycyjnym zapasem dla temperatury.
+    """
+    t_cols    = find_cols(df.columns, TIME_KW)
+    temp_cols = find_cols(df.columns, TEMP_KW)
+    hum_cols  = find_cols(df.columns, HUM_KW)
     if not t_cols:
         raise ValueError(
             f"No time column detected. Available columns: {list(df.columns)}"
@@ -1030,7 +1036,128 @@ def parse_csv_generic(filepath, output_dir):
     temps = df[temp_col].apply(clean_num)
     hums  = df[hum_col].apply(clean_num).tolist() if hum_col else None
 
-    save_result(times.tolist(), temps.tolist(), hums, filepath.name, output_dir)
+    save_result(times.tolist(), temps.tolist(), hums, source_name, output_dir, suffix)
+
+
+# Excel, w ktorym kazdy wiersz CSV lezy w JEDNEJ komorce kolumny A — eksport
+# Milesight EM320-TH ('Historical Data'):
+#   'Time,Temp/℃,RH/%'
+#   '2026-11-11 09:35:11,26.7,31'      (najnowszy zapis na gorze)
+_SEPARATORY_SPAKOWANE = (';', '\t', '|', ',')
+
+
+def rozpakuj_csv_z_kolumny(df_raw, max_wierszy_naglowka=40, min_wierszy=3):
+    """
+    Rozkłada CSV wpisany w jedna kolumne arkusza na tabele z naglowkiem.
+
+    Zwraca DataFrame albo None, gdy arkusz tak nie wyglada: dane poza kolumna A,
+    brak naglowka z czasem i temperatura/wilgotnoscia albo wiersze danych o innej
+    liczbie pol niz naglowek. Separator ',' sprawdzany jako ostatni — przy ';'
+    przecinek bywa znakiem dziesietnym.
+    """
+    if df_raw is None or df_raw.empty:
+        return None
+    if df_raw.shape[1] > 1 and df_raw.iloc[:, 1:].notna().any().any():
+        return None
+    kol = [str(v).strip() for v in df_raw.iloc[:, 0].tolist()
+           if pd.notna(v) and str(v).strip()]
+    naglowek_idx = next(
+        (i for i, s in enumerate(kol[:max_wierszy_naglowka])
+         if TIME_KW.search(s) and (TEMP_KW.search(s) or HUM_KW.search(s))), None)
+    if naglowek_idx is None:
+        return None
+    for sep in _SEPARATORY_SPAKOWANE:
+        naglowek = [p.strip() for p in kol[naglowek_idx].split(sep)]
+        if len(naglowek) < 2:
+            continue
+        wiersze = [[p.strip() for p in s.split(sep)] for s in kol[naglowek_idx + 1:]]
+        pasujace = [w for w in wiersze if len(w) == len(naglowek)]
+        if len(pasujace) < min_wierszy or len(pasujace) * 2 < len(wiersze):
+            continue
+        return pd.DataFrame(pasujace, columns=naglowek)
+    return None
+
+
+def _sama_data(v):
+    """Data bez godziny (datetime o polnocy, date albo tekst 'RRRR-MM-DD')."""
+    if isinstance(v, (datetime, pd.Timestamp)):
+        return v.hour == 0 and v.minute == 0 and v.second == 0
+    if isinstance(v, date):
+        return True
+    return bool(re.fullmatch(r'\d{4}-\d{2}-\d{2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}', str(v).strip()))
+
+
+def _sama_godzina(v):
+    if isinstance(v, dtime):
+        return True
+    return bool(re.fullmatch(r'\d{1,2}:\d{2}(?::\d{2})?', str(v).strip()))
+
+
+def _nazwy_ze_spakowanego_naglowka(tekst):
+    """'Time,Temp/℃,RH/%' w jednej komorce -> ['Time', 'Temp/℃', 'RH/%'] albo None."""
+    for sep in _SEPARATORY_SPAKOWANE:
+        czesci = [p.strip() for p in str(tekst).split(sep)]
+        if len(czesci) >= 2 and TIME_KW.search(czesci[0]) and all(czesci):
+            return czesci
+    return None
+
+
+def scal_rozdzielona_date_i_godzine(df, probka=20):
+    """
+    Wyrownuje naglowek eksportu Milesight rozbitego recznie 'Tekstem jako kolumny'.
+
+    Spotykane warianty (dane zawsze: data | godzina | T | RH, bo spacja w
+    '2026-11-17 12:37:47' tez dzieli komorke):
+      * naglowek rozbity: 'Time | Temp | RH | (pusto)' — o kolumne za waski,
+      * naglowek NIE rozbity: 'Time,Temp/℃,RH/%' w A1, reszta pusta.
+    Bez korekty temperatura byla czytana z kolumny godziny i plik konczyl sie
+    'Brak prawidlowych danych'.
+
+    Gdy rozbite sa tylko dane, a czas jest w jednej komorce, wystarczy nadac
+    kolumnom nazwy ze spakowanego naglowka.
+
+    Zwraca DataFrame z czasem w pierwszej kolumnie i naglowkami nad swoimi
+    danymi — albo df bez zmian, gdy arkusz tak nie wyglada.
+    """
+    if df.shape[1] < 2:
+        return df
+    kolumny = list(df.columns)
+    if _licz_liczby(df, kolumny[-1]) == 0:
+        return df
+    puste = [str(c).startswith('Unnamed') for c in kolumny]
+    nazwy = _nazwy_ze_spakowanego_naglowka(kolumny[0]) if all(puste[1:]) else None
+    spakowany = nazwy is not None
+    if not spakowany:
+        if not puste[-1] or any(puste[:-1]):
+            return df
+        nazwy = kolumny[:-1]
+    if not nazwy or not TIME_KW.search(str(nazwy[0])) or len(set(map(str, nazwy))) < len(nazwy):
+        return df
+
+    if spakowany and len(nazwy) == len(kolumny):
+        print(f"      ⚠  Naglowek w jednej komorce ('{kolumny[0]}') — rozdzielono nazwy kolumn")
+        return df.set_axis(nazwy, axis=1)
+
+    if len(nazwy) != len(kolumny) - 1 or TIME_KW.search(str(nazwy[1])):
+        return df
+    c0, c1 = kolumny[0], kolumny[1]
+    para = df[[c0, c1]].dropna().head(probka)
+    if para.empty or not (para[c0].map(_sama_data).all() and para[c1].map(_sama_godzina).all()):
+        return df
+
+    def _tekst_daty(v):
+        if isinstance(v, (datetime, pd.Timestamp, date)):
+            return v.strftime('%Y-%m-%d')
+        return str(v).strip()
+
+    czas = [parse_dt(f"{_tekst_daty(d)} {g}") if pd.notna(d) and pd.notna(g) else None
+            for d, g in zip(df[c0], df[c1])]
+    nowy = pd.DataFrame({nazwy[0]: czas})
+    for i in range(1, len(nazwy)):
+        nowy[nazwy[i]] = df.iloc[:, i + 1].values
+    print(f"      ⚠  Data i godzina w osobnych kolumnach, naglowek przesuniety o kolumne "
+          f"— scalono czas i wyrownano naglowki")
+    return nowy
 
 
 def parse_excel_inspect(filepath, output_dir):
@@ -1100,6 +1227,19 @@ def parse_excel_inspect(filepath, output_dir):
                 if DEBUG:
                     traceback.print_exc()
 
+        # ── CSV spakowany w kolumnie A (Milesight 'Historical Data') ────────
+        df_csv = rozpakuj_csv_z_kolumny(df_raw)
+        if df_csv is not None:
+            print(f"      → CSV w jednej kolumnie arkusza "
+                  f"({len(df_csv)} wierszy, kolumny: {', '.join(map(str, df_csv.columns))})")
+            try:
+                zapisz_tabele_tekstowa(df_csv, filepath.name, output_dir, tag)
+                continue
+            except Exception as e:
+                print(f"      ✗ CSV w kolumnie — blad: {e}")
+                if DEBUG:
+                    traceback.print_exc()
+
         # ── Tempmate M1 (metadane + 'Summary' przed tabela) ─────────────────
         tempmate_idx = _wiersz_tabeli_tempmate(df_raw)
         if tempmate_idx is not None:
@@ -1127,6 +1267,7 @@ def parse_excel_inspect(filepath, output_dir):
                     filepath, header=int(header_idx), engine=engine, sheet_name=sheet,
                     engine_kwargs=_ek(engine)
                 )
+                df = scal_rozdzielona_date_i_godzine(df)
                 t_cols    = find_cols(df.columns, TIME_KW)
                 temp_cols = find_cols(df.columns, TEMP_KW)
                 hum_cols  = find_cols(df.columns, HUM_KW)
@@ -1764,6 +1905,8 @@ def main():
     files = sorted(
         f for f in input_dir.iterdir()
         if f.is_file() and f.suffix.lower() in SUPPORTED_EXT
+        # '~$plik.xlsx' to plik blokady Excela (ktos ma oryginal otwarty) — nie dane.
+        and not f.name.startswith('~$')
     )
 
     # Wybor z panelu zawezajacy wsad. Bez niego (uruchomienie reczne) bierzemy

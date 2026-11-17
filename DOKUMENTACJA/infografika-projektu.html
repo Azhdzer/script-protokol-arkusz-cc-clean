@@ -53,7 +53,7 @@
 <section id="przeglad">
 <h2>Przegląd</h2>
 <!-- AUTO:statystyki -->
-<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 300</b><span>linii kodu</span></div><div class="stat"><b>628</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>930</b><span>testów (50 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 16.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 453</b><span>linii kodu</span></div><div class="stat"><b>635</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>940</b><span>testów (51 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 17.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
 <!-- /AUTO:statystyki -->
 <p>Python 3 + PySide6 (panel), openpyxl (zapis bez Excela), xlwings / pywin32 (Excel COM — przeliczanie formuł, linki,
 wstawianie wierszy), python-docx (świadectwa), pandas (parsery logów), pypdf (PZ). Jeden plik <code>ProtokolCC.exe</code> (PyInstaller).</p>
@@ -270,7 +270,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <h2>Moduły</h2>
 <!-- AUTO:moduly -->
 <table><thead><tr><th>Plik</th><th class="r">Linie</th><th class="r">Funkcje</th><th>Rola</th></tr></thead><tbody>
-<tr><td><code>analizuj_excele.py</code></td><td class='r'>1807</td><td class='r'>50</td><td>Universal Excel/CSV parser for temperature &amp; humidity data loggers.</td></tr>
+<tr><td><code>analizuj_excele.py</code></td><td class='r'>1950</td><td class='r'>57</td><td>Universal Excel/CSV parser for temperature &amp; humidity data loggers.</td></tr>
 <tr><td><code>app_entry.py</code></td><td class='r'>95</td><td class='r'>3</td><td>punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).</td></tr>
 <tr><td><code>app_gui.py</code></td><td class='r'>1147</td><td class='r'>51</td><td>panel sterujacy calym obiegiem wzorcowania (PySide6).</td></tr>
 <tr><td><code>cc_config.py</code></td><td class='r'>712</td><td class='r'>16</td><td>jedno zrodlo prawdy o ustawieniach calego obiegu.</td></tr>
@@ -282,7 +282,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td><code>generuj_arkusze.py</code></td><td class='r'>5269</td><td class='r'>162</td><td>Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</td></tr>
 <tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4625</td><td class='r'>141</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
 <tr><td><code>generuj_swiadectwa.py</code></td><td class='r'>369</td><td class='r'>15</td><td>krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych.</td></tr>
-<tr><td><code>pz_dane.py</code></td><td class='r'>1616</td><td class='r'>61</td><td>wspolny modul do wczytywania danych przyrzadow z:</td></tr>
+<tr><td><code>pz_dane.py</code></td><td class='r'>1626</td><td class='r'>61</td><td>wspolny modul do wczytywania danych przyrzadow z:</td></tr>
 <tr><td><code>wypelnij_warunki.py</code></td><td class='r'>177</td><td class='r'>4</td><td>krok 4: warunki srodowiskowe w protokole.</td></tr>
 </tbody></table>
 <!-- /AUTO:moduly -->
@@ -292,7 +292,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <h2>Spis funkcji</h2>
 <p class="muted small">Numer linii, nazwa, pierwsza linia opisu (docstring). Kliknij moduł, żeby rozwinąć.</p>
 <!-- AUTO:funkcje -->
-<details><summary><code>analizuj_excele.py</code> — 50 funkcji, 1807 linii <span class='muted'>· Universal Excel/CSV parser for temperature &amp; humidity data loggers.</span></summary>
+<details><summary><code>analizuj_excele.py</code> — 57 funkcji, 1950 linii <span class='muted'>· Universal Excel/CSV parser for temperature &amp; humidity data loggers.</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>64</td><td><code>_ek</code></td><td></td></tr>
 <tr><td class='r muted'>82</td><td><code>_mapa_pz</code></td><td>Przyrzady z PZ (wczytywane raz, przy pierwszym zapisie wyniku).</td></tr>
@@ -326,24 +326,31 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>882</td><td><code>parse_hobo</code></td><td>HOBO CSV - skip title row, detect columns by keyword.</td></tr>
 <tr><td class='r muted'>911</td><td><code>parse_aranet</code></td><td>Aranet multi-sensor CSV - one output file per sensor.</td></tr>
 <tr><td class='r muted'>979</td><td><code>parse_csv_generic</code></td><td>Generic CSV - smart separator/encoding detection + keyword column mapping.</td></tr>
-<tr><td class='r muted'>1036</td><td><code>parse_excel_inspect</code></td><td>Excel file: auto-detect sub-format per sheet.</td></tr>
-<tr><td class='r muted'>1175</td><td><code>parse_comet_txt</code></td><td>Comet/TFA text export (.txt) — two sub-formats after a metadata header block:</td></tr>
-<tr><td class='r muted'>1233</td><td><code>_licz_liczby</code></td><td>Ile wartosci w kolumnie da sie odczytac jako liczbe (z przecinkiem tez).</td></tr>
-<tr><td class='r muted'>1240</td><td><code>_dominujaca_jednostka</code></td><td>Jednostka kolumny — o ile kolumna JEST kolumna jednostki: ten sam krotki,</td></tr>
-<tr><td class='r muted'>1256</td><td><code>_kolumny_wg_jednostek</code></td><td>Uklad &#x27;wartosc + jednostka obok&#x27;. Logger zapisuje kanaly ogolnie, wiec nazwa</td></tr>
-<tr><td class='r muted'>1291</td><td><code>_best_numeric_col</code></td><td>Spośród podanych kolumn zwróć (nazwa, liczba_wartości) tej z największą liczbą</td></tr>
-<tr><td class='r muted'>1306</td><td><code>parse_txt_generic</code></td><td>Generyczny .txt z separatorem (np. log termostatu xTHERM przez COM:</td></tr>
-<tr><td class='r muted'>1373</td><td><code>_find_col</code></td><td>Znajdź kolumnę po dokładnej nazwie (lub zawieraniu), bez względu na wielkość liter.</td></tr>
-<tr><td class='r muted'>1389</td><td><code>_save_xtherm</code></td><td>Zapis wyniku termostatu xTHERM: dwie kolumny temperatury (wewn. + zewn.)</td></tr>
-<tr><td class='r muted'>1397</td><td><code>_col</code></td><td></td></tr>
-<tr><td class='r muted'>1427</td><td><code>parse_xtherm_com</code></td><td>Termostat xTHERM (log przez COM, naglowek &#x27;czas odbioru;...&#x27;).</td></tr>
-<tr><td class='r muted'>1458</td><td><code>parse_pdf_logger</code></td><td>Raporty PDF loggerow temperatury/wilgotnosci (np. tempmate. Data Report).</td></tr>
-<tr><td class='r muted'>1512</td><td><code>parse_putty</code></td><td>Log z terminala PuTTY z czujnika P/T/RH (Vaisala i pokrewne). Linie danych maja</td></tr>
-<tr><td class='r muted'>1570</td><td><code>parse_multimetr_przetworniki</code></td><td>Eksport multimetru z wyjsciami PRZETWORNIKOW (zlecenie 230: 1586A, kolumny</td></tr>
-<tr><td class='r muted'>1623</td><td><code>process_file</code></td><td></td></tr>
-<tr><td class='r muted'>1642</td><td><code>_glowna_sesja</code></td><td>Zwraca NAJDLUZSZY ciagly blok pomiarow z ramki `d` (posortowanej po &#x27;Czas&#x27;).</td></tr>
-<tr><td class='r muted'>1665</td><td><code>zbuduj_zestawienie</code></td><td>Laczy pomiary WSZYSTKICH przetworzonych przyrzadow w jeden plik, wyrownane po czasie:</td></tr>
-<tr><td class='r muted'>1739</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>995</td><td><code>zapisz_tabele_tekstowa</code></td><td>Tabela z naglowkiem (czas / temperatura / wilgotnosc) -&gt; plik wynikow.</td></tr>
+<tr><td class='r muted'>1049</td><td><code>rozpakuj_csv_z_kolumny</code></td><td>Rozkłada CSV wpisany w jedna kolumne arkusza na tabele z naglowkiem.</td></tr>
+<tr><td class='r muted'>1081</td><td><code>_sama_data</code></td><td>Data bez godziny (datetime o polnocy, date albo tekst &#x27;RRRR-MM-DD&#x27;).</td></tr>
+<tr><td class='r muted'>1090</td><td><code>_sama_godzina</code></td><td></td></tr>
+<tr><td class='r muted'>1096</td><td><code>_nazwy_ze_spakowanego_naglowka</code></td><td>&#x27;Time,Temp/℃,RH/%&#x27; w jednej komorce -&gt; [&#x27;Time&#x27;, &#x27;Temp/℃&#x27;, &#x27;RH/%&#x27;] albo None.</td></tr>
+<tr><td class='r muted'>1105</td><td><code>scal_rozdzielona_date_i_godzine</code></td><td>Wyrownuje naglowek eksportu Milesight rozbitego recznie &#x27;Tekstem jako kolumny&#x27;.</td></tr>
+<tr><td class='r muted'>1148</td><td><code>_tekst_daty</code></td><td></td></tr>
+<tr><td class='r muted'>1163</td><td><code>parse_excel_inspect</code></td><td>Excel file: auto-detect sub-format per sheet.</td></tr>
+<tr><td class='r muted'>1316</td><td><code>parse_comet_txt</code></td><td>Comet/TFA text export (.txt) — two sub-formats after a metadata header block:</td></tr>
+<tr><td class='r muted'>1374</td><td><code>_licz_liczby</code></td><td>Ile wartosci w kolumnie da sie odczytac jako liczbe (z przecinkiem tez).</td></tr>
+<tr><td class='r muted'>1381</td><td><code>_dominujaca_jednostka</code></td><td>Jednostka kolumny — o ile kolumna JEST kolumna jednostki: ten sam krotki,</td></tr>
+<tr><td class='r muted'>1397</td><td><code>_kolumny_wg_jednostek</code></td><td>Uklad &#x27;wartosc + jednostka obok&#x27;. Logger zapisuje kanaly ogolnie, wiec nazwa</td></tr>
+<tr><td class='r muted'>1432</td><td><code>_best_numeric_col</code></td><td>Spośród podanych kolumn zwróć (nazwa, liczba_wartości) tej z największą liczbą</td></tr>
+<tr><td class='r muted'>1447</td><td><code>parse_txt_generic</code></td><td>Generyczny .txt z separatorem (np. log termostatu xTHERM przez COM:</td></tr>
+<tr><td class='r muted'>1514</td><td><code>_find_col</code></td><td>Znajdź kolumnę po dokładnej nazwie (lub zawieraniu), bez względu na wielkość liter.</td></tr>
+<tr><td class='r muted'>1530</td><td><code>_save_xtherm</code></td><td>Zapis wyniku termostatu xTHERM: dwie kolumny temperatury (wewn. + zewn.)</td></tr>
+<tr><td class='r muted'>1538</td><td><code>_col</code></td><td></td></tr>
+<tr><td class='r muted'>1568</td><td><code>parse_xtherm_com</code></td><td>Termostat xTHERM (log przez COM, naglowek &#x27;czas odbioru;...&#x27;).</td></tr>
+<tr><td class='r muted'>1599</td><td><code>parse_pdf_logger</code></td><td>Raporty PDF loggerow temperatury/wilgotnosci (np. tempmate. Data Report).</td></tr>
+<tr><td class='r muted'>1653</td><td><code>parse_putty</code></td><td>Log z terminala PuTTY z czujnika P/T/RH (Vaisala i pokrewne). Linie danych maja</td></tr>
+<tr><td class='r muted'>1711</td><td><code>parse_multimetr_przetworniki</code></td><td>Eksport multimetru z wyjsciami PRZETWORNIKOW (zlecenie 230: 1586A, kolumny</td></tr>
+<tr><td class='r muted'>1764</td><td><code>process_file</code></td><td></td></tr>
+<tr><td class='r muted'>1783</td><td><code>_glowna_sesja</code></td><td>Zwraca NAJDLUZSZY ciagly blok pomiarow z ramki `d` (posortowanej po &#x27;Czas&#x27;).</td></tr>
+<tr><td class='r muted'>1806</td><td><code>zbuduj_zestawienie</code></td><td>Laczy pomiary WSZYSTKICH przetworzonych przyrzadow w jeden plik, wyrownane po czasie:</td></tr>
+<tr><td class='r muted'>1880</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
 <details><summary><code>app_entry.py</code> — 3 funkcji, 95 linii <span class='muted'>· punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).</span></summary>
 <table class="fn"><tbody>
@@ -891,69 +898,69 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>257</td><td><code>main</code></td><td></td></tr>
 <tr><td class='r muted'>303</td><td><code>dane_miesiaca</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>pz_dane.py</code> — 61 funkcji, 1616 linii <span class='muted'>· wspolny modul do wczytywania danych przyrzadow z:</span></summary>
+<details><summary><code>pz_dane.py</code> — 61 funkcji, 1626 linii <span class='muted'>· wspolny modul do wczytywania danych przyrzadow z:</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>48</td><td><code>__init__</code></td><td></td></tr>
 <tr><td class='r muted'>66</td><td><code>__repr__</code></td><td></td></tr>
 <tr><td class='r muted'>76</td><td><code>normalizuj_serial</code></td><td>Klucz do dopasowania: bez spacji, wielkie litery, bez kropek/przecinkow na koncu.</td></tr>
-<tr><td class='r muted'>111</td><td><code>serial_z_nazwy_pliku</code></td><td>Nr fabryczny przyrzadu z nazwy pliku loggera albo pliku wynikow — klucz</td></tr>
-<tr><td class='r muted'>153</td><td><code>prefiks_z_szablonu</code></td><td>&#x27;xxx_LA_TH_2026 - protokol CC.xlsx&#x27; + &#x27;221&#x27; -&gt; &#x27;221_LA_TH_2026&#x27;.</td></tr>
-<tr><td class='r muted'>158</td><td><code>nazwa_pliku_opracowania</code></td><td></td></tr>
-<tr><td class='r muted'>162</td><td><code>zlecenie_przyrzadu</code></td><td>Numer zlecenia przyrzadu z PZ (szukany po nr fabrycznym albo ewidencyjnym —</td></tr>
-<tr><td class='r muted'>173</td><td><code>_norm_txt</code></td><td>Normalizacja nazw (producent/typ) do dopasowania rozmytego.</td></tr>
-<tr><td class='r muted'>180</td><td><code>_oczysc</code></td><td>Porzadkuje wartosc do wpisania: zbedne spacje, koncowe znaki interpunkcyjne.</td></tr>
-<tr><td class='r muted'>241</td><td><code>_ewidencyjne_z_nawiasow</code></td><td>Nr ewidencyjne z nawiasow za numerami fabrycznymi, rownolegle do _wytnij_serial_liste.</td></tr>
-<tr><td class='r muted'>255</td><td><code>_wytnij_serial_liste</code></td><td>Zwraca liste serial-i z czesci &#x27;obiekt&#x27; (obsluguje kilka po przecinku).</td></tr>
-<tr><td class='r muted'>264</td><td><code>_parsuj_pole</code></td><td>Zwraca (typ, wytworca) z fragmentu tekstu.</td></tr>
-<tr><td class='r muted'>278</td><td><code>_numer_ewidencyjny</code></td><td>Numer ewidencyjny z fragmentu opisu (znane zapisy, potem dowolna etykieta).</td></tr>
-<tr><td class='r muted'>291</td><td><code>sklej_numer</code></td><td>Numer rozerwany przez warstwe tekstowa PDF (tekst wyjustowany): &#x27;371 72104&#x27; -&gt;</td></tr>
-<tr><td class='r muted'>304</td><td><code>rozdziel_wytworce</code></td><td>&#x27;Testo – wzorcowanie czujnika&#x27; -&gt; (&#x27;Testo&#x27;, &#x27;– wzorcowanie czujnika&#x27;).</td></tr>
-<tr><td class='r muted'>313</td><td><code>typ_bez_producenta</code></td><td>&#x27;testo 175T2&#x27; przy producencie &#x27;Testo&#x27; -&gt; &#x27;175T2&#x27;. W protokole producent</td></tr>
-<tr><td class='r muted'>335</td><td><code>_parsuj_bullet</code></td><td>Jeden wypunktowany podpunkt: &#x27;• nr fabr.: 40118669, nr ewid.: Q/LOG/36&#x27;</td></tr>
-<tr><td class='r muted'>395</td><td><code>_parsuj_wskaznik_po_obiekcie</code></td><td>Uklad &#x27;czujnik + wskaznik&#x27;: polaczony przyrzad, w ktorym czesc odczytowa ma</td></tr>
-<tr><td class='r muted'>465</td><td><code>_numeracja_to_podpunkty</code></td><td>Czy &#x27;1) 2) 3)&#x27; to SZTUKI jednej pozycji, a nie osobne pozycje PZ?</td></tr>
-<tr><td class='r muted'>493</td><td><code>_parsuj_wpis</code></td><td>Parsuje jeden wpis &#x27;Obiekty wzorcowania&#x27; -&gt; lista PZPrzyrzad.</td></tr>
-<tr><td class='r muted'>583</td><td><code>_parsuj_zleceniodawce</code></td><td>Zwraca blok adresowy ZLECENIODAWCY (nazwa + ulica + kod/miasto) jako tekst</td></tr>
-<tr><td class='r muted'>596</td><td><code>_parsuj_uzytkownikow_wg_pozycji</code></td><td>Mapa: numer pozycji przyrzadu -&gt; blok adresowy JEGO uzytkownika.</td></tr>
-<tr><td class='r muted'>626</td><td><code>_parsuj_uzytkownik</code></td><td>Zwraca blok adresowy uzytkownika (bez pustych linii i notatki &#x27;Uwaga&#x27;), albo &#x27;&#x27;.</td></tr>
-<tr><td class='r muted'>635</td><td><code>_numer_zlecenia_th</code></td><td>Zwraca numer zlecenia (samo &#x27;119&#x27;); przy wielu zleceniach preferuje /LA/TH/.</td></tr>
-<tr><td class='r muted'>657</td><td><code>_numery_pozycji</code></td><td>Numery pozycji z naglowka wiersza metody: &#x27;1), 8), 9)&#x27; oraz zakresy &#x27;2) ÷ 7)&#x27;.</td></tr>
-<tr><td class='r muted'>667</td><td><code>_pozycje_komory</code></td><td>Numery pozycji wzorcowanych w KOMORZE KLIMATYCZNEJ (nasz protokol CC/CC-04) —</td></tr>
-<tr><td class='r muted'>733</td><td><code>_bez_przypisow</code></td><td>Usuwa linie przypisow o powtorzeniu punktu (histereza).</td></tr>
-<tr><td class='r muted'>746</td><td><code>_punkty_z_fragmentu</code></td><td>Punkty (T, RH|None) z jednego fragmentu sekcji &#x27;Zakres wzorcowania&#x27;.</td></tr>
-<tr><td class='r muted'>815</td><td><code>_scal_punkty</code></td><td>Laczy punkty z wielu POZYCJI (przyrzadow) i wielu PZ w jedna liste punktow komory.</td></tr>
-<tr><td class='r muted'>839</td><td><code>punkty_wzorcowania</code></td><td>Punkty pomiarowe ZAMOWIONE w PZ (sekcja &#x27;Zakres wzorcowania&#x27;) — lista krotek</td></tr>
-<tr><td class='r muted'>860</td><td><code>punkty_wzorcowania_grupy</code></td><td>To samo co punkty_wzorcowania, ale z podzialem na POZYCJE (przyrzady) — jedna grupa</td></tr>
-<tr><td class='r muted'>892</td><td><code>punkty_wg_pozycji</code></td><td>Mapa: numer pozycji PZ -&gt; lista punktow zamowionych DLA TEJ pozycji (przyrzadu).</td></tr>
-<tr><td class='r muted'>924</td><td><code>wczytaj_punkty_przyrzadow</code></td><td>Mapa: nr fabryczny/ewidencyjny przyrzadu -&gt; punkty ZAMOWIONE wlasnie dla niego.</td></tr>
-<tr><td class='r muted'>961</td><td><code>_opis_punktow</code></td><td></td></tr>
-<tr><td class='r muted'>965</td><td><code>wczytaj_punkty</code></td><td>Punkty zamowione we WSZYSTKICH PZ z folderu i we wszystkich ich pozycjach.</td></tr>
-<tr><td class='r muted'>999</td><td><code>_cel_skrotu</code></td><td>Plik, na ktory wskazuje skrot Windows (.lnk), albo None.</td></tr>
-<tr><td class='r muted'>1010</td><td><code>pliki_pz</code></td><td>PDF-y PZ z folderu: pliki .pdf ORAZ skroty .lnk do PDF-ow.</td></tr>
-<tr><td class='r muted'>1046</td><td><code>_zasilanie_wg_pozycji</code></td><td>{pozycja: &#x27;Uz = (24,0 ± 0,1) V DC.&#x27;} z bloku &#x27;UWAGA:&#x27;.</td></tr>
-<tr><td class='r muted'>1065</td><td><code>parsuj_pdf</code></td><td>Parsuje jeden PDF PZ -&gt; lista PZPrzyrzad.</td></tr>
-<tr><td class='r muted'>1074</td><td><code>_podziel_na_wpisy</code></td><td>re.split sekcji po &#x27;1) &#x27;, &#x27;2) &#x27; ... -&gt; [prefix, &#x27;1&#x27;, tekst1, &#x27;2&#x27;, tekst2, ...].</td></tr>
-<tr><td class='r muted'>1097</td><td><code>rok_produkcji</code></td><td>Rok produkcji z opisu przyrzadu w PZ: pierwsze &#x27;year of production: NNNN&#x27; po jego</td></tr>
-<tr><td class='r muted'>1113</td><td><code>parsuj_tekst</code></td><td>Parsuje TEKST wyciagniety z PZ -&gt; lista PZPrzyrzad.</td></tr>
-<tr><td class='r muted'>1191</td><td><code>wczytaj_pz</code></td><td>Wczytuje wszystkie PDFy z folder_pz -&gt; dict[normalizuj_serial(nr_fabr) -&gt; PZPrzyrzad].</td></tr>
-<tr><td class='r muted'>1241</td><td><code>_do_float</code></td><td></td></tr>
-<tr><td class='r muted'>1248</td><td><code>wczytaj_zestawienie</code></td><td>Wczytuje liste wpisow: [(producent_norm, typ_norm, t_res, rh_res), ...].</td></tr>
-<tr><td class='r muted'>1285</td><td><code>rozdzielczosc_zestawienie</code></td><td>Rozmyte dopasowanie (producent, typ) do Zestawienia. Kolumna Typ bywa wieloliniowa</td></tr>
-<tr><td class='r muted'>1340</td><td><code>rozdzielczosci_wg_temperatury</code></td><td>Lista [(zakres, wartosc), ...] z opisu rozdzielczosci temperatury.</td></tr>
-<tr><td class='r muted'>1406</td><td><code>_odleglosc_od_zakresu</code></td><td></td></tr>
-<tr><td class='r muted'>1413</td><td><code>rozdzielczosc_dla_temperatury</code></td><td>Rozdzielczosc temperatury do wpisania w zakladce o temperaturze `temp`.</td></tr>
-<tr><td class='r muted'>1454</td><td><code>_fmt_t</code></td><td>Temperatura do komunikatu: &#x27;70&#x27;, &#x27;-10&#x27;, &#x27;4,5&#x27;.</td></tr>
-<tr><td class='r muted'>1463</td><td><code>rozdzielczosc_z_kolumny</code></td><td>Rozdzielczosc = najmniejsze miejsce dziesietne, ktore sie zmienia w kolumnie:</td></tr>
-<tr><td class='r muted'>1506</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>1516</td><td><code>jednostka</code></td><td></td></tr>
-<tr><td class='r muted'>1519</td><td><code>__repr__</code></td><td></td></tr>
-<tr><td class='r muted'>1524</td><td><code>_bez_kreski</code></td><td></td></tr>
-<tr><td class='r muted'>1529</td><td><code>sygnal_z_tekstu</code></td><td>&#x27;Prąd&#x27; / &#x27;Napięcie&#x27; z wpisu operatora albo z jednostki (&#x27;mA&#x27;, &#x27;V&#x27;, &#x27;U&#x27;, &#x27;I&#x27;).</td></tr>
-<tr><td class='r muted'>1541</td><td><code>przetworniki_z_tabeli</code></td><td>{nr fabryczny (znormalizowany): Przetwornik} z tabeli panelu.</td></tr>
-<tr><td class='r muted'>1558</td><td><code>_liczba_txt</code></td><td></td></tr>
-<tr><td class='r muted'>1562</td><td><code>opis_skalowania</code></td><td>Tekst do Strony 2 (M — temperatura, N — wilgotnosc), jak wpisywany recznie:</td></tr>
-<tr><td class='r muted'>1582</td><td><code>zakresy_ze_skalowania</code></td><td>Opis ze Strony 2 -&gt; ((wy_od, wy_do, &#x27;mA&#x27;|&#x27;V&#x27;|None), (od, do)) albo None.</td></tr>
-<tr><td class='r muted'>1600</td><td><code>kanaly_z_uwag</code></td><td>&#x27;Uwagi&#x27; ze Strony 2 -&gt; (kanal_t, kanal_rh, kanaly_bez_opisu). Kanaly z opisem</td></tr>
+<tr><td class='r muted'>117</td><td><code>serial_z_nazwy_pliku</code></td><td>Nr fabryczny przyrzadu z nazwy pliku loggera albo pliku wynikow — klucz</td></tr>
+<tr><td class='r muted'>163</td><td><code>prefiks_z_szablonu</code></td><td>&#x27;xxx_LA_TH_2026 - protokol CC.xlsx&#x27; + &#x27;221&#x27; -&gt; &#x27;221_LA_TH_2026&#x27;.</td></tr>
+<tr><td class='r muted'>168</td><td><code>nazwa_pliku_opracowania</code></td><td></td></tr>
+<tr><td class='r muted'>172</td><td><code>zlecenie_przyrzadu</code></td><td>Numer zlecenia przyrzadu z PZ (szukany po nr fabrycznym albo ewidencyjnym —</td></tr>
+<tr><td class='r muted'>183</td><td><code>_norm_txt</code></td><td>Normalizacja nazw (producent/typ) do dopasowania rozmytego.</td></tr>
+<tr><td class='r muted'>190</td><td><code>_oczysc</code></td><td>Porzadkuje wartosc do wpisania: zbedne spacje, koncowe znaki interpunkcyjne.</td></tr>
+<tr><td class='r muted'>251</td><td><code>_ewidencyjne_z_nawiasow</code></td><td>Nr ewidencyjne z nawiasow za numerami fabrycznymi, rownolegle do _wytnij_serial_liste.</td></tr>
+<tr><td class='r muted'>265</td><td><code>_wytnij_serial_liste</code></td><td>Zwraca liste serial-i z czesci &#x27;obiekt&#x27; (obsluguje kilka po przecinku).</td></tr>
+<tr><td class='r muted'>274</td><td><code>_parsuj_pole</code></td><td>Zwraca (typ, wytworca) z fragmentu tekstu.</td></tr>
+<tr><td class='r muted'>288</td><td><code>_numer_ewidencyjny</code></td><td>Numer ewidencyjny z fragmentu opisu (znane zapisy, potem dowolna etykieta).</td></tr>
+<tr><td class='r muted'>301</td><td><code>sklej_numer</code></td><td>Numer rozerwany przez warstwe tekstowa PDF (tekst wyjustowany): &#x27;371 72104&#x27; -&gt;</td></tr>
+<tr><td class='r muted'>314</td><td><code>rozdziel_wytworce</code></td><td>&#x27;Testo – wzorcowanie czujnika&#x27; -&gt; (&#x27;Testo&#x27;, &#x27;– wzorcowanie czujnika&#x27;).</td></tr>
+<tr><td class='r muted'>323</td><td><code>typ_bez_producenta</code></td><td>&#x27;testo 175T2&#x27; przy producencie &#x27;Testo&#x27; -&gt; &#x27;175T2&#x27;. W protokole producent</td></tr>
+<tr><td class='r muted'>345</td><td><code>_parsuj_bullet</code></td><td>Jeden wypunktowany podpunkt: &#x27;• nr fabr.: 40118669, nr ewid.: Q/LOG/36&#x27;</td></tr>
+<tr><td class='r muted'>405</td><td><code>_parsuj_wskaznik_po_obiekcie</code></td><td>Uklad &#x27;czujnik + wskaznik&#x27;: polaczony przyrzad, w ktorym czesc odczytowa ma</td></tr>
+<tr><td class='r muted'>475</td><td><code>_numeracja_to_podpunkty</code></td><td>Czy &#x27;1) 2) 3)&#x27; to SZTUKI jednej pozycji, a nie osobne pozycje PZ?</td></tr>
+<tr><td class='r muted'>503</td><td><code>_parsuj_wpis</code></td><td>Parsuje jeden wpis &#x27;Obiekty wzorcowania&#x27; -&gt; lista PZPrzyrzad.</td></tr>
+<tr><td class='r muted'>593</td><td><code>_parsuj_zleceniodawce</code></td><td>Zwraca blok adresowy ZLECENIODAWCY (nazwa + ulica + kod/miasto) jako tekst</td></tr>
+<tr><td class='r muted'>606</td><td><code>_parsuj_uzytkownikow_wg_pozycji</code></td><td>Mapa: numer pozycji przyrzadu -&gt; blok adresowy JEGO uzytkownika.</td></tr>
+<tr><td class='r muted'>636</td><td><code>_parsuj_uzytkownik</code></td><td>Zwraca blok adresowy uzytkownika (bez pustych linii i notatki &#x27;Uwaga&#x27;), albo &#x27;&#x27;.</td></tr>
+<tr><td class='r muted'>645</td><td><code>_numer_zlecenia_th</code></td><td>Zwraca numer zlecenia (samo &#x27;119&#x27;); przy wielu zleceniach preferuje /LA/TH/.</td></tr>
+<tr><td class='r muted'>667</td><td><code>_numery_pozycji</code></td><td>Numery pozycji z naglowka wiersza metody: &#x27;1), 8), 9)&#x27; oraz zakresy &#x27;2) ÷ 7)&#x27;.</td></tr>
+<tr><td class='r muted'>677</td><td><code>_pozycje_komory</code></td><td>Numery pozycji wzorcowanych w KOMORZE KLIMATYCZNEJ (nasz protokol CC/CC-04) —</td></tr>
+<tr><td class='r muted'>743</td><td><code>_bez_przypisow</code></td><td>Usuwa linie przypisow o powtorzeniu punktu (histereza).</td></tr>
+<tr><td class='r muted'>756</td><td><code>_punkty_z_fragmentu</code></td><td>Punkty (T, RH|None) z jednego fragmentu sekcji &#x27;Zakres wzorcowania&#x27;.</td></tr>
+<tr><td class='r muted'>825</td><td><code>_scal_punkty</code></td><td>Laczy punkty z wielu POZYCJI (przyrzadow) i wielu PZ w jedna liste punktow komory.</td></tr>
+<tr><td class='r muted'>849</td><td><code>punkty_wzorcowania</code></td><td>Punkty pomiarowe ZAMOWIONE w PZ (sekcja &#x27;Zakres wzorcowania&#x27;) — lista krotek</td></tr>
+<tr><td class='r muted'>870</td><td><code>punkty_wzorcowania_grupy</code></td><td>To samo co punkty_wzorcowania, ale z podzialem na POZYCJE (przyrzady) — jedna grupa</td></tr>
+<tr><td class='r muted'>902</td><td><code>punkty_wg_pozycji</code></td><td>Mapa: numer pozycji PZ -&gt; lista punktow zamowionych DLA TEJ pozycji (przyrzadu).</td></tr>
+<tr><td class='r muted'>934</td><td><code>wczytaj_punkty_przyrzadow</code></td><td>Mapa: nr fabryczny/ewidencyjny przyrzadu -&gt; punkty ZAMOWIONE wlasnie dla niego.</td></tr>
+<tr><td class='r muted'>971</td><td><code>_opis_punktow</code></td><td></td></tr>
+<tr><td class='r muted'>975</td><td><code>wczytaj_punkty</code></td><td>Punkty zamowione we WSZYSTKICH PZ z folderu i we wszystkich ich pozycjach.</td></tr>
+<tr><td class='r muted'>1009</td><td><code>_cel_skrotu</code></td><td>Plik, na ktory wskazuje skrot Windows (.lnk), albo None.</td></tr>
+<tr><td class='r muted'>1020</td><td><code>pliki_pz</code></td><td>PDF-y PZ z folderu: pliki .pdf ORAZ skroty .lnk do PDF-ow.</td></tr>
+<tr><td class='r muted'>1056</td><td><code>_zasilanie_wg_pozycji</code></td><td>{pozycja: &#x27;Uz = (24,0 ± 0,1) V DC.&#x27;} z bloku &#x27;UWAGA:&#x27;.</td></tr>
+<tr><td class='r muted'>1075</td><td><code>parsuj_pdf</code></td><td>Parsuje jeden PDF PZ -&gt; lista PZPrzyrzad.</td></tr>
+<tr><td class='r muted'>1084</td><td><code>_podziel_na_wpisy</code></td><td>re.split sekcji po &#x27;1) &#x27;, &#x27;2) &#x27; ... -&gt; [prefix, &#x27;1&#x27;, tekst1, &#x27;2&#x27;, tekst2, ...].</td></tr>
+<tr><td class='r muted'>1107</td><td><code>rok_produkcji</code></td><td>Rok produkcji z opisu przyrzadu w PZ: pierwsze &#x27;year of production: NNNN&#x27; po jego</td></tr>
+<tr><td class='r muted'>1123</td><td><code>parsuj_tekst</code></td><td>Parsuje TEKST wyciagniety z PZ -&gt; lista PZPrzyrzad.</td></tr>
+<tr><td class='r muted'>1201</td><td><code>wczytaj_pz</code></td><td>Wczytuje wszystkie PDFy z folder_pz -&gt; dict[normalizuj_serial(nr_fabr) -&gt; PZPrzyrzad].</td></tr>
+<tr><td class='r muted'>1251</td><td><code>_do_float</code></td><td></td></tr>
+<tr><td class='r muted'>1258</td><td><code>wczytaj_zestawienie</code></td><td>Wczytuje liste wpisow: [(producent_norm, typ_norm, t_res, rh_res), ...].</td></tr>
+<tr><td class='r muted'>1295</td><td><code>rozdzielczosc_zestawienie</code></td><td>Rozmyte dopasowanie (producent, typ) do Zestawienia. Kolumna Typ bywa wieloliniowa</td></tr>
+<tr><td class='r muted'>1350</td><td><code>rozdzielczosci_wg_temperatury</code></td><td>Lista [(zakres, wartosc), ...] z opisu rozdzielczosci temperatury.</td></tr>
+<tr><td class='r muted'>1416</td><td><code>_odleglosc_od_zakresu</code></td><td></td></tr>
+<tr><td class='r muted'>1423</td><td><code>rozdzielczosc_dla_temperatury</code></td><td>Rozdzielczosc temperatury do wpisania w zakladce o temperaturze `temp`.</td></tr>
+<tr><td class='r muted'>1464</td><td><code>_fmt_t</code></td><td>Temperatura do komunikatu: &#x27;70&#x27;, &#x27;-10&#x27;, &#x27;4,5&#x27;.</td></tr>
+<tr><td class='r muted'>1473</td><td><code>rozdzielczosc_z_kolumny</code></td><td>Rozdzielczosc = najmniejsze miejsce dziesietne, ktore sie zmienia w kolumnie:</td></tr>
+<tr><td class='r muted'>1516</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>1526</td><td><code>jednostka</code></td><td></td></tr>
+<tr><td class='r muted'>1529</td><td><code>__repr__</code></td><td></td></tr>
+<tr><td class='r muted'>1534</td><td><code>_bez_kreski</code></td><td></td></tr>
+<tr><td class='r muted'>1539</td><td><code>sygnal_z_tekstu</code></td><td>&#x27;Prąd&#x27; / &#x27;Napięcie&#x27; z wpisu operatora albo z jednostki (&#x27;mA&#x27;, &#x27;V&#x27;, &#x27;U&#x27;, &#x27;I&#x27;).</td></tr>
+<tr><td class='r muted'>1551</td><td><code>przetworniki_z_tabeli</code></td><td>{nr fabryczny (znormalizowany): Przetwornik} z tabeli panelu.</td></tr>
+<tr><td class='r muted'>1568</td><td><code>_liczba_txt</code></td><td></td></tr>
+<tr><td class='r muted'>1572</td><td><code>opis_skalowania</code></td><td>Tekst do Strony 2 (M — temperatura, N — wilgotnosc), jak wpisywany recznie:</td></tr>
+<tr><td class='r muted'>1592</td><td><code>zakresy_ze_skalowania</code></td><td>Opis ze Strony 2 -&gt; ((wy_od, wy_do, &#x27;mA&#x27;|&#x27;V&#x27;|None), (od, do)) albo None.</td></tr>
+<tr><td class='r muted'>1610</td><td><code>kanaly_z_uwag</code></td><td>&#x27;Uwagi&#x27; ze Strony 2 -&gt; (kanal_t, kanal_rh, kanaly_bez_opisu). Kanaly z opisem</td></tr>
 </tbody></table></details>
 <details><summary><code>wypelnij_warunki.py</code> — 4 funkcji, 177 linii <span class='muted'>· krok 4: warunki srodowiskowe w protokole.</span></summary>
 <table class="fn"><tbody>
