@@ -62,6 +62,8 @@ URUCHAMIALNE = {
     "srod":    ("4 · Warunki środowiskowe", "warunki", "wypelnij_warunki.py"),
     # Konczy obieg dla arkuszy zrobionych bez Worda i uzupelnionych pozniej.
     "swiad":   ("5 · Świadectwa z arkuszy", "swiadectwa", "generuj_swiadectwa.py"),
+    # Arkusze ze wszystkimi powtorzeniami punktow — do porownania, bez swiadectw.
+    "porown":  ("6 · Arkusze porównawcze", "porownanie", "generuj_porownanie.py"),
 }
 
 # Ustawienia kroku 2 pokazywane WEWNATRZ karty "Dane wejsciowe", tuz pod lista
@@ -193,6 +195,7 @@ class Okno(QMainWindow):
         self.lista_txt.odswiez(zachowaj=self.wartosci.get("OBS_TXT_FILES") or [])
         self.lista_przetw.odswiez(zachowaj=self.wartosci.get("OBS_PRZETW_PLIKI") or [])
         self.lista_logow.odswiez(zachowaj=self.wartosci.get("ANL_PLIKI") or [])
+        self.lista_porown.odswiez(zachowaj=self.wartosci.get("POR_PROTOKOLY") or [])
         for wiersz in self.kontrolne:
             wiersz.odswiez()
 
@@ -273,6 +276,7 @@ class Okno(QMainWindow):
         self.stos.addWidget(self._strona_arkusze())
         self.stos.addWidget(self._strona_warunki())
         self.stos.addWidget(self._strona_swiadectwa())
+        self.stos.addWidget(self._strona_porownanie())
         self.stos.addWidget(self._strona_zaawansowane())
         return self.stos
 
@@ -288,6 +292,8 @@ class Okno(QMainWindow):
         elif nr == 2:
             self.lista_txt.odswiez()
             self.lista_przetw.odswiez()
+        elif nr == 6:
+            self.lista_porown.odswiez()
 
     def _przewijalna(self):
         """Zwraca (scroll, layout) — kazda strona kroku jest przewijalna."""
@@ -574,6 +580,40 @@ class Okno(QMainWindow):
         lay.addStretch(1)
         return strona
 
+    # ── strona: arkusze porownawcze ──────────────────────────────────────
+    def _folder_porownania(self):
+        """Folder kroku 6 — protokoly do porownania i arkusze porownawcze (tworzony od razu)."""
+        f = str(self.wartosci.get("POR_FOLDER") or "Etap_6_porownanie")
+        pelny = f if os.path.isabs(f) else os.path.join(self.folder, f)
+        try:
+            os.makedirs(pelny, exist_ok=True)
+        except OSError:
+            pass
+        return pelny
+
+    def _strona_porownanie(self):
+        strona, lay = self._strona_kroku("porown")
+        u_prot = C.WG_ENV["POR_PROTOKOLY"]
+        karta, kl = self._karta(u_prot.grupa)
+        et = QLabel(u_prot.etykieta)
+        et.setObjectName("EtykietaPola")
+        op = QLabel(u_prot.opis)
+        op.setObjectName("OpisPola")
+        op.setWordWrap(True)
+        kl.addWidget(et)
+        kl.addWidget(op)
+        # Tylko protokoly — w folderze leza tez dziesiatki arkuszy obliczeniowych.
+        self.lista_porown = ListaPlikow(
+            tuple(u_prot.wzorzec), self._folder_porownania,
+            filtr=lambda n: "protok" in n.lower(),
+            opis_wielu="przyrzady zostana polaczone po nr fabrycznym")
+        self.lista_porown.zmienione.connect(self._zmiana)
+        kl.addWidget(self.lista_porown)
+        lay.addWidget(karta)
+        self._dodaj_pola(lay, C.dla_kroku("porown", C.PODSTAWOWY))
+        lay.addStretch(1)
+        return strona
+
     # ── strona: zaawansowane ─────────────────────────────────────────────
     def _strona_zaawansowane(self):
         scroll, lay = self._przewijalna()
@@ -617,7 +657,8 @@ class Okno(QMainWindow):
         if odp != QMessageBox.Yes:
             return
         dom = C.domyslne()
-        zachowaj = ("CC_FOLDER", "OBS_TXT_FILES", "OBS_PRZETW_PLIKI", "PRZETWORNIKI")
+        zachowaj = ("CC_FOLDER", "OBS_TXT_FILES", "OBS_PRZETW_PLIKI", "PRZETWORNIKI",
+                    "POR_PROTOKOLY")
         for env, pole in self.pola.items():
             if env in zachowaj:
                 continue
@@ -693,6 +734,7 @@ class Okno(QMainWindow):
         self.wartosci["OBS_TXT_FILES"] = self.lista_txt.zaznaczone()
         self.wartosci["OBS_PRZETW_PLIKI"] = self.lista_przetw.zaznaczone()
         self.wartosci["ANL_PLIKI"] = self.lista_logow.zaznaczone()
+        self.wartosci["POR_PROTOKOLY"] = self.lista_porown.zaznaczone()
 
     def _zapisz(self):
         self._zbierz()
@@ -775,6 +817,23 @@ class Okno(QMainWindow):
                              "swiadectwa beda BEZ warunkow srodowiskowych.")
                 if any(n.startswith("~$") for n in os.listdir(pelny)):
                     p.append("Ktorys plik w folderze kroku 5 jest otwarty w Excelu — zamknij go.")
+        if "porown" in kroki:
+            wybrane = self.lista_porown.zaznaczone()
+            if not wybrane:
+                p.append("Nie zaznaczono protokolu do porownania (krok 6).")
+            for n in wybrane:
+                if not os.path.exists(os.path.join(self._folder_porownania(), n)):
+                    p.append(f"Zaznaczonego protokolu nie ma w folderze kroku 6: {n}")
+                elif "Strona 3" not in nazwy_arkuszy(os.path.join(self._folder_porownania(), n)):
+                    p.append(f"'{n}' — to nie wyglada na protokol (brak zakladki 'Strona 3').")
+            pole = self.pola.get("POR_SZABLON")
+            if pole and pole.brak_pliku():
+                p.append(f"Nie znaleziono szablonu arkusza (krok 6) → "
+                         f"'{pole.wartosc() or '(nie wybrano)'}'")
+            for nazwa in str(self.wartosci.get("GEN_LINKOWANE", "")).split(";"):
+                nazwa = nazwa.strip()
+                if nazwa and not os.path.exists(os.path.join(self.folder, nazwa)):
+                    p.append(f"Brak pliku linkowanego w folderze roboczym: {nazwa}")
         if "srod" in kroki:
             pole = self.pola.get("SR_PROTOKOL")
             if pole and pole.brak_pliku():

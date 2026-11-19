@@ -68,7 +68,7 @@
   <h1>Generator arkuszy i protokołów<br>wzorcowania CC / CC‑04</h1>
   <div class="st">Instrukcja użytkownika i opis działania — od logów przyrządów do świadectw wzorcowania.</div>
   <!-- AUTO:statystyki -->
-<div class="stats"><div class="stat"><b>14</b><span>modułów Python</span></div><div class="stat"><b>18 453</b><span>linii kodu</span></div><div class="stat"><b>635</b><span>funkcji</span></div><div class="stat"><b>94</b><span>ustawień w panelu</span></div><div class="stat"><b>940</b><span>testów (51 plików)</span></div><div class="stat"><b>5</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 17.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<div class="stats"><div class="stat"><b>15</b><span>modułów Python</span></div><div class="stat"><b>19 157</b><span>linii kodu</span></div><div class="stat"><b>657</b><span>funkcji</span></div><div class="stat"><b>99</b><span>ustawień w panelu</span></div><div class="stat"><b>960</b><span>testów (52 plików)</span></div><div class="stat"><b>6</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 19.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
 <!-- /AUTO:statystyki -->
   <div class="meta">
     <b>Wersja 2.0</b> · listopad 2026 · opracował Artsiom Azhdzer<br>
@@ -799,6 +799,14 @@ flowchart TD
 <tr><td><span class='muted'>Dane wejsciowe</span><br><b>Folder z arkuszami obliczeniowymi</b></td><td><code>SW_FOLDER</code></td><td>Etap_5_ark_obl_to_word</td><td>Tu wkladasz gotowe arkusze obliczeniowe (kopie z kroku 3, uzupelnione). Protokoly z pomiarow (do warunkow srodowiskowych) — w tym folderze albo w folderze glownym (tam brane tylko protokoly tego samego zlecenia, np. 232_...). Swiadectwa powstaja w tym samym folderze.</td></tr>
 <tr><td><span class='muted'>Numeracja</span><br><b>Numer pierwszego swiadectwa</b></td><td><code>SW_NR_SW</code></td><td>1047</td><td>Kolejne swiadectwa dostaja numery rosnaco (1047, 1048, ...) — kolejnosc wg przelacznika ponizej.</td></tr>
 <tr><td><span class='muted'>Numeracja</span><br><b>Numeruj swiadectwa wg nr ewidencyjnego</b></td><td><code>SW_NR_SW_WG_EWID</code></td><td>wył.</td><td>Wlaczone = numery swiadectw rosnaco wg nr ewidencyjnego z PZ. Wylaczone = rosnaco wg nr fabrycznego (jak w kroku 3).</td></tr>
+</tbody></table>
+<h3 id="ust-porown">6 · Arkusze porównawcze <span class="muted">— Protokol(y) z powtorzeniami  -&gt;  arkusze ze WSZYSTKIMI punktami do porownania (bez swiadectw)</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Protokoly do porownania</b></td><td><code>POR_PROTOKOLY</code></td><td>—</td><td>Protokoly z folderu kroku 6 (ponizej). Zaznacz jeden albo kilka — kilka = przyrzady laczone po nr fabrycznym, zakladki z kolejnych protokolow po kolei.</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Folder kroku 6</b></td><td><code>POR_FOLDER</code></td><td>Etap_6_porownanie</td><td>Tu wkladasz protokoly do porownania i tu powstaja arkusze porownawcze — osobno od arkuszy kroku 3 (te same nazwy plikow).</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Szablon arkusza obliczeniowego</b></td><td><code>POR_SZABLON</code></td><td>xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx</td><td>Ten sam szablon co w kroku 3 (zwykly termohigrometr). Szablonu skrypt nie zmienia — kazdy arkusz to jego kopia.</td></tr>
+<tr><td><span class='muted'>Zakres</span><br><b>Tylko przyrzady</b></td><td><code>POR_PRZYRZADY</code></td><td>—</td><td>Puste = wszystkie z odczytami. Np. &#x27;2, 5, 21-24&#x27; (numery ze Strony 2) albo numery fabryczne / ewidencyjne. Kazdy przyrzad to osobny arkusz z kilkunastoma zakladkami — przy 39 przyrzadach krok trwa dlugo.</td></tr>
+<tr><td><span class='muted'>Zakres</span><br><b>Uwzglednij szare komorki</b></td><td><code>POR_SZARE</code></td><td>wł.</td><td>Wlaczone = punkty wyszarzone dla przyrzadu tez dostaja zakladke (szara karta) — do porownania. Szara wilgotnosc w punkcie samej temperatury jest zawsze pomijana.</td></tr>
 </tbody></table>
 <!-- /AUTO:ustawienia -->
 

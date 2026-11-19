@@ -630,10 +630,14 @@ class ListaPlikow(QWidget):
 
     zmienione = Signal()
 
-    def __init__(self, wzorzec, folder_cb, parent=None):
+    def __init__(self, wzorzec, folder_cb, parent=None, filtr=None,
+                 opis_wielu="zostana sklejone chronologicznie"):
         super().__init__(parent)
         self.wzorzec = wzorzec
         self._folder_cb = folder_cb
+        # filtr(nazwa) -> bool: dodatkowe zawezenie listy (np. tylko protokoly).
+        self._filtr = filtr
+        self._opis_wielu = opis_wielu
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -734,7 +738,7 @@ class ListaPlikow(QWidget):
             self.podsumowanie.setText(f"Zaznaczono 1 z {wsz} plikow.")
         else:
             self.podsumowanie.setText(
-                f"Zaznaczono {n} z {wsz} plikow — zostana sklejone chronologicznie.")
+                f"Zaznaczono {n} z {wsz} plikow — {self._opis_wielu}.")
 
     def odswiez(self, zachowaj=None):
         """
@@ -750,7 +754,8 @@ class ListaPlikow(QWidget):
         try:
             wpisy = [(e.name, e.stat()) for e in os.scandir(folder)
                      if e.is_file() and e.name.lower().endswith(self.wzorzec)
-                     and not e.name.startswith("~$")]
+                     and not e.name.startswith("~$")
+                     and (self._filtr is None or self._filtr(e.name))]
         except OSError:
             wpisy = []
         wpisy.sort(key=lambda x: x[1].st_mtime, reverse=True)

@@ -19,7 +19,7 @@ desktopowym panelem **PySide6** i spakowany w jeden plik `ProtokolCC.exe`.
 
 ---
 
-## 🗺️ Obieg — pięć kroków
+## 🗺️ Obieg — pięć kroków (+ arkusze porównawcze)
 
 ```mermaid
 flowchart LR
@@ -38,12 +38,14 @@ flowchart LR
   K3 --> SW[("Świadectwa .docx")]
   ARK -. uzupełnione .-> K5["5 · Świadectwa z arkuszy<br/>generuj_swiadectwa.py"]
   K5 --> SW
+  PROT -. z powtórzeniami .-> K6["6 · Arkusze porównawcze<br/>generuj_porownanie.py"]
+  K6 --> POR[("Etap_6_porownanie/<br/>arkusze ze wszystkimi punktami")]
   classDef in fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
   classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
   classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   class LOG,TXT,PZ,POM in
-  class K1,K2,K3,K4,K5 xf
-  class WYN,OBS,PROT,ARK,SW out
+  class K1,K2,K3,K4,K5,K6 xf
+  class WYN,OBS,PROT,ARK,SW,POR out
 ```
 
 | Krok | Wejście | Wynik |
@@ -53,6 +55,7 @@ flowchart LR
 | **3 · Arkusze i Word** | protokół, szablony, Wzory/Obliczenia, Pom. nr 9 | arkusz obliczeniowy na przyrząd, świadectwa Word |
 | **4 · Warunki** | protokół, Pom. nr 9 | t/RH pomieszczenia (F/G) dla każdego punktu |
 | **5 · Świadectwa z arkuszy** | uzupełnione arkusze w `Etap_5_ark_obl_to_word/` | świadectwa obok arkuszy |
+| **6 · Arkusze porównawcze** | protokół(y) z powtórzeniami i przekładkami w `Etap_6_porownanie/`, szablon z kroku 3 | w tym samym folderze — arkusz na przyrząd z zakładką dla KAŻDEGO powtórzenia, bez świadectw |
 
 Typy przyrządów w kroku 3: **termohigrometr / termometr**, **przetwornik** (wyjście mA/V: t, RH, t + RH),
 **przyrząd z wyświetlaczem i wyjściem** (jeden arkusz `TH + Przetwornik`, świadectwo z pięcioma tabelami).
@@ -71,6 +74,7 @@ Okno prowadzi przez obieg krok po kroku (lewa listwa), a każdy krok ma własny 
 | **3 · Arkusze i Word** | Protokół, szablony, etapy, numer i numeracja świadectw, higrometr K18, podpisy, czujniki komór, szablony Word. |
 | **4 · Warunki środowiskowe** | Protokół i czujnik pomieszczenia. |
 | **5 · Świadectwa z arkuszy** | Folder arkuszy, numer początkowy, numeracja. |
+| **6 · Arkusze porównawcze** | Folder kroku 6, zaznaczenie protokołu (lub kilku) z tego folderu, szablon, wybór przyrządów (`2, 5, 21-24`), szare komórki. |
 | **Zaawansowane** | Okno analizy, suszenie, korekta zegara, filtr kolorów, pliki linkowane, stabilność Excela. |
 
 Na dole: **Log** (na żywo, kolorowany, zapisywany do pliku) i **Utworzone pliki** (co powstało/zmieniło się,
@@ -79,10 +83,10 @@ zastrzeżeń (brak plików, niezaznaczone logi, istniejący protokół…). Nadp
 `kopie_zapasowe/`, a plik otwarty w Excelu jest najpierw zapisywany i zamykany. **Jeden krok naraz** —
 dwa przebiegi kroku 3 zamykają sobie nawzajem Excele.
 
-## ▶️ Uruchamianie — jeden exe, sześć trybów
+## ▶️ Uruchamianie — jeden exe, siedem trybów
 
 Panel uruchamia kroki jako podprocesy. W zamrożonym `.exe` ten sam plik pełni rolę panelu i kroku —
-o trybie decyduje `CC_WORKER`: puste = panel, `analiza`, `obserwacje`, `arkusze`, `warunki`, `swiadectwa`.
+o trybie decyduje `CC_WORKER`: puste = panel, `analiza`, `obserwacje`, `arkusze`, `warunki`, `swiadectwa`, `porownanie`.
 
 ```mermaid
 sequenceDiagram
@@ -138,20 +142,21 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | Plik | Linie | Funkcje | Rola |
 |---|---:|---:|---|
 | `analizuj_excele.py` | 1950 | 57 | Universal Excel/CSV parser for temperature & humidity data loggers. |
-| `app_entry.py` | 95 | 3 | punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe). |
-| `app_gui.py` | 1147 | 51 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
-| `cc_config.py` | 712 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
+| `app_entry.py` | 98 | 3 | punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe). |
+| `app_gui.py` | 1206 | 53 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
+| `cc_config.py` | 746 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
 | `cc_excel.py` | 360 | 19 | wlasne instancje Excela: uruchomienie i PEWNE zamkniecie. |
 | `cc_kopia.py` | 57 | 2 | kopia zapasowa pliku PRZED jego nadpisaniem. |
 | `cc_szablon_przetwornika.py` | 536 | 21 | szablon arkusza obliczeniowego dla PRZETWORNIKA. |
-| `cc_widgets.py` | 1385 | 79 | elementy interfejsu panelu (app_gui.py). |
+| `cc_widgets.py` | 1390 | 79 | elementy interfejsu panelu (app_gui.py). |
 | `cc_widok.py` | 145 | 4 | jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx. |
-| `generuj_arkusze.py` | 5269 | 162 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
+| `generuj_arkusze.py` | 5315 | 163 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
 | `generuj_obserwacje.py` | 4625 | 141 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
+| `generuj_porownanie.py` | 557 | 19 | KROK 6: arkusze obliczeniowe porownawcze. |
 | `generuj_swiadectwa.py` | 369 | 15 | krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych. |
 | `pz_dane.py` | 1626 | 61 | wspolny modul do wczytywania danych przyrzadow z: |
 | `wypelnij_warunki.py` | 177 | 4 | krok 4: warunki srodowiskowe w protokole. |
-| `testy/` | — | 940 testów | 51 plików `test_*.py` (unittest) |
+| `testy/` | — | 960 testów | 52 plików `test_*.py` (unittest) |
 <!-- /AUTO:moduly_md -->
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
@@ -176,10 +181,11 @@ uruchomienie `python generuj_obserwacje.py` bez panelu działa jak dawniej.
 
 | Prefiks | Zakres | Przykłady |
 |---|---|---|
-| `CC_WORKER` | tryb exe | `analiza` / `obserwacje` / `arkusze` / `warunki` / `swiadectwa` / (puste = GUI) |
+| `CC_WORKER` | tryb exe | `analiza` / `obserwacje` / `arkusze` / `warunki` / `swiadectwa` / `porownanie` / (puste = GUI) |
 | `CC_*` | wspólne | `CC_FOLDER`, `CC_PROTOKOL`, `CC_SZABLON`, `CC_PZ_FOLDER`, `CC_ZESTAWIENIE` |
 | `ANL_*` | krok 1 — analiza | `ANL_PLIKI`, `ANL_INPUT`, `ANL_OUTPUT`, `ANL_DEBUG` |
 | `OBS_*` | krok 2 — obserwacja | `OBS_TXT_FILES`, `OBS_PODPIS`, `OBS_STAB_PO_RH`, `OBS_PROG_T`, `OBS_KOREKTA_ZEGARA`, `OBS_FOTO`, `OBS_FOTO_ZRODLO`, `OBS_FOTO_CEL`, … |
+| `POR_*` | krok 6 — arkusze porównawcze | `POR_PROTOKOLY`, `POR_SZABLON`, `POR_PRZYRZADY`, `POR_SZARE`, `POR_FOLDER` |
 | `GEN_*` | krok 3 — arkusze/Word | `GEN_EXCEL`, `GEN_WORD`, `GEN_POMIJAJ_PUSTE`, `GEN_NR_SW`, `GEN_NR_SW_WG_EWID`, `GEN_K18_CC`, `GEN_PODPIS_1`, `GEN_MAP_CC04`, `GEN_KOLOR_AKT`, … |
 
 Konwersję typów robią helpery `cc_config.flaga / liczba / calk / tekst / minuty /
@@ -212,7 +218,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**940 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**960 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -325,6 +331,17 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 - **Odstęp reprezentantów od zmiany nastawy: 5 min** (było 2, `OBS_ODSTEP_KONIEC`): zegary przyrządów
   spóźniają się czasem o ~2 min względem komory, więc okno kończące się 2 min przed zmianą łapało u nich
   już przejście do kolejnego punktu. Zmiana nastawy o 14:13 → ostatni reprezentant najpóźniej 14:08.
+- **Krok 6 · Arkusze porównawcze** (`generuj_porownanie.py`, folder `Etap_6_porownanie/` — tu protokoły
+  do porównania i tu powstają arkusze, jak w kroku 5): „mega protokół”
+  (zlecenie 243, `protokół CC-04_1`) ma między blokami **przekładki** — wiersze bez numeru, w których
+  przyrząd dostaje nowy czujnik wzorcowy (`CC-04-LG` …) i odległość; krok 3 kończył czytanie na pierwszej
+  przekładce (bloki co 5 wierszy). Krok 6 czyta protokół bez Excela (bloki po numerze w kol. A), każda
+  zakładka liczy się względem czujnika ważnego w JEJ bloku (K11–K17 i Rs z K/L/M/N), powtórzenia mają
+  nazwę punktu z PZ i sufiks (`25, 60 (2)`, `60, 25 (3)`), a `Wyniki` mają wiersz dla każdej zakładki
+  (także w tabeli temperatur). Szare komórki (punkt wyłączony dla przyrządu) też dostają zakładkę —
+  z szarą kartą; szara wilgotność w punkcie samej temperatury jest pomijana. Bez warunków
+  środowiskowych i odczytu kalibracji (to dane do świadectw). Kilka protokołów: przyrządy łączone po
+  nr fabrycznym, zakładki z kolejnych protokołów dopisywane po kolei.
 - **Krok 5 · Świadectwa z arkuszy** (`generuj_swiadectwa.py`, folder `Etap_5_ark_obl_to_word`): gotowe arkusze
   obliczeniowe (zrobione bez Worda, uzupełnione po kolejnych pomiarach) → świadectwa Word tak samo jak w kroku 3
   (te same funkcje). Wyniki z arkusza, producent/typ/serial z arkusza, nr ewid./użytkownik/zasilanie z PZ (folder PZ

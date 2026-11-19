@@ -201,6 +201,15 @@ KONTRAKT = {
         ("SW_NR_SW", "m.NR_SW_POCZATKOWY", "2600", "2600", "1047"),
         ("SW_NR_SW_WG_EWID", "m.NR_SW_WG_EWID", "1", "True", "False"),
     ],
+    "generuj_porownanie": [
+        ("POR_PROTOKOLY", "m.PROTOKOLY", "a.xlsx;b.xlsx", "['a.xlsx', 'b.xlsx']", "[]"),
+        ("POR_SZABLON", "m.SZABLON", "Sz_X.xlsx", "Sz_X.xlsx",
+         "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx"),
+        ("POR_PRZYRZADY", "m.WYBOR_PRZYRZADOW", "2, 5", "2, 5", ""),
+        ("POR_SZARE", "m.UWZGLEDNIJ_SZARE", "0", "False", "True"),
+        ("POR_FOLDER", "m.FOLDER_WYJ", "Por_X",
+         os.path.join(BAZA, "Por_X"), os.path.join(BAZA, "Etap_6_porownanie")),
+    ],
 }
 
 # Ustawienia, ktorych nie da sie sprawdzic przez stala modulu — dzialaja dopiero
@@ -228,7 +237,8 @@ class TestPokrycie(unittest.TestCase):
         """Kazda nazwa zmiennej musi pojawic sie w kodzie ktoregos ze skryptow."""
         zrodla = ""
         for plik in ("analizuj_excele.py", "generuj_obserwacje.py",
-                     "generuj_arkusze.py", "wypelnij_warunki.py", "generuj_swiadectwa.py", "app_gui.py"):
+                     "generuj_arkusze.py", "wypelnij_warunki.py", "generuj_swiadectwa.py",
+                     "generuj_porownanie.py", "app_gui.py"):
             with open(os.path.join(KORZEN, plik), encoding="utf-8") as f:
                 zrodla += f.read()
         for env in C.WG_ENV:

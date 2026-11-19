@@ -56,21 +56,22 @@ class BazaOkna(unittest.TestCase):
 class TestBudowaOkna(BazaOkna):
 
     def test_ma_wszystkie_strony(self):
-        # Przygotowanie, 1-3, 4 (warunki srodowiskowe), Zaawansowane
-        self.assertEqual(self.okno.stos.count(), 7)
+        # Przygotowanie, 1-3, 4 (warunki srodowiskowe), 5, 6 (porownanie), Zaawansowane
+        self.assertEqual(self.okno.stos.count(), 8)
 
     def test_kroki_uruchamialne_maja_status(self):
-        self.assertEqual(set(self.okno.statusy), {"analiza", "obs", "ark", "srod", "swiad"})
+        self.assertEqual(set(self.okno.statusy), {"analiza", "obs", "ark", "srod", "swiad", "porown"})
 
     def test_pola_pokrywaja_caly_rejestr(self):
         # CC_FOLDER ma wlasne miejsce w naglowku; OBS_TXT_FILES i ANL_PLIKI to
         # listy plikow z zaznaczaniem (ListaPlikow), nie zwykle pola formularza.
-        oczekiwane = set(C.WG_ENV) - {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI"}
+        oczekiwane = set(C.WG_ENV) - {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI",
+                                      "POR_PROTOKOLY"}
         self.assertEqual(set(self.okno.pola), oczekiwane)
 
     def test_listy_plikow_sa_podpiete_do_ustawien(self):
         """Kazda lista z zaznaczaniem musi odpowiadac wpisowi w rejestrze."""
-        for env in ("OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI"):
+        for env in ("OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI", "POR_PROTOKOLY"):
             with self.subTest(env=env):
                 self.assertIn(env, C.WG_ENV)
                 self.assertEqual(C.WG_ENV[env].typ, "pliki")
@@ -115,9 +116,10 @@ class TestBudowaOkna(BazaOkna):
         na tym potknely sie ustawienia zdjec, ktore trafily nie tam, gdzie
         podejmuje sie decyzje o ich zbieraniu.
         """
-        strony = {"przygotowanie": 0, "analiza": 1, "obs": 2, "ark": 3, "srod": 4, "swiad": 5}
+        strony = {"przygotowanie": 0, "analiza": 1, "obs": 2, "ark": 3, "srod": 4, "swiad": 5,
+                  "porown": 6}
         # CC_FOLDER ma wlasne miejsce w naglowku, listy plikow to osobne widgety.
-        bez_pola = {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI"}
+        bez_pola = {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI", "POR_PROTOKOLY"}
         for u in C.USTAWIENIA:
             if u.poziom != C.PODSTAWOWY or u.env in bez_pola:
                 continue

@@ -45,6 +45,8 @@ KROKI = [
      "Pom. nr 9  ->  Strona 3 protokolu: t i RH pomieszczenia dla kazdego punktu"),
     ("swiad",         "5 · Świadectwa z arkuszy",
      "Gotowe arkusze obliczeniowe z folderu  ->  swiadectwa Word (jak w kroku 3)"),
+    ("porown",        "6 · Arkusze porównawcze",
+     "Protokol(y) z powtorzeniami  ->  arkusze ze WSZYSTKIMI punktami do porownania (bez swiadectw)"),
 ]
 
 PODSTAWOWY  = "podstawowy"
@@ -574,7 +576,35 @@ _SWIADECTWA = [
             "rosnaco wg nr fabrycznego (jak w kroku 3)."),
 ]
 
-USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE + _WARUNKI + _SWIADECTWA
+# ── KROK 6 — generuj_porownanie.py ───────────────────────────────────────────
+# Szablon arkusza, pliki linkowane, mapowanie CC-04 i podpisy — wspolne z krokiem 3.
+_POROWNANIE = [
+    _U("POR_PROTOKOLY", "Protokoly do porownania", "pliki", [], "porown",
+       grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"),
+       opis="Protokoly z folderu kroku 6 (ponizej). Zaznacz jeden albo kilka — kilka = "
+            "przyrzady laczone po nr fabrycznym, zakladki z kolejnych protokolow po kolei."),
+    _U("POR_FOLDER", "Folder kroku 6", "folder", "Etap_6_porownanie", "porown",
+       grupa="Dane wejsciowe",
+       opis="Tu wkladasz protokoly do porownania i tu powstaja arkusze porownawcze — "
+            "osobno od arkuszy kroku 3 (te same nazwy plikow)."),
+    _U("POR_SZABLON", "Szablon arkusza obliczeniowego", "plik",
+       "xxx_LA_TH_2026 - ILAJ 5.4_11#21 - Wzór ark. obl.Wer.12 z 17.06.2026 - 1 - RH (CC).xlsx",
+       "porown", grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"),
+       opis="Ten sam szablon co w kroku 3 (zwykly termohigrometr). Szablonu skrypt nie "
+            "zmienia — kazdy arkusz to jego kopia."),
+    _U("POR_PRZYRZADY", "Tylko przyrzady", "tekst", "", "porown",
+       grupa="Zakres",
+       opis="Puste = wszystkie z odczytami. Np. '2, 5, 21-24' (numery ze Strony 2) albo "
+            "numery fabryczne / ewidencyjne. Kazdy przyrzad to osobny arkusz z kilkunastoma "
+            "zakladkami — przy 39 przyrzadach krok trwa dlugo."),
+    _U("POR_SZARE", "Uwzglednij szare komorki", "flaga", True, "porown",
+       grupa="Zakres",
+       opis="Wlaczone = punkty wyszarzone dla przyrzadu tez dostaja zakladke (szara karta) "
+            "— do porownania. Szara wilgotnosc w punkcie samej temperatury jest zawsze "
+            "pomijana."),
+]
+
+USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE + _WARUNKI + _SWIADECTWA + _POROWNANIE
 WG_ENV = {u.env: u for u in USTAWIENIA}
 
 
@@ -609,6 +639,10 @@ def wczytaj():
         pass
     except (OSError, ValueError):
         pass
+    # Pierwsza wersja kroku 6 miala folder WYNIKOW 'porownanie' (ukryty w Zaawansowanych).
+    # Teraz folder kroku 6 to miejsce na protokoly i arkusze — wlasna nazwa jak w kroku 5.
+    if wart.get("POR_FOLDER") == "porownanie":
+        wart["POR_FOLDER"] = "Etap_6_porownanie"
     return wart
 
 

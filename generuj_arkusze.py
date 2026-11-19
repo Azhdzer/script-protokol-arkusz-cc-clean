@@ -391,6 +391,17 @@ _PZ_PUNKTY_PRZYRZADOW_CACHE = None
 # samym arkuszem Wyniki i swiadectwo z pusta tabela kalibracji.
 POMIJAJ_PRZYRZADY_BEZ_DANYCH = C.flaga("GEN_POMIJAJ_PUSTE", True)
 
+# Przelaczniki dla kroku 6 (arkusz porownawczy, generuj_porownanie.py). Krok 3
+# ich nie zmienia — wartosci ponizej to jego zwykle zachowanie.
+#   * warunki srodowiskowe: krok 6 ich nie liczy — sluza swiadectwom, a liczenie
+#     zapisuje F/G do protokolu kroku 3 po wierszach co 5 (protokol z przekladkami
+#     ma bloki gdzie indziej),
+#   * Wyniki: tabela temperatur bez wyboru reprezentanta — kazda zakladka ma wiersz.
+OBLICZAJ_WARUNKI_SRODOWISKOWE = True
+WYNIKI_WSZYSTKIE_ZAKLADKI = False
+# Kolor karty zakladki zbudowanej z szarych (pomijanych) komorek protokolu.
+KOLOR_KARTY_SZAREJ = 0xBFBFBF
+
 
 # --- Nadpisania z panelu GUI (app_gui.py) przez zmienne srodowiskowe ---
 GENERUJ_EXCEL = C.flaga("GEN_EXCEL", GENERUJ_EXCEL)
@@ -1597,6 +1608,24 @@ def wczytaj_dane_ef_z_protokolu_s3(sciezka, arkusz, n_kopii, n_zakladek,
     return dane_ef
 
 
+def uzupelnij_przetworniki(dane_s2, multimetr_s1):
+    """Parametry zakladek roboczych przetwornikow (tabela panelu / protokol) -> rekord['PRZETWORNIK']."""
+    _tabela = pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW)
+    for _rek in dane_s2:
+        _rek["PRZETWORNIK"] = parametry_przetwornika(
+            _rek, _tabela, multimetr_s1,
+            {"ogolny": SZABLON_PRZETWORNIKA, "rh": SZABLON_PRZETWORNIKA_RH})
+        _p = _rek["PRZETWORNIK"]
+        if _p:
+            print(f"  [Przetwornik] {_rek.get('E')}: {_p['L10']}, multimetr {_p['K14']}, "
+                  f"kanaly t={_p['K15']} RH={_p['K16']}, wyjscie "
+                  f"{_p.get('M22', '?')} ÷ {_p.get('O22', '?')} "
+                  f"(zrodlo: {_p['_zrodlo']}) — dane do G/H, szablon: "
+                  f"{_p['_szablon'] or '(standardowy)'}.")
+            for _o in _p["_ostrzezenia"]:
+                _warn(f"Przetwornik {_rek.get('E')}: {_o}")
+
+
 def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                               start_s2, start_s3, blok,
                               start_col_e, start_col_f, krok):
@@ -1801,20 +1830,7 @@ def wczytaj_wszystko_xlwings(sciezka, ark_s2, ark_s3,
                 _multimetr_s1 = wb.sheets["Strona 1"].range(KOMORKA_MULTIMETRU_S1).value
         except Exception:
             _multimetr_s1 = None
-        _tabela = pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW)
-        for _rek in dane_s2:
-            _rek["PRZETWORNIK"] = parametry_przetwornika(
-                _rek, _tabela, _multimetr_s1,
-                {"ogolny": SZABLON_PRZETWORNIKA, "rh": SZABLON_PRZETWORNIKA_RH})
-            _p = _rek["PRZETWORNIK"]
-            if _p:
-                print(f"  [Przetwornik] {_rek.get('E')}: {_p['L10']}, multimetr {_p['K14']}, "
-                      f"kanaly t={_p['K15']} RH={_p['K16']}, wyjscie "
-                      f"{_p.get('M22', '?')} ÷ {_p.get('O22', '?')} "
-                      f"(zrodlo: {_p['_zrodlo']}) — dane do G/H, szablon: "
-                      f"{_p['_szablon'] or '(standardowy)'}.")
-                for _o in _p["_ostrzezenia"]:
-                    _warn(f"Przetwornik {_rek.get('E')}: {_o}")
+        uzupelnij_przetworniki(dane_s2, _multimetr_s1)
 
         # --- Strona 3: F24 dla arkusza Wyniki, per kopia (wiersz 17) ---
         # Wymaganie: czytaj wartosc ze scalonej komorki Q:R17 (lub S:T17 dla CC-04),
@@ -3715,7 +3731,11 @@ def _uporzadkuj_tabele_wyniki(app, ws_w, working_final, aktywne=None):
         (_temp_zaokr(w), _rh_z_nazwy_zakladki(w.get("arkusz")), w["powtorka"], w)
         for w in valid if _temp_zaokr(w) is not None
     ]
-    reprezentanci_or_sorted = sorted(_wybierz_reprezentantow_temp(wpisy_or), key=_temp_zaokr)
+    if WYNIKI_WSZYSTKIE_ZAKLADKI:
+        # Arkusz porownawczy (krok 6): kazda zakladka, takze powtorki ' (N)', ma swoj wiersz.
+        reprezentanci_or_sorted = sorted((wp[3] for wp in wpisy_or), key=_klucz_bi)
+    else:
+        reprezentanci_or_sorted = sorted(_wybierz_reprezentantow_temp(wpisy_or), key=_temp_zaokr)
 
     for t in tabele:
         lista = valid_rh_sorted if t["rodzaj"] == "rh" else reprezentanci_or_sorted
@@ -4407,12 +4427,22 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
             if _rozdz_rh is not None:
                 ws.range("H55").value = _rozdz_rh
 
-            # Dla protokolow CC-04 wpisz stale parametry przyrzadu.
-            if parametry_cc04 is not None:
-                ws.range("K11").value = parametry_cc04["K11"]
-                ws.range("K12").value = parametry_cc04["K12"]
-                ws.range("K13").value = parametry_cc04["K13"]
-                ws.range("K17").value = parametry_cc04["K17"]
+            # Dla protokolow CC-04 wpisz stale parametry przyrzadu. Protokol z
+            # przekladkami (krok 6) zmienia czujnik wzorcowy w trakcie — wtedy blok
+            # niesie wlasny tag (ef['CC04_TAG']) i to on decyduje dla tej zakladki.
+            _param_zakl = parametry_cc04
+            if isinstance(ef, dict) and ef.get("CC04_TAG"):
+                _param_zakl = MAPOWANIE_TYPU_CC04.get(str(ef["CC04_TAG"]).upper(), parametry_cc04)
+            if isinstance(ef, dict) and ef.get("SZARY"):
+                try:
+                    ws.api.Tab.Color = KOLOR_KARTY_SZAREJ
+                except Exception:
+                    pass
+            if _param_zakl is not None:
+                ws.range("K11").value = _param_zakl["K11"]
+                ws.range("K12").value = _param_zakl["K12"]
+                ws.range("K13").value = _param_zakl["K13"]
+                ws.range("K17").value = _param_zakl["K17"]
             elif not rekord.get("IS_CC04_PROTO"):
                 # Komora CC — jeden czujnik wzorcowy, tak samo z ustawien panelu.
                 for _kom in ("K11", "K12", "K13", "K17"):
@@ -4514,11 +4544,15 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws_w.range(f"E{32 + extra_rows}").value = PODPISUJACY_2   # scalone E32:G32
 
         # --- Etap 7: warunki środowiskowe (Strona 3 F/G + Wzory.xls) ---
-        _log_etap("licze warunki srodowiskowe (Pom. nr 9 + Wzory.xls)...", _t0)
-        zakresy_srodowiskowe = _oblicz_warunki_srodowiskowe(
-            app, wb, dane_zakladek, NR_POMIESZCZENIA, MODEL_CZUJNIKA, _cache_fg=_cache_fg
-        )
-        _log_etap("warunki srodowiskowe policzone", _t0)
+        if OBLICZAJ_WARUNKI_SRODOWISKOWE:
+            _log_etap("licze warunki srodowiskowe (Pom. nr 9 + Wzory.xls)...", _t0)
+            zakresy_srodowiskowe = _oblicz_warunki_srodowiskowe(
+                app, wb, dane_zakladek, NR_POMIESZCZENIA, MODEL_CZUJNIKA, _cache_fg=_cache_fg
+            )
+            _log_etap("warunki srodowiskowe policzone", _t0)
+        else:
+            zakresy_srodowiskowe = None
+            _log_etap("warunki srodowiskowe pominiete (arkusz porownawczy)", _t0)
 
         # Przelicz i zapisz — wb.save() utrwala obliczone wartosci jako cache Excela.
         # Dzieki temu po otwarciu kopii bez plikow linkowanych (Obliczenia, Wzory)
@@ -4819,15 +4853,21 @@ def _odczytaj_kalibracje_xlwings(app, sciezka_pliku, ark_wyniki, enable_diag=Fal
 # TWORZENIE KOPII
 # =============================================================================
 
-def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki, f24_per_kopia):
+def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki, f24_per_kopia,
+                 folder_wyj=None, odczyt_kalibracji=True):
     """
     Dla każdego rekordu z Strona 2:
       1. Generuje nazwę kopii i kopiuje szablon (shutil.copy2).
       2. Modyfikuje kopie przez xlwings (jeden proces Excel dla wszystkich).
             3. Przywraca w kopiach sciezki linkow zewnetrznych do serwera.
     Zwraca listę nazw utworzonych kopii.
+
+    folder_wyj — gdzie zapisac kopie (domyslnie `folder`); pliki linkowane i tak
+    z `folder`. odczyt_kalibracji=False pomija odczyt wynikow do swiadectw
+    (krok 6 — arkusz porownawczy swiadectw nie robi).
     """
     sciezka_szablonu = os.path.join(folder, szablon_plik)
+    folder_kopii = folder_wyj or folder
     n = len(dane)
     kopie = []
     dane_zakladek_per_kopia = []
@@ -4840,7 +4880,7 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki,
         # indeks w petli nie odpowiada juz pozycji na Stronie 2.
         nowa_nazwa = generuj_nazwe_pliku(szablon_plik, rekord["O"], _numer_do_nazwy(rekord),
                                          nr_przyrzadu=rekord.get("_nr_przyrzadu", j + 1))
-        sciezka_kopii = os.path.join(folder, _bezpieczna_nazwa_pliku(nowa_nazwa))
+        sciezka_kopii = os.path.join(folder_kopii, _bezpieczna_nazwa_pliku(nowa_nazwa))
         if os.path.exists(sciezka_kopii):
             print(f"  [UWAGA] Plik już istnieje, nadpisuję: {nowa_nazwa}")
         # Przetwornik: kopia z SZABLONU PRZETWORNIKA ('Wyniki' z wiersza 253) —
@@ -4883,7 +4923,12 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki,
                     dane_zakladek,
                     dane_ef_kopia_surowe,
                 )
-                if aktywne_idx:
+                if aktywne_idx and all("wiersz_s3" in zd for zd in dane_zakladek_kopia):
+                    # Protokol z przekladkami: bloki nie leza co 5 wierszy — wiersz z odczytu.
+                    print("    Aktywne bloki Strona 3 (wiersze): " + ", ".join(
+                        f"{zd['wiersz_s3']}-{zd['wiersz_s3'] + BLOK_S3 - 1}"
+                        for zd in dane_zakladek_kopia))
+                elif aktywne_idx:
                     zakresy = _formatuj_zakresy_wierszy_s3(aktywne_idx, START_ROW_S3, BLOK_S3)
                     print(f"    Aktywne bloki Strona 3 (wiersze): {zakresy}")
                 else:
@@ -4903,14 +4948,15 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki,
             zakresy_srod = _dostosuj_xlwings(app, sciezka_kopii, dane_zakladek_kopia, dane_ef_kopia, rekord, nowa_nazwa, ark_wyniki, f24_val, sciezki_linkowane=sciezki_linkowane, _pierwsza_kopia=(j == 0), _cache_fg=_cache_fg)
             zakresy_per_kopia.append(zakresy_srod)
 
-        print("  Odczyt kalibracji po zakonczeniu wypelniania wszystkich kopii...")
+        if odczyt_kalibracji:
+            print("  Odczyt kalibracji po zakonczeniu wypelniania wszystkich kopii...")
         # Swieza sesja rowniez na odczyt kalibracji (poprzednia obrobila ostatnia kopie).
         # Kopie sa juz zapisane — pad Excela tutaj (RPC, np. gdy rownolegle dziala drugi
         # krok 3 i sprzata 'zawieszone' Excele) nie moze konczyc kroku bez swiadectw:
         # swieza sesja i jeszcze jedna proba.
         _zamknij_sesje_excel(app, linked_wbs)
         app = None
-        for j, nowa_nazwa, sciezka_kopii, _ in kopie:
+        for j, nowa_nazwa, sciezka_kopii, _ in (kopie if odczyt_kalibracji else []):
             print(f"    [Kalibracja {j+1:>{len(str(n))}}/{n}] {nowa_nazwa}")
             for _proba in range(2):
                 try:
