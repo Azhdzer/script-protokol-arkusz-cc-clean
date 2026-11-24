@@ -1612,9 +1612,12 @@ def uzupelnij_przetworniki(dane_s2, multimetr_s1):
     """Parametry zakladek roboczych przetwornikow (tabela panelu / protokol) -> rekord['PRZETWORNIK']."""
     _tabela = pz_dane.przetworniki_z_tabeli(TABELA_PRZETWORNIKOW)
     for _rek in dane_s2:
+        _komora = (MAPOWANIE_TYPU_CC04.get(str(_rek.get("CC04_TAG") or "").upper(), {})
+                   if _rek.get("IS_CC04_PROTO") or _rek.get("CC04_TAG") else PARAMETRY_CC)
         _rek["PRZETWORNIK"] = parametry_przetwornika(
             _rek, _tabela, multimetr_s1,
-            {"ogolny": SZABLON_PRZETWORNIKA, "rh": SZABLON_PRZETWORNIKA_RH})
+            {"ogolny": SZABLON_PRZETWORNIKA, "rh": SZABLON_PRZETWORNIKA_RH},
+            multimetr_komory=_komora.get("K12") if _rek.get("CC04_TAG") else None)
         _p = _rek["PRZETWORNIK"]
         if _p:
             print(f"  [Przetwornik] {_rek.get('E')}: {_p['L10']}, multimetr {_p['K14']}, "
@@ -1890,12 +1893,17 @@ def _kanal_do_komorki(kanal):
     return n if str(n) == t else t
 
 
-def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domyslny=None):
+def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domyslny=None,
+                           multimetr_komory=None):
     """
     Komorki zakladki roboczej dla kopii-przetwornika albo None (zwykly termohigrometr).
-    Zwraca dict {'K10': ..., 'L10': ..., 'K14', 'K15', 'K16', 'M22', 'O22',
+    Zwraca dict {'K10': ..., 'L10': ..., 'C6', 'K14', 'K15', 'K16', 'M22', 'O22',
     'L27', 'O27', 'L28', 'O28', '_ostrzezenia': [...]}; brakujace zakresy pomijane
     (zostaja z szablonu).
+
+    multimetr_komory — multimetr czujnika wzorcowego komory (K12, CC-04: '1586A-02');
+    ten sam skaner mierzy wyjscie przetwornika, wiec gdy tabela panelu i Strona 1 go
+    nie podaja, K14 = multimetr komory (zlecenie 252), a dopiero potem domyslny.
     """
     sygnal_t = _sygnal_z_jednostki(rekord.get("JEDN_T"))
     sygnal_rh = _sygnal_z_jednostki(rekord.get("JEDN_RH"))
@@ -1929,6 +1937,8 @@ def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domys
     if not multimetr:
         s1 = str(multimetr_s1 or "").strip()
         multimetr = s1 if s1 and s1 != "-" else ""
+    if not multimetr and str(multimetr_komory or "").strip() not in ("", "-"):
+        multimetr = str(multimetr_komory).strip()
     if not multimetr:
         multimetr = MULTIMETR_PRZETWORNIKA_DOMYSLNY
         ostrz.append(f"multimetr nieznany — przyjeto {multimetr} "
@@ -1960,10 +1970,20 @@ def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domys
                             else szablon_domyslny.get("ogolny"))
     szablon = (tab.szablon if tab is not None and tab.szablon else "") or szablon_domyslny or ""
 
+    # C6 — rodzaj przyrzadu (lista w szablonie): wyjscie t, RH albo oba. Kanal albo
+    # zakres mowia, ktore wyjscie jest naprawde (jednostka 'mA' bywa w obu kolumnach).
+    ma_t = bool(sygnal_t and (t_zakres or kanal_t))
+    ma_rh = bool(sygnal_rh and (rh_zakres or kanal_rh))
+    if not (ma_t or ma_rh):
+        ma_t, ma_rh = bool(sygnal_t), bool(sygnal_rh)
+    rodzaj = ("Przetwornik t i RH" if ma_t and ma_rh else
+              "Przetwornik t" if ma_t else "Przetwornik RH")
+
     wynik = {
         "_szablon": szablon,
         "K10": "Przetwornik",
         "L10": sygnal,
+        "C6": rodzaj,
         "K14": multimetr,
         "K15": _kanal_do_komorki(kanal_t),
         "K16": _kanal_do_komorki(kanal_rh),
@@ -1979,7 +1999,7 @@ def parametry_przetwornika(rekord, tabela=None, multimetr_s1=None, szablon_domys
     return wynik
 
 
-KOMORKI_PRZETWORNIKA = ("K10", "L10", "K14", "K15", "K16",
+KOMORKI_PRZETWORNIKA = ("K10", "L10", "C6", "K14", "K15", "K16",
                         "M22", "O22", "L27", "O27", "L28", "O28")
 
 
@@ -4427,6 +4447,8 @@ def _dostosuj_xlwings(app, sciezka_pliku, dane_zakladek, dane_ef_kopia, rekord, 
                 ws.range("E6").value = rekord["D"]
             if _przetw:
                 for _kom in KOMORKI_PRZETWORNIKA:
+                    if _kom == "C6" and _polaczony:
+                        continue          # wyswietlacz + wyjscie: C6 jak w szablonie
                     if _kom in _przetw:
                         _v = _przetw[_kom]
                         # '001' jako TEKST — inaczej Excel zamienia go na 1.

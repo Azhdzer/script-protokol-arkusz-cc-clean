@@ -74,6 +74,10 @@ class TestOpisyZProtokolu(unittest.TestCase):
         self.assertEqual(pz_dane.zakresy_ze_skalowania("0-5V \n(-40 / +60)'C"),
                          ((0.0, 5.0, "V"), (-40.0, 60.0)))
 
+    def test_skalowanie_252_najpierw_temperatura_jednostki_przy_liczbach(self):
+        self.assertEqual(pz_dane.zakresy_ze_skalowania("t: (-30 ÷ 80) °C    4mA - 20mA"),
+                         ((4.0, 20.0, "mA"), (-30.0, 80.0)))
+
     def test_skalowanie_brak(self):
         self.assertIsNone(pz_dane.zakresy_ze_skalowania("-"))
 
@@ -153,7 +157,7 @@ class TestParametryKopii(unittest.TestCase):
     def test_230_z_protokolu(self):
         p = A.parametry_przetwornika(self.REKORD_230, {}, "-")
         self.assertEqual({k: p[k] for k in A.KOMORKI_PRZETWORNIKA if k in p},
-                         {"K10": "Przetwornik", "L10": "Prąd", "K14": "1586A",
+                         {"K10": "Przetwornik", "L10": "Prąd", "C6": "Przetwornik RH", "K14": "1586A",
                           "K15": "-", "K16": "001", "M22": 4.0, "O22": 20.0,
                           "L28": 0.0, "O28": 100.0})
         self.assertTrue(any("multimetr" in o for o in p["_ostrzezenia"]))
@@ -162,6 +166,26 @@ class TestParametryKopii(unittest.TestCase):
         p = A.parametry_przetwornika(self.REKORD_230, pz_dane.przetworniki_z_tabeli(TABELA), "-")
         self.assertEqual((p["K14"], p["K16"], p["_zrodlo"]), ("1586A", "001", "tabela panelu"))
         self.assertEqual(p["_ostrzezenia"], [])
+
+    # Zlecenie 252 (CC-04): przetwornik t, w kolumnie RH tez 'mA', ale bez kanalu i skalowania.
+    REKORD_252 = {"E": "18943786", "JEDN_T": "mA", "JEDN_RH": "mA",
+                  "M": "t: (-30 ÷ 80) °C    4mA - 20mA", "N": "-", "P": "Uz = 24V\nCh: 222"}
+
+    def test_252_z_protokolu(self):
+        p = A.parametry_przetwornika(self.REKORD_252, {}, "-", multimetr_komory="1586A-02")
+        self.assertEqual({k: p[k] for k in A.KOMORKI_PRZETWORNIKA if k in p},
+                         {"K10": "Przetwornik", "L10": "Prąd", "C6": "Przetwornik t",
+                          "K14": "1586A-02", "K15": 222, "K16": "-", "M22": 4.0, "O22": 20.0,
+                          "L27": -30.0, "O27": 80.0})
+        self.assertEqual(p["_ostrzezenia"], [])
+
+    def test_multimetr_strony_1_przed_multimetrem_komory(self):
+        p = A.parametry_przetwornika(self.REKORD_252, {}, "1586A-01", multimetr_komory="1586A-02")
+        self.assertEqual(p["K14"], "1586A-01")
+
+    def test_rodzaj_t_i_rh(self):
+        rek = {"E": "X", "JEDN_T": "mA", "JEDN_RH": "mA", "P": "ch temp 105\nch humid 115"}
+        self.assertEqual(A.parametry_przetwornika(rek, {}, None)["C6"], "Przetwornik t i RH")
 
     def test_multimetr_ze_strony_1(self):
         p = A.parametry_przetwornika(self.REKORD_230, {}, "1586A-01")

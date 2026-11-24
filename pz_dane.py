@@ -1583,22 +1583,25 @@ def opis_skalowania(p, wielkosc):
             f"odpowiada:\n({_liczba_txt(od)} ÷ {_liczba_txt(do)}) {jedn}")
 
 
-# Zakres w opisie skalowania: '(4 ÷ 20) mA', '0-5V', '(-40 / +60)', '( 0 - 100)RH'.
+# Zakres w opisie skalowania: '(4 ÷ 20) mA', '0-5V', '(-40 / +60)', '( 0 - 100)RH',
+# '4mA - 20mA' (jednostka przy obu liczbach, zlecenie 252).
 _RE_ZAKRES_SKALOWANIA = re.compile(
-    r'([-+]?\d+(?:[.,]\d+)?)\s*(?:÷|–|-|/|\.\.)\s*([-+]?\d+(?:[.,]\d+)?)\s*\)?\s*(mA|V)?',
+    r'([-+]?\d+(?:[.,]\d+)?)\s*(mA|V)?\s*(?:÷|–|-|/|\.\.)\s*([-+]?\d+(?:[.,]\d+)?)\s*\)?\s*(mA|V)?',
     re.I)
 
 
 def zakresy_ze_skalowania(tekst):
     """
     Opis ze Strony 2 -> ((wy_od, wy_do, 'mA'|'V'|None), (od, do)) albo None.
-    Pierwszy zakres to wyjscie przetwornika, drugi — wielkosc mierzona.
+    Wyjscie to zakres z jednostka mA/V; bez jednostek — pierwszy zakres to wyjscie,
+    drugi wielkosc mierzona. Kolejnosc bywa odwrotna: 't: (-30 ÷ 80) °C  4mA - 20mA'.
     """
-    zakresy = [(float(a.replace(',', '.')), float(b.replace(',', '.')), j)
-               for a, b, j in _RE_ZAKRES_SKALOWANIA.findall(str(tekst or ""))]
+    zakresy = [(float(a.replace(',', '.')), float(b.replace(',', '.')), j1 or j2)
+               for a, j1, b, j2 in _RE_ZAKRES_SKALOWANIA.findall(str(tekst or ""))]
     if len(zakresy) < 2:
         return None
-    (w1, w2, jedn), (o1, o2, _j) = zakresy[0], zakresy[1]
+    wyjscie = next((i for i, z in enumerate(zakresy[:2]) if z[2]), 0)
+    (w1, w2, jedn), (o1, o2, _j) = zakresy[wyjscie], zakresy[1 - wyjscie]
     return (w1, w2, (jedn or None) and ("mA" if jedn.lower() == "ma" else "V")), (o1, o2)
 
 

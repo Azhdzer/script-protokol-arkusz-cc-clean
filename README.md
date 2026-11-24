@@ -291,6 +291,11 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Przetwornik: skalowanie `t: (-30 ÷ 80) °C    4mA - 20mA`** (zlecenie 252): zakres wyjścia rozpoznawany
+  po jednostce mA/V (także przy obu liczbach) i w dowolnej kolejności — wcześniej zostawało 0 ÷ 5 i −40 ÷ 60
+  z szablonu, a *Wyniki* pokazywały ~185 °C zamiast 20 °C. Multimetr wyjścia, gdy nie ma go w tabeli panelu
+  ani na Stronie 1: ten sam co czujnika wzorcowego komory CC-04 (K12, `1586A-02`). C6 = rodzaj przyrządu
+  (`Przetwornik t` / `Przetwornik RH` / `Przetwornik t i RH`). Testy: `testy/test_przetworniki_tabela.py`.
 - **Krok 5: data wzorcowania z protokołu, nie z K4 arkusza** (zlecenie 243): zakładka trafia na blok
   Strony 3 po swoich odczytach (E/F przyrządu i Rs wzorca w C), a data i warunki środowiskowe są z tego
   bloku. W arkuszach składanych ręcznie K4 bywało złe (dane z 17.11 z K4 = 11.11 albo 18.11) i 17.11
