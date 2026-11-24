@@ -7,6 +7,7 @@ CC_WORKER, ktora ustawia panel GUI przed uruchomieniem podprocesu:
 
     CC_WORKER=analiza     -> analizuj_excele.main()
     CC_WORKER=obserwacje  -> generuj_obserwacje.main()
+    CC_WORKER=protokol_obs -> protokol_z_obserwacji.main()  (krok 2b)
     CC_WORKER=arkusze     -> generuj_arkusze.main()
     CC_WORKER=warunki     -> wypelnij_warunki.main()
     CC_WORKER=swiadectwa  -> generuj_swiadectwa.main()
@@ -38,6 +39,8 @@ def _run_worker(mode: str) -> int:
         import generuj_arkusze as m
     elif mode == "obserwacje":
         import generuj_obserwacje as m
+    elif mode == "protokol_obs":
+        import protokol_z_obserwacji as m
     elif mode == "analiza":
         import analizuj_excele as m
     elif mode == "warunki":

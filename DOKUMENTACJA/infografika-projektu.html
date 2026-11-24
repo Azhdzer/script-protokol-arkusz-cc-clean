@@ -53,7 +53,7 @@
 <section id="przeglad">
 <h2>Przegląd</h2>
 <!-- AUTO:statystyki -->
-<div class="stats"><div class="stat"><b>15</b><span>modułów Python</span></div><div class="stat"><b>19 157</b><span>linii kodu</span></div><div class="stat"><b>657</b><span>funkcji</span></div><div class="stat"><b>99</b><span>ustawień w panelu</span></div><div class="stat"><b>960</b><span>testów (52 plików)</span></div><div class="stat"><b>6</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 19.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<div class="stats"><div class="stat"><b>16</b><span>modułów Python</span></div><div class="stat"><b>19 504</b><span>linii kodu</span></div><div class="stat"><b>668</b><span>funkcji</span></div><div class="stat"><b>99</b><span>ustawień w panelu</span></div><div class="stat"><b>970</b><span>testów (53 plików)</span></div><div class="stat"><b>7</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 24.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
 <!-- /AUTO:statystyki -->
 <p>Python 3 + PySide6 (panel), openpyxl (zapis bez Excela), xlwings / pywin32 (Excel COM — przeliczanie formuł, linki,
 wstawianie wierszy), python-docx (świadectwa), pandas (parsery logów), pypdf (PZ). Jeden plik <code>ProtokolCC.exe</code> (PyInstaller).</p>
@@ -271,18 +271,19 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <!-- AUTO:moduly -->
 <table><thead><tr><th>Plik</th><th class="r">Linie</th><th class="r">Funkcje</th><th>Rola</th></tr></thead><tbody>
 <tr><td><code>analizuj_excele.py</code></td><td class='r'>1950</td><td class='r'>57</td><td>Universal Excel/CSV parser for temperature &amp; humidity data loggers.</td></tr>
-<tr><td><code>app_entry.py</code></td><td class='r'>98</td><td class='r'>3</td><td>punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).</td></tr>
-<tr><td><code>app_gui.py</code></td><td class='r'>1206</td><td class='r'>53</td><td>panel sterujacy calym obiegiem wzorcowania (PySide6).</td></tr>
-<tr><td><code>cc_config.py</code></td><td class='r'>746</td><td class='r'>16</td><td>jedno zrodlo prawdy o ustawieniach calego obiegu.</td></tr>
+<tr><td><code>app_entry.py</code></td><td class='r'>101</td><td class='r'>3</td><td>punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).</td></tr>
+<tr><td><code>app_gui.py</code></td><td class='r'>1272</td><td class='r'>56</td><td>panel sterujacy calym obiegiem wzorcowania (PySide6).</td></tr>
+<tr><td><code>cc_config.py</code></td><td class='r'>749</td><td class='r'>16</td><td>jedno zrodlo prawdy o ustawieniach calego obiegu.</td></tr>
 <tr><td><code>cc_excel.py</code></td><td class='r'>360</td><td class='r'>19</td><td>wlasne instancje Excela: uruchomienie i PEWNE zamkniecie.</td></tr>
 <tr><td><code>cc_kopia.py</code></td><td class='r'>57</td><td class='r'>2</td><td>kopia zapasowa pliku PRZED jego nadpisaniem.</td></tr>
 <tr><td><code>cc_szablon_przetwornika.py</code></td><td class='r'>536</td><td class='r'>21</td><td>szablon arkusza obliczeniowego dla PRZETWORNIKA.</td></tr>
 <tr><td><code>cc_widgets.py</code></td><td class='r'>1390</td><td class='r'>79</td><td>elementy interfejsu panelu (app_gui.py).</td></tr>
 <tr><td><code>cc_widok.py</code></td><td class='r'>145</td><td class='r'>4</td><td>jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx.</td></tr>
 <tr><td><code>generuj_arkusze.py</code></td><td class='r'>5315</td><td class='r'>163</td><td>Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</td></tr>
-<tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4625</td><td class='r'>141</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
+<tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4875</td><td class='r'>148</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
 <tr><td><code>generuj_porownanie.py</code></td><td class='r'>557</td><td class='r'>19</td><td>KROK 6: arkusze obliczeniowe porownawcze.</td></tr>
 <tr><td><code>generuj_swiadectwa.py</code></td><td class='r'>369</td><td class='r'>15</td><td>krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych.</td></tr>
+<tr><td><code>protokol_z_obserwacji.py</code></td><td class='r'>25</td><td class='r'>1</td><td>KROK 2b: protokol z poprawionej obserwacji.</td></tr>
 <tr><td><code>pz_dane.py</code></td><td class='r'>1626</td><td class='r'>61</td><td>wspolny modul do wczytywania danych przyrzadow z:</td></tr>
 <tr><td><code>wypelnij_warunki.py</code></td><td class='r'>177</td><td class='r'>4</td><td>krok 4: warunki srodowiskowe w protokole.</td></tr>
 </tbody></table>
@@ -353,86 +354,89 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>1806</td><td><code>zbuduj_zestawienie</code></td><td>Laczy pomiary WSZYSTKICH przetworzonych przyrzadow w jeden plik, wyrownane po czasie:</td></tr>
 <tr><td class='r muted'>1880</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>app_entry.py</code> — 3 funkcji, 98 linii <span class='muted'>· punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).</span></summary>
+<details><summary><code>app_entry.py</code> — 3 funkcji, 101 linii <span class='muted'>· punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).</span></summary>
 <table class="fn"><tbody>
-<tr><td class='r muted'>25</td><td><code>_log_crash</code></td><td>Zapisz pelny traceback obok .exe — zamrozony worker nie ma stdout w GUI-mode.</td></tr>
-<tr><td class='r muted'>36</td><td><code>_run_worker</code></td><td></td></tr>
-<tr><td class='r muted'>58</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>26</td><td><code>_log_crash</code></td><td>Zapisz pelny traceback obok .exe — zamrozony worker nie ma stdout w GUI-mode.</td></tr>
+<tr><td class='r muted'>37</td><td><code>_run_worker</code></td><td></td></tr>
+<tr><td class='r muted'>61</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>app_gui.py</code> — 53 funkcji, 1206 linii <span class='muted'>· panel sterujacy calym obiegiem wzorcowania (PySide6).</span></summary>
+<details><summary><code>app_gui.py</code> — 56 funkcji, 1272 linii <span class='muted'>· panel sterujacy calym obiegiem wzorcowania (PySide6).</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>51</td><td><code>zasob</code></td><td></td></tr>
-<tr><td class='r muted'>85</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>141</td><td><code>folder</code></td><td></td></tr>
-<tr><td class='r muted'>144</td><td><code>_naglowek</code></td><td></td></tr>
-<tr><td class='r muted'>178</td><td><code>_wybierz_folder</code></td><td></td></tr>
-<tr><td class='r muted'>185</td><td><code>_folder_logow</code></td><td>Folder wejsciowy kroku 1 — wzgledny liczony od folderu roboczego.</td></tr>
-<tr><td class='r muted'>190</td><td><code>_odswiez_folder</code></td><td>Po zmianie folderu przeladowuje wszystkie listy plikow i kontrolki.</td></tr>
-<tr><td class='r muted'>203</td><td><code>_listwa</code></td><td></td></tr>
-<tr><td class='r muted'>263</td><td><code>_status</code></td><td></td></tr>
-<tr><td class='r muted'>271</td><td><code>_strony</code></td><td></td></tr>
-<tr><td class='r muted'>283</td><td><code>_przelacz</code></td><td></td></tr>
-<tr><td class='r muted'>298</td><td><code>_przewijalna</code></td><td>Zwraca (scroll, layout) — kazda strona kroku jest przewijalna.</td></tr>
-<tr><td class='r muted'>311</td><td><code>_karta</code></td><td></td></tr>
-<tr><td class='r muted'>321</td><td><code>_podpis</code></td><td></td></tr>
-<tr><td class='r muted'>326</td><td><code>_linia</code></td><td></td></tr>
-<tr><td class='r muted'>332</td><td><code>_naglowek_kroku</code></td><td>Szapka strony kroku: nazwa, opis i PRZYCISK URUCHOMIENIA.</td></tr>
-<tr><td class='r muted'>370</td><td><code>_strona_kroku</code></td><td>Zwraca (strona, layout_tresci). Szapka nie przewija sie z trescia.</td></tr>
-<tr><td class='r muted'>382</td><td><code>_zbuduj_pole</code></td><td>Tworzy Pole, rejestruje je i podpina zapis ustawien.</td></tr>
-<tr><td class='r muted'>390</td><td><code>_dodaj_pola</code></td><td>Wstawia karty pogrupowane wg `grupa`, zachowujac kolejnosc rejestru.</td></tr>
-<tr><td class='r muted'>407</td><td><code>_strona_przygotowanie</code></td><td></td></tr>
-<tr><td class='r muted'>425</td><td><code>sciezka</code></td><td></td></tr>
-<tr><td class='r muted'>429</td><td><code>plik_czujnika</code></td><td></td></tr>
-<tr><td class='r muted'>485</td><td><code>_strona_analiza</code></td><td></td></tr>
-<tr><td class='r muted'>507</td><td><code>_strona_obserwacja</code></td><td></td></tr>
-<tr><td class='r muted'>538</td><td><code>_karta_przetwornikow</code></td><td>Podpunkt kroku 2 — przetworniki (wyjscie pradowe/napieciowe): plik(i)</td></tr>
-<tr><td class='r muted'>560</td><td><code>_strona_arkusze</code></td><td></td></tr>
-<tr><td class='r muted'>567</td><td><code>_strona_warunki</code></td><td></td></tr>
-<tr><td class='r muted'>577</td><td><code>_strona_swiadectwa</code></td><td></td></tr>
-<tr><td class='r muted'>584</td><td><code>_folder_porownania</code></td><td>Folder kroku 6 — protokoly do porownania i arkusze porownawcze (tworzony od razu).</td></tr>
-<tr><td class='r muted'>594</td><td><code>_strona_porownanie</code></td><td></td></tr>
-<tr><td class='r muted'>618</td><td><code>_strona_zaawansowane</code></td><td></td></tr>
-<tr><td class='r muted'>651</td><td><code>_przywroc_domyslne</code></td><td></td></tr>
-<tr><td class='r muted'>671</td><td><code>_dol</code></td><td></td></tr>
-<tr><td class='r muted'>709</td><td><code>_zapisz_log</code></td><td></td></tr>
-<tr><td class='r muted'>724</td><td><code>_zmiana</code></td><td></td></tr>
-<tr><td class='r muted'>731</td><td><code>_zbierz</code></td><td></td></tr>
-<tr><td class='r muted'>739</td><td><code>_zapisz</code></td><td></td></tr>
-<tr><td class='r muted'>746</td><td><code>_problemy</code></td><td>Lista czytelnych zastrzezen; pusta = wszystko na miejscu.</td></tr>
-<tr><td class='r muted'>849</td><td><code>pliki_nadpisywane_przez_krok2</code></td><td>Protokol i arkusz obserwacji, ktore krok 2 utworzy OD NOWA dla wybranego</td></tr>
-<tr><td class='r muted'>869</td><td><code>_potwierdz_nadpisanie_protokolu</code></td><td>Krok 2 tworzy protokol i obserwacje OD NOWA. Dwa razy przepadlo przez to</td></tr>
-<tr><td class='r muted'>888</td><td><code>_problemy_zawartosci</code></td><td>Sprawdza, czy wybrane pliki SA tym, za co sie podaja.</td></tr>
-<tr><td class='r muted'>923</td><td><code>_uruchom</code></td><td></td></tr>
-<tr><td class='r muted'>952</td><td><code>_nastepny</code></td><td></td></tr>
-<tr><td class='r muted'>994</td><td><code>_wyjscie</code></td><td></td></tr>
-<tr><td class='r muted'>998</td><td><code>_blad_startu</code></td><td></td></tr>
-<tr><td class='r muted'>1002</td><td><code>_koniec</code></td><td></td></tr>
-<tr><td class='r muted'>1026</td><td><code>_przerwij</code></td><td></td></tr>
-<tr><td class='r muted'>1034</td><td><code>_zajety</code></td><td></td></tr>
-<tr><td class='r muted'>1042</td><td><code>closeEvent</code></td><td></td></tr>
-<tr><td class='r muted'>1056</td><td><code>_qss</code></td><td></td></tr>
-<tr><td class='r muted'>1159</td><td><code>_podepnij_raportowanie_bledow</code></td><td>Kieruje nieobsluzone wyjatki do logu panelu.</td></tr>
-<tr><td class='r muted'>1170</td><td><code>hak</code></td><td></td></tr>
-<tr><td class='r muted'>1189</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>87</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>143</td><td><code>folder</code></td><td></td></tr>
+<tr><td class='r muted'>146</td><td><code>_naglowek</code></td><td></td></tr>
+<tr><td class='r muted'>180</td><td><code>_wybierz_folder</code></td><td></td></tr>
+<tr><td class='r muted'>187</td><td><code>_folder_logow</code></td><td>Folder wejsciowy kroku 1 — wzgledny liczony od folderu roboczego.</td></tr>
+<tr><td class='r muted'>192</td><td><code>_odswiez_folder</code></td><td>Po zmianie folderu przeladowuje wszystkie listy plikow i kontrolki.</td></tr>
+<tr><td class='r muted'>205</td><td><code>_listwa</code></td><td></td></tr>
+<tr><td class='r muted'>265</td><td><code>_status</code></td><td></td></tr>
+<tr><td class='r muted'>273</td><td><code>_strony</code></td><td></td></tr>
+<tr><td class='r muted'>286</td><td><code>_przelacz</code></td><td></td></tr>
+<tr><td class='r muted'>307</td><td><code>_przewijalna</code></td><td>Zwraca (scroll, layout) — kazda strona kroku jest przewijalna.</td></tr>
+<tr><td class='r muted'>320</td><td><code>_karta</code></td><td></td></tr>
+<tr><td class='r muted'>330</td><td><code>_podpis</code></td><td></td></tr>
+<tr><td class='r muted'>335</td><td><code>_linia</code></td><td></td></tr>
+<tr><td class='r muted'>341</td><td><code>_naglowek_kroku</code></td><td>Szapka strony kroku: nazwa, opis i PRZYCISK URUCHOMIENIA.</td></tr>
+<tr><td class='r muted'>379</td><td><code>_strona_kroku</code></td><td>Zwraca (strona, layout_tresci). Szapka nie przewija sie z trescia.</td></tr>
+<tr><td class='r muted'>391</td><td><code>_zbuduj_pole</code></td><td>Tworzy Pole, rejestruje je i podpina zapis ustawien.</td></tr>
+<tr><td class='r muted'>399</td><td><code>_dodaj_pola</code></td><td>Wstawia karty pogrupowane wg `grupa`, zachowujac kolejnosc rejestru.</td></tr>
+<tr><td class='r muted'>416</td><td><code>_strona_przygotowanie</code></td><td></td></tr>
+<tr><td class='r muted'>434</td><td><code>sciezka</code></td><td></td></tr>
+<tr><td class='r muted'>438</td><td><code>plik_czujnika</code></td><td></td></tr>
+<tr><td class='r muted'>494</td><td><code>_strona_analiza</code></td><td></td></tr>
+<tr><td class='r muted'>516</td><td><code>_strona_obserwacja</code></td><td></td></tr>
+<tr><td class='r muted'>547</td><td><code>_karta_przetwornikow</code></td><td>Podpunkt kroku 2 — przetworniki (wyjscie pradowe/napieciowe): plik(i)</td></tr>
+<tr><td class='r muted'>569</td><td><code>_strona_obserwacja_poprawiona</code></td><td></td></tr>
+<tr><td class='r muted'>595</td><td><code>obserwacja_wybranego_pomiaru</code></td><td>(nazwa obserwacji, nazwa protokolu) dla TXT zaznaczonych w kroku 2 albo (None, None).</td></tr>
+<tr><td class='r muted'>604</td><td><code>_odswiez_obserwacje_poprawiona</code></td><td></td></tr>
+<tr><td class='r muted'>616</td><td><code>_strona_arkusze</code></td><td></td></tr>
+<tr><td class='r muted'>623</td><td><code>_strona_warunki</code></td><td></td></tr>
+<tr><td class='r muted'>633</td><td><code>_strona_swiadectwa</code></td><td></td></tr>
+<tr><td class='r muted'>640</td><td><code>_folder_porownania</code></td><td>Folder kroku 6 — protokoly do porownania i arkusze porownawcze (tworzony od razu).</td></tr>
+<tr><td class='r muted'>650</td><td><code>_strona_porownanie</code></td><td></td></tr>
+<tr><td class='r muted'>674</td><td><code>_strona_zaawansowane</code></td><td></td></tr>
+<tr><td class='r muted'>707</td><td><code>_przywroc_domyslne</code></td><td></td></tr>
+<tr><td class='r muted'>727</td><td><code>_dol</code></td><td></td></tr>
+<tr><td class='r muted'>765</td><td><code>_zapisz_log</code></td><td></td></tr>
+<tr><td class='r muted'>780</td><td><code>_zmiana</code></td><td></td></tr>
+<tr><td class='r muted'>787</td><td><code>_zbierz</code></td><td></td></tr>
+<tr><td class='r muted'>795</td><td><code>_zapisz</code></td><td></td></tr>
+<tr><td class='r muted'>802</td><td><code>_problemy</code></td><td>Lista czytelnych zastrzezen; pusta = wszystko na miejscu.</td></tr>
+<tr><td class='r muted'>915</td><td><code>pliki_nadpisywane_przez_krok2</code></td><td>Protokol i arkusz obserwacji, ktore krok 2 utworzy OD NOWA dla wybranego</td></tr>
+<tr><td class='r muted'>935</td><td><code>_potwierdz_nadpisanie_protokolu</code></td><td>Krok 2 tworzy protokol i obserwacje OD NOWA. Dwa razy przepadlo przez to</td></tr>
+<tr><td class='r muted'>954</td><td><code>_problemy_zawartosci</code></td><td>Sprawdza, czy wybrane pliki SA tym, za co sie podaja.</td></tr>
+<tr><td class='r muted'>989</td><td><code>_uruchom</code></td><td></td></tr>
+<tr><td class='r muted'>1018</td><td><code>_nastepny</code></td><td></td></tr>
+<tr><td class='r muted'>1060</td><td><code>_wyjscie</code></td><td></td></tr>
+<tr><td class='r muted'>1064</td><td><code>_blad_startu</code></td><td></td></tr>
+<tr><td class='r muted'>1068</td><td><code>_koniec</code></td><td></td></tr>
+<tr><td class='r muted'>1092</td><td><code>_przerwij</code></td><td></td></tr>
+<tr><td class='r muted'>1100</td><td><code>_zajety</code></td><td></td></tr>
+<tr><td class='r muted'>1108</td><td><code>closeEvent</code></td><td></td></tr>
+<tr><td class='r muted'>1122</td><td><code>_qss</code></td><td></td></tr>
+<tr><td class='r muted'>1225</td><td><code>_podepnij_raportowanie_bledow</code></td><td>Kieruje nieobsluzone wyjatki do logu panelu.</td></tr>
+<tr><td class='r muted'>1236</td><td><code>hak</code></td><td></td></tr>
+<tr><td class='r muted'>1255</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>cc_config.py</code> — 16 funkcji, 746 linii <span class='muted'>· jedno zrodlo prawdy o ustawieniach calego obiegu.</span></summary>
+<details><summary><code>cc_config.py</code> — 16 funkcji, 749 linii <span class='muted'>· jedno zrodlo prawdy o ustawieniach calego obiegu.</span></summary>
 <table class="fn"><tbody>
-<tr><td class='r muted'>81</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>104</td><td><code>do_env</code></td><td>Zamienia wartosc na tekst przekazywany do podprocesu.</td></tr>
-<tr><td class='r muted'>115</td><td><code>_U</code></td><td></td></tr>
-<tr><td class='r muted'>611</td><td><code>dla_kroku</code></td><td>Ustawienia danego kroku; opcjonalnie tylko danego poziomu.</td></tr>
-<tr><td class='r muted'>617</td><td><code>domyslne</code></td><td>Slownik env -&gt; wartosc domyslna.</td></tr>
-<tr><td class='r muted'>625</td><td><code>wczytaj</code></td><td>Wczytuje zapisane ustawienia, uzupelniajac braki wartosciami domyslnymi.</td></tr>
-<tr><td class='r muted'>649</td><td><code>zapisz</code></td><td>Zapisuje ustawienia. Zwraca None przy sukcesie albo tekst bledu.</td></tr>
-<tr><td class='r muted'>659</td><td><code>do_env</code></td><td>Slownik zmiennych srodowiskowych dla podprocesu-workera.</td></tr>
-<tr><td class='r muted'>676</td><td><code>flaga</code></td><td></td></tr>
-<tr><td class='r muted'>681</td><td><code>liczba</code></td><td></td></tr>
-<tr><td class='r muted'>691</td><td><code>calk</code></td><td></td></tr>
-<tr><td class='r muted'>701</td><td><code>tekst</code></td><td></td></tr>
-<tr><td class='r muted'>706</td><td><code>minuty</code></td><td>Zwraca timedelta. domyslna_td to timedelta uzywana, gdy zmiennej brak.</td></tr>
-<tr><td class='r muted'>717</td><td><code>lista</code></td><td>Lista tekstow rozdzielonych srednikiem.</td></tr>
-<tr><td class='r muted'>725</td><td><code>tabela</code></td><td>Lista wierszy (lista list) zapisana w env jako JSON.</td></tr>
-<tr><td class='r muted'>737</td><td><code>sciezka</code></td><td>Sciezka do pliku/folderu. Wartosc wzgledna rozwijana jest wzgledem `baza`</td></tr>
+<tr><td class='r muted'>84</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>107</td><td><code>do_env</code></td><td>Zamienia wartosc na tekst przekazywany do podprocesu.</td></tr>
+<tr><td class='r muted'>118</td><td><code>_U</code></td><td></td></tr>
+<tr><td class='r muted'>614</td><td><code>dla_kroku</code></td><td>Ustawienia danego kroku; opcjonalnie tylko danego poziomu.</td></tr>
+<tr><td class='r muted'>620</td><td><code>domyslne</code></td><td>Slownik env -&gt; wartosc domyslna.</td></tr>
+<tr><td class='r muted'>628</td><td><code>wczytaj</code></td><td>Wczytuje zapisane ustawienia, uzupelniajac braki wartosciami domyslnymi.</td></tr>
+<tr><td class='r muted'>652</td><td><code>zapisz</code></td><td>Zapisuje ustawienia. Zwraca None przy sukcesie albo tekst bledu.</td></tr>
+<tr><td class='r muted'>662</td><td><code>do_env</code></td><td>Slownik zmiennych srodowiskowych dla podprocesu-workera.</td></tr>
+<tr><td class='r muted'>679</td><td><code>flaga</code></td><td></td></tr>
+<tr><td class='r muted'>684</td><td><code>liczba</code></td><td></td></tr>
+<tr><td class='r muted'>694</td><td><code>calk</code></td><td></td></tr>
+<tr><td class='r muted'>704</td><td><code>tekst</code></td><td></td></tr>
+<tr><td class='r muted'>709</td><td><code>minuty</code></td><td>Zwraca timedelta. domyslna_td to timedelta uzywana, gdy zmiennej brak.</td></tr>
+<tr><td class='r muted'>720</td><td><code>lista</code></td><td>Lista tekstow rozdzielonych srednikiem.</td></tr>
+<tr><td class='r muted'>728</td><td><code>tabela</code></td><td>Lista wierszy (lista list) zapisana w env jako JSON.</td></tr>
+<tr><td class='r muted'>740</td><td><code>sciezka</code></td><td>Sciezka do pliku/folderu. Wartosc wzgledna rozwijana jest wzgledem `baza`</td></tr>
 </tbody></table></details>
 <details><summary><code>cc_excel.py</code> — 19 funkcji, 360 linii <span class='muted'>· wlasne instancje Excela: uruchomienie i PEWNE zamkniecie.</span></summary>
 <table class="fn"><tbody>
@@ -740,7 +744,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>5238</td><td><code>_wyczysc_autorecover_folder</code></td><td>Usuwa stare pliki autoodzyskiwania Excela z %AppData%\Microsoft\Excel,</td></tr>
 <tr><td class='r muted'>5286</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>generuj_obserwacje.py</code> — 141 funkcji, 4625 linii <span class='muted'>· Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</span></summary>
+<details><summary><code>generuj_obserwacje.py</code> — 148 funkcji, 4875 linii <span class='muted'>· Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>205</td><td><code>parse_measurement_id</code></td><td>Zwraca część nazwy pliku po &#x27;YYYY-MM-DD HH.MM &#x27; (np. &#x27;119_141_147_149_151_164&#x27;).</td></tr>
 <tr><td class='r muted'>214</td><td><code>open_txt</code></td><td>Otwiera plik TXT próbując kolejnych kodowań.</td></tr>
@@ -842,47 +846,54 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>2716</td><td><code>_format_rozdz</code></td><td>Format liczbowy Excela wg rozdzielczosci: 0.1 -&gt; &#x27;0.0&#x27;, 0.01 -&gt; &#x27;0.00&#x27;, 1 -&gt; &#x27;0&#x27;.</td></tr>
 <tr><td class='r muted'>2724</td><td><code>_minuty_punktu</code></td><td>Pelne minuty punktu — cele doboru wierszy przyrzadow.</td></tr>
 <tr><td class='r muted'>2742</td><td><code>_znajdz_5_wierszy</code></td><td>Dla listy 5 docelowych dat/czasow zwraca liste 5 najblizszych wpisow</td></tr>
-<tr><td class='r muted'>2757</td><td><code>_oznacz_wyniki_xlsx</code></td><td>Koloruje w pliku wynikow (krok 1) wiersze wybrane przez obserwacje.</td></tr>
-<tr><td class='r muted'>2822</td><td><code>_wypelnij_wyniki_srodowiskowe</code></td><td>Wpisuje dane srodowiskowe (Temperatura+Wilgotnosc) z plikow WYNIKI_FOLDER do</td></tr>
-<tr><td class='r muted'>2901</td><td><code>_wpisz</code></td><td>Wpisuje jedna kolumne (temp z val_idx) + opc. wilgotnosc do blokow punktow.</td></tr>
-<tr><td class='r muted'>3028</td><td><code>wypelnij_podpisy_strona2</code></td><td>Wpisuje date i podpis w bloku po prawej stronie Strony 2:</td></tr>
-<tr><td class='r muted'>3046</td><td><code>_ostrzez_o_brakujacych_plikach</code></td><td>Przyrzad z PZ wzorcowany w komorze, dla ktorego nie ma pliku wynikow, nie</td></tr>
-<tr><td class='r muted'>3074</td><td><code>_rozdz_rh</code></td><td>Rozdzielczosc RH do kolumny L: z Zestawienia, potem z odczytow wilgotnosci.</td></tr>
-<tr><td class='r muted'>3087</td><td><code>_skalowanie_nie_dotyczy</code></td><td>M, N &#x27;Skalowanie przetwornika (jesli dotyczy)&#x27;: pusta komorka -&gt; &#x27;-&#x27;.</td></tr>
-<tr><td class='r muted'>3095</td><td><code>wypelnij_strone2_z_pz</code></td><td>Wypelnia tabele przyrzadow na Stronie 2 protokolu na podstawie PZ.</td></tr>
-<tr><td class='r muted'>3151</td><td><code>_set</code></td><td></td></tr>
-<tr><td class='r muted'>3186</td><td><code>_wyszarz_punkty_spoza_zamowienia</code></td><td>Wyszarza odczyty przyrzadu w punktach, ktorych NIE zamowiono wlasnie dla niego.</td></tr>
-<tr><td class='r muted'>3244</td><td><code>_delete_rows_via_excel</code></td><td>Usuwa row_count wierszy od row_from przez Excel COM (przesuwa reszte w gore —</td></tr>
-<tr><td class='r muted'>3286</td><td><code>_insert_blocks_via_excel</code></td><td>Otwiera plik w Excelu przez COM i wykonuje n_extra razy operacje</td></tr>
-<tr><td class='r muted'>3341</td><td><code>_rozszerz_kolumny_przyrzadow</code></td><td>Dokłada PARY kolumn przyrzadow w Stronie 3, gdy przyrzadow jest wiecej niz w szablonie</td></tr>
-<tr><td class='r muted'>3441</td><td><code>_ustaw_komorke</code></td><td>Wpisuje wartosc, uwzgledniajac SCALENIA: gdy (row,col) lezy w scalonym zakresie,</td></tr>
-<tr><td class='r muted'>3454</td><td><code>_kolumna_roku_s3</code></td><td>Kolumna na ROK w naglowku Strony 3 = pierwsza kolumna ZA etykieta &#x27;/LA/TH/&#x27;.</td></tr>
-<tr><td class='r muted'>3472</td><td><code>_zapisz_bezpiecznie</code></td><td>Zapisuje skoroszyt; gdy plik jest OTWARTY w Excelu (zablokowany) — daje czytelny</td></tr>
-<tr><td class='r muted'>3495</td><td><code>_round_hm</code></td><td>Zaokrągla datetime do pelnej minuty i zwraca string HH:MM.</td></tr>
-<tr><td class='r muted'>3504</td><td><code>_wsp_korelacji</code></td><td>Wspolczynnik korelacji Pearsona (None, gdy za malo danych lub brak zmiennosci).</td></tr>
-<tr><td class='r muted'>3517</td><td><code>rola_przetwornika</code></td><td>&#x27;t&#x27; albo &#x27;rh&#x27; — co mierzy wyjscie przetwornika w kolumnie `idx`. Naglowek pliku</td></tr>
-<tr><td class='r muted'>3544</td><td><code>urzadzenia_przetwornikow</code></td><td>Przyrzady wzorcowane przez wyjscia analogowe. Kanaly dzielimy na temperature</td></tr>
-<tr><td class='r muted'>3559</td><td><code>nr</code></td><td></td></tr>
-<tr><td class='r muted'>3591</td><td><code>opis_kanalow_przetwornika</code></td><td>Tekst do &#x27;Uwag&#x27; na Stronie 2 — jak wpisywany recznie:</td></tr>
-<tr><td class='r muted'>3609</td><td><code>jednostka_przetwornika</code></td><td>&#x27;V&#x27; / &#x27;mA&#x27; dla wyjscia przetwornika, &#x27;-&#x27; gdy tego wyjscia nie ma.</td></tr>
-<tr><td class='r muted'>3617</td><td><code>_wpisz_przetwornik</code></td><td>Wskazania multimetru z wyjsc przetwornika -&gt; para kolumn przyrzadu (t, RH).</td></tr>
-<tr><td class='r muted'>3640</td><td><code>_serial_przetwornika</code></td><td>Nr fabryczny przetwornika: jedyny przyrzad z PZ wzorcowany w komorze, inaczej &#x27;&#x27;.</td></tr>
-<tr><td class='r muted'>3647</td><td><code>_uwagi_bez_tresci</code></td><td>Puste &#x27;Uwagi&#x27; (kol. P) przyrzadu -&gt; &#x27;-&#x27; na szarym tle, jak inne pola bez danych.</td></tr>
-<tr><td class='r muted'>3656</td><td><code>_wypelnij_przetworniki_strona2</code></td><td>Wiersz przetwornika na Stronie 2: dane przyrzadu jak zwykle (z PZ), ale</td></tr>
-<tr><td class='r muted'>3697</td><td><code>multimetr_z_naglowka</code></td><td>&#x27;Multimetr wzorcowy Pt100: 1586A-02&#x27; -&gt; &#x27;1586A-02&#x27; (None, gdy brak).</td></tr>
-<tr><td class='r muted'>3708</td><td><code>_wypelnij_strone1_przetworniki</code></td><td>Przetworniki mierzone multimetrem -&gt; Strona 1, p. 1.5 (D53, I53, I58).</td></tr>
-<tr><td class='r muted'>3725</td><td><code>generuj_protokol</code></td><td>Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.</td></tr>
-<tr><td class='r muted'>3935</td><td><code>_subst</code></td><td>Podmienia Pt100-XX w wartosci komorki lub wpisuje nazwe jesli brak wzorca.</td></tr>
-<tr><td class='r muted'>4077</td><td><code>_podpisz_i_nazwij</code></td><td>Dopisuje podpis do pliku i nadaje mu nazwe zlecenia. Zwraca nowa nazwe albo None.</td></tr>
-<tr><td class='r muted'>4103</td><td><code>opracuj_pliki_wynikow</code></td><td>Ostatni krok obrobki plikow z kroku 1: podpis &#x27;Opracowal / Data&#x27; i nazwa zlecenia.</td></tr>
-<tr><td class='r muted'>4142</td><td><code>sciezka_zestawienia</code></td><td>Zestawienie zbiorcze do zaznaczania: swieze z kroku 1 (&#x27;zestawienie_pomiarow.xlsx&#x27;),</td></tr>
-<tr><td class='r muted'>4153</td><td><code>oznacz_zestawienie_punkty</code></td><td>W pliku wyniki/zestawienie_pomiarow.xlsx (wszystkie przyrzady na wspolnej osi czasu)</td></tr>
-<tr><td class='r muted'>4239</td><td><code>_czas_z_nazwy_foto</code></td><td>Czas zdjecia z NAZWY pliku (np. &#x27;2026-07-23_16.12.51.jpg&#x27;). None gdy brak.</td></tr>
-<tr><td class='r muted'>4252</td><td><code>_indeks_zdjec</code></td><td>Indeks zdjec: posortowana lista (czas, sciezka). Czas z nazwy pliku, a gdy nazwa</td></tr>
-<tr><td class='r muted'>4282</td><td><code>_najblizsze_zdjecie</code></td><td>Zwraca (czas, sciezka, odchylka) zdjecia najblizszego czasowi `cel`.</td></tr>
-<tr><td class='r muted'>4296</td><td><code>_nazwa_folderu_punktu</code></td><td>Nazwa podfolderu punktu, np. &#x27;punkt_01_50,0C&#x27; albo &#x27;punkt_07_23,0C_60RH&#x27;.</td></tr>
-<tr><td class='r muted'>4309</td><td><code>kopiuj_foto_punktow</code></td><td>Kopiuje zdjecia odpowiadajace WYBRANYM punktom: dla kazdego z 5 wierszy</td></tr>
-<tr><td class='r muted'>4379</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>2764</td><td><code>_wyczysc_oznaczenia_punktow</code></td><td>Zdejmuje oznaczenia punktow z tabeli (wiersze 2+): wypelnienie, pogrubienie, numer.</td></tr>
+<tr><td class='r muted'>2782</td><td><code>_oznacz_wyniki_xlsx</code></td><td>Koloruje w pliku wynikow (krok 1) wiersze wybrane przez obserwacje.</td></tr>
+<tr><td class='r muted'>2849</td><td><code>_wypelnij_wyniki_srodowiskowe</code></td><td>Wpisuje dane srodowiskowe (Temperatura+Wilgotnosc) z plikow WYNIKI_FOLDER do</td></tr>
+<tr><td class='r muted'>2928</td><td><code>_wpisz</code></td><td>Wpisuje jedna kolumne (temp z val_idx) + opc. wilgotnosc do blokow punktow.</td></tr>
+<tr><td class='r muted'>3055</td><td><code>wypelnij_podpisy_strona2</code></td><td>Wpisuje date i podpis w bloku po prawej stronie Strony 2:</td></tr>
+<tr><td class='r muted'>3073</td><td><code>_ostrzez_o_brakujacych_plikach</code></td><td>Przyrzad z PZ wzorcowany w komorze, dla ktorego nie ma pliku wynikow, nie</td></tr>
+<tr><td class='r muted'>3101</td><td><code>_rozdz_rh</code></td><td>Rozdzielczosc RH do kolumny L: z Zestawienia, potem z odczytow wilgotnosci.</td></tr>
+<tr><td class='r muted'>3114</td><td><code>_skalowanie_nie_dotyczy</code></td><td>M, N &#x27;Skalowanie przetwornika (jesli dotyczy)&#x27;: pusta komorka -&gt; &#x27;-&#x27;.</td></tr>
+<tr><td class='r muted'>3122</td><td><code>wypelnij_strone2_z_pz</code></td><td>Wypelnia tabele przyrzadow na Stronie 2 protokolu na podstawie PZ.</td></tr>
+<tr><td class='r muted'>3178</td><td><code>_set</code></td><td></td></tr>
+<tr><td class='r muted'>3213</td><td><code>_wyszarz_punkty_spoza_zamowienia</code></td><td>Wyszarza odczyty przyrzadu w punktach, ktorych NIE zamowiono wlasnie dla niego.</td></tr>
+<tr><td class='r muted'>3271</td><td><code>_delete_rows_via_excel</code></td><td>Usuwa row_count wierszy od row_from przez Excel COM (przesuwa reszte w gore —</td></tr>
+<tr><td class='r muted'>3313</td><td><code>_insert_blocks_via_excel</code></td><td>Otwiera plik w Excelu przez COM i wykonuje n_extra razy operacje</td></tr>
+<tr><td class='r muted'>3368</td><td><code>_rozszerz_kolumny_przyrzadow</code></td><td>Dokłada PARY kolumn przyrzadow w Stronie 3, gdy przyrzadow jest wiecej niz w szablonie</td></tr>
+<tr><td class='r muted'>3468</td><td><code>_ustaw_komorke</code></td><td>Wpisuje wartosc, uwzgledniajac SCALENIA: gdy (row,col) lezy w scalonym zakresie,</td></tr>
+<tr><td class='r muted'>3481</td><td><code>_kolumna_roku_s3</code></td><td>Kolumna na ROK w naglowku Strony 3 = pierwsza kolumna ZA etykieta &#x27;/LA/TH/&#x27;.</td></tr>
+<tr><td class='r muted'>3499</td><td><code>_zapisz_bezpiecznie</code></td><td>Zapisuje skoroszyt; gdy plik jest OTWARTY w Excelu (zablokowany) — daje czytelny</td></tr>
+<tr><td class='r muted'>3522</td><td><code>_round_hm</code></td><td>Zaokrągla datetime do pelnej minuty i zwraca string HH:MM.</td></tr>
+<tr><td class='r muted'>3531</td><td><code>_wsp_korelacji</code></td><td>Wspolczynnik korelacji Pearsona (None, gdy za malo danych lub brak zmiennosci).</td></tr>
+<tr><td class='r muted'>3544</td><td><code>rola_przetwornika</code></td><td>&#x27;t&#x27; albo &#x27;rh&#x27; — co mierzy wyjscie przetwornika w kolumnie `idx`. Naglowek pliku</td></tr>
+<tr><td class='r muted'>3571</td><td><code>urzadzenia_przetwornikow</code></td><td>Przyrzady wzorcowane przez wyjscia analogowe. Kanaly dzielimy na temperature</td></tr>
+<tr><td class='r muted'>3586</td><td><code>nr</code></td><td></td></tr>
+<tr><td class='r muted'>3618</td><td><code>opis_kanalow_przetwornika</code></td><td>Tekst do &#x27;Uwag&#x27; na Stronie 2 — jak wpisywany recznie:</td></tr>
+<tr><td class='r muted'>3636</td><td><code>jednostka_przetwornika</code></td><td>&#x27;V&#x27; / &#x27;mA&#x27; dla wyjscia przetwornika, &#x27;-&#x27; gdy tego wyjscia nie ma.</td></tr>
+<tr><td class='r muted'>3644</td><td><code>_wpisz_przetwornik</code></td><td>Wskazania multimetru z wyjsc przetwornika -&gt; para kolumn przyrzadu (t, RH).</td></tr>
+<tr><td class='r muted'>3667</td><td><code>_serial_przetwornika</code></td><td>Nr fabryczny przetwornika: jedyny przyrzad z PZ wzorcowany w komorze, inaczej &#x27;&#x27;.</td></tr>
+<tr><td class='r muted'>3674</td><td><code>_uwagi_bez_tresci</code></td><td>Puste &#x27;Uwagi&#x27; (kol. P) przyrzadu -&gt; &#x27;-&#x27; na szarym tle, jak inne pola bez danych.</td></tr>
+<tr><td class='r muted'>3683</td><td><code>_wypelnij_przetworniki_strona2</code></td><td>Wiersz przetwornika na Stronie 2: dane przyrzadu jak zwykle (z PZ), ale</td></tr>
+<tr><td class='r muted'>3724</td><td><code>multimetr_z_naglowka</code></td><td>&#x27;Multimetr wzorcowy Pt100: 1586A-02&#x27; -&gt; &#x27;1586A-02&#x27; (None, gdy brak).</td></tr>
+<tr><td class='r muted'>3735</td><td><code>_wypelnij_strone1_przetworniki</code></td><td>Przetworniki mierzone multimetrem -&gt; Strona 1, p. 1.5 (D53, I53, I58).</td></tr>
+<tr><td class='r muted'>3752</td><td><code>generuj_protokol</code></td><td>Tworzy plik protokolu na podstawie reprezentacyjnych wierszy z obserwacji.</td></tr>
+<tr><td class='r muted'>3962</td><td><code>_subst</code></td><td>Podmienia Pt100-XX w wartosci komorki lub wpisuje nazwe jesli brak wzorca.</td></tr>
+<tr><td class='r muted'>4104</td><td><code>_podpisz_i_nazwij</code></td><td>Dopisuje podpis do pliku i nadaje mu nazwe zlecenia. Zwraca nowa nazwe albo None.</td></tr>
+<tr><td class='r muted'>4130</td><td><code>opracuj_pliki_wynikow</code></td><td>Ostatni krok obrobki plikow z kroku 1: podpis &#x27;Opracowal / Data&#x27; i nazwa zlecenia.</td></tr>
+<tr><td class='r muted'>4169</td><td><code>sciezka_zestawienia</code></td><td>Zestawienie zbiorcze do zaznaczania: swieze z kroku 1 (&#x27;zestawienie_pomiarow.xlsx&#x27;),</td></tr>
+<tr><td class='r muted'>4180</td><td><code>oznacz_zestawienie_punkty</code></td><td>W pliku wyniki/zestawienie_pomiarow.xlsx (wszystkie przyrzady na wspolnej osi czasu)</td></tr>
+<tr><td class='r muted'>4268</td><td><code>_czas_z_nazwy_foto</code></td><td>Czas zdjecia z NAZWY pliku (np. &#x27;2026-07-23_16.12.51.jpg&#x27;). None gdy brak.</td></tr>
+<tr><td class='r muted'>4281</td><td><code>_indeks_zdjec</code></td><td>Indeks zdjec: posortowana lista (czas, sciezka). Czas z nazwy pliku, a gdy nazwa</td></tr>
+<tr><td class='r muted'>4311</td><td><code>_najblizsze_zdjecie</code></td><td>Zwraca (czas, sciezka, odchylka) zdjecia najblizszego czasowi `cel`.</td></tr>
+<tr><td class='r muted'>4325</td><td><code>_nazwa_folderu_punktu</code></td><td>Nazwa podfolderu punktu, np. &#x27;punkt_01_50,0C&#x27; albo &#x27;punkt_07_23,0C_60RH&#x27;.</td></tr>
+<tr><td class='r muted'>4338</td><td><code>kopiuj_foto_punktow</code></td><td>Kopiuje zdjecia odpowiadajace WYBRANYM punktom: dla kazdego z 5 wierszy</td></tr>
+<tr><td class='r muted'>4423</td><td><code>_kolor_hex</code></td><td></td></tr>
+<tr><td class='r muted'>4430</td><td><code>_wiersz_oznaczony</code></td><td>Reprezentant punktu: komorka A wypelniona (nie na bialo) i pogrubiona.</td></tr>
+<tr><td class='r muted'>4443</td><td><code>punkty_z_obserwacji</code></td><td>Grupy reprezentantow oznaczonych w obserwacji -&gt; (grupy, problemy).</td></tr>
+<tr><td class='r muted'>4495</td><td><code>przypisz_punkty_pz</code></td><td>Punkt z PZ dla kazdej grupy (albo None) — jak w _wybierz_okna_wg_pz: kandydaci po</td></tr>
+<tr><td class='r muted'>4529</td><td><code>nazwa_obserwacji</code></td><td>Plik obserwacji kroku 2 dla pomiaru (ta sama nazwa, ktora krok 2 nadaje).</td></tr>
+<tr><td class='r muted'>4536</td><td><code>main_z_obserwacji</code></td><td>Krok 2b: protokol od nowa z punktow oznaczonych recznie w obserwacji.</td></tr>
+<tr><td class='r muted'>4629</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
 <details><summary><code>generuj_porownanie.py</code> — 19 funkcji, 557 linii <span class='muted'>· KROK 6: arkusze obliczeniowe porownawcze.</span></summary>
 <table class="fn"><tbody>
@@ -923,6 +934,10 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>242</td><td><code>rekord_arkusza</code></td><td>Rekord jak ze Strony 2 protokolu — tyle, ile potrzebuje utworz_kopie_word.</td></tr>
 <tr><td class='r muted'>257</td><td><code>main</code></td><td></td></tr>
 <tr><td class='r muted'>303</td><td><code>dane_miesiaca</code></td><td></td></tr>
+</tbody></table></details>
+<details><summary><code>protokol_z_obserwacji.py</code> — 1 funkcji, 25 linii <span class='muted'>· KROK 2b: protokol z poprawionej obserwacji.</span></summary>
+<table class="fn"><tbody>
+<tr><td class='r muted'>19</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
 <details><summary><code>pz_dane.py</code> — 61 funkcji, 1626 linii <span class='muted'>· wspolny modul do wczytywania danych przyrzadow z:</span></summary>
 <table class="fn"><tbody>

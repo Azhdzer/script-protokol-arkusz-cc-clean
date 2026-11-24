@@ -30,6 +30,8 @@ flowchart LR
   WYN --> K2
   K2 --> OBS[("Obserwacja")]
   K2 --> PROT[("Protokół<br/>Strona 1·2·3")]
+  OBS -. poprawione ręcznie .-> K2b["2b · Protokół z obserwacji<br/>protokol_z_obserwacji.py"]
+  K2b --> PROT
   POM["Pom. nr 9"] --> K4["4 · Warunki<br/>wypelnij_warunki.py"]
   K4 --> PROT
   PROT --> K3["3 · Arkusze i Word<br/>generuj_arkusze.py"]
@@ -44,7 +46,7 @@ flowchart LR
   classDef xf fill:#fef3c7,stroke:#d97706,color:#7c2d12;
   classDef out fill:#dcfce7,stroke:#16a34a,color:#14532d;
   class LOG,TXT,PZ,POM in
-  class K1,K2,K3,K4,K5,K6 xf
+  class K1,K2,K2b,K3,K4,K5,K6 xf
   class WYN,OBS,PROT,ARK,SW,POR out
 ```
 
@@ -52,6 +54,7 @@ flowchart LR
 |---|---|---|
 | **1 · Analiza logów** | logi w `excel_do_analizy/` (11+ formatów) | `wyniki/<zlecenie>_<serial>…xlsx` — `Czas \| t \| RH`, zestawienie |
 | **2 · Obserwacja** | TXT multimetru, `wyniki/`, PZ, Zestawienie, (pliki 1586A przetworników) | obserwacja z oknami punktów, protokół (Strona 1–3) |
+| **2b · Protokół z obserwacji** | obserwacja z punktami poprawionymi ręcznie, te same TXT, `wyniki/`, PZ | protokół od nowa z TYCH punktów, oznaczenia w wynikach i zestawieniu na nowo |
 | **3 · Arkusze i Word** | protokół, szablony, Wzory/Obliczenia, Pom. nr 9 | arkusz obliczeniowy na przyrząd, świadectwa Word |
 | **4 · Warunki** | protokół, Pom. nr 9 | t/RH pomieszczenia (F/G) dla każdego punktu |
 | **5 · Świadectwa z arkuszy** | uzupełnione arkusze w `Etap_5_ark_obl_to_word/` | świadectwa obok arkuszy |
@@ -71,6 +74,7 @@ Okno prowadzi przez obieg krok po kroku (lewa listwa), a każdy krok ma własny 
 | **Przygotowanie** | Lista kontrolna plików wejściowych z ich **wiekiem** — `Wzory.xls` sprzed wielu dni dostaje pomarańczowe „ZAKTUALIZUJ przed uruchomieniem”. |
 | **1 · Analiza logów** | Zaznaczanie plików z `excel_do_analizy/` (wybór zapamiętywany, nowe pliki niezaznaczone). |
 | **2 · Obserwacja** | Zaznaczanie plików TXT multimetru; podpisy, szablony, PZ, filtr, zdjęcia; **2a · Przetworniki** — pliki 1586A i karty przetworników. |
+| **2b · Protokół z obserwacji** | Instrukcja oznaczania, podgląd: które TXT, która obserwacja, który protokół zostanie przebudowany. |
 | **3 · Arkusze i Word** | Protokół, szablony, etapy, numer i numeracja świadectw, higrometr K18, podpisy, czujniki komór, szablony Word. |
 | **4 · Warunki środowiskowe** | Protokół i czujnik pomieszczenia. |
 | **5 · Świadectwa z arkuszy** | Folder arkuszy, numer początkowy, numeracja. |
@@ -83,10 +87,10 @@ zastrzeżeń (brak plików, niezaznaczone logi, istniejący protokół…). Nadp
 `kopie_zapasowe/`, a plik otwarty w Excelu jest najpierw zapisywany i zamykany. **Jeden krok naraz** —
 dwa przebiegi kroku 3 zamykają sobie nawzajem Excele.
 
-## ▶️ Uruchamianie — jeden exe, siedem trybów
+## ▶️ Uruchamianie — jeden exe, osiem trybów
 
 Panel uruchamia kroki jako podprocesy. W zamrożonym `.exe` ten sam plik pełni rolę panelu i kroku —
-o trybie decyduje `CC_WORKER`: puste = panel, `analiza`, `obserwacje`, `arkusze`, `warunki`, `swiadectwa`, `porownanie`.
+o trybie decyduje `CC_WORKER`: puste = panel, `analiza`, `obserwacje`, `protokol_obs`, `arkusze`, `warunki`, `swiadectwa`, `porownanie`.
 
 ```mermaid
 sequenceDiagram
@@ -142,21 +146,22 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 | Plik | Linie | Funkcje | Rola |
 |---|---:|---:|---|
 | `analizuj_excele.py` | 1950 | 57 | Universal Excel/CSV parser for temperature & humidity data loggers. |
-| `app_entry.py` | 98 | 3 | punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe). |
-| `app_gui.py` | 1206 | 53 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
-| `cc_config.py` | 746 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
+| `app_entry.py` | 101 | 3 | punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe). |
+| `app_gui.py` | 1272 | 56 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
+| `cc_config.py` | 749 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
 | `cc_excel.py` | 360 | 19 | wlasne instancje Excela: uruchomienie i PEWNE zamkniecie. |
 | `cc_kopia.py` | 57 | 2 | kopia zapasowa pliku PRZED jego nadpisaniem. |
 | `cc_szablon_przetwornika.py` | 536 | 21 | szablon arkusza obliczeniowego dla PRZETWORNIKA. |
 | `cc_widgets.py` | 1390 | 79 | elementy interfejsu panelu (app_gui.py). |
 | `cc_widok.py` | 145 | 4 | jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx. |
 | `generuj_arkusze.py` | 5315 | 163 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
-| `generuj_obserwacje.py` | 4625 | 141 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
+| `generuj_obserwacje.py` | 4875 | 148 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
 | `generuj_porownanie.py` | 557 | 19 | KROK 6: arkusze obliczeniowe porownawcze. |
 | `generuj_swiadectwa.py` | 369 | 15 | krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych. |
+| `protokol_z_obserwacji.py` | 25 | 1 | KROK 2b: protokol z poprawionej obserwacji. |
 | `pz_dane.py` | 1626 | 61 | wspolny modul do wczytywania danych przyrzadow z: |
 | `wypelnij_warunki.py` | 177 | 4 | krok 4: warunki srodowiskowe w protokole. |
-| `testy/` | — | 960 testów | 52 plików `test_*.py` (unittest) |
+| `testy/` | — | 970 testów | 53 plików `test_*.py` (unittest) |
 <!-- /AUTO:moduly_md -->
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
@@ -181,7 +186,7 @@ uruchomienie `python generuj_obserwacje.py` bez panelu działa jak dawniej.
 
 | Prefiks | Zakres | Przykłady |
 |---|---|---|
-| `CC_WORKER` | tryb exe | `analiza` / `obserwacje` / `arkusze` / `warunki` / `swiadectwa` / `porownanie` / (puste = GUI) |
+| `CC_WORKER` | tryb exe | `analiza` / `obserwacje` / `protokol_obs` / `arkusze` / `warunki` / `swiadectwa` / `porownanie` / (puste = GUI) |
 | `CC_*` | wspólne | `CC_FOLDER`, `CC_PROTOKOL`, `CC_SZABLON`, `CC_PZ_FOLDER`, `CC_ZESTAWIENIE` |
 | `ANL_*` | krok 1 — analiza | `ANL_PLIKI`, `ANL_INPUT`, `ANL_OUTPUT`, `ANL_DEBUG` |
 | `OBS_*` | krok 2 — obserwacja | `OBS_TXT_FILES`, `OBS_PODPIS`, `OBS_STAB_PO_RH`, `OBS_PROG_T`, `OBS_KOREKTA_ZEGARA`, `OBS_FOTO`, `OBS_FOTO_ZRODLO`, `OBS_FOTO_CEL`, … |
@@ -218,7 +223,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**960 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**970 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -331,6 +336,15 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 - **Odstęp reprezentantów od zmiany nastawy: 5 min** (było 2, `OBS_ODSTEP_KONIEC`): zegary przyrządów
   spóźniają się czasem o ~2 min względem komory, więc okno kończące się 2 min przed zmianą łapało u nich
   już przejście do kolejnego punktu. Zmiana nastawy o 14:13 → ostatni reprezentant najpóźniej 14:08.
+- **Krok 2b · Protokół z obserwacji** (`protokol_z_obserwacji.py` → `generuj_obserwacje.main_z_obserwacji`):
+  gdy krok 2 wybrał punkty nie tak (np. 61,2/25 i 61/59 poza tolerancją nastaw, 70,2 zamiast 70,3 —
+  zlecenie 243), operator poprawia wybór w obserwacji jak zwykle: **5 wierszy z wypełnieniem i
+  pogrubieniem** (kolor dowolny — także kolor motywu „zielony, akcent 6”), a z odrzuconych zdejmuje
+  pogrubienie. Krok 2b czyta te oznaczenia (dopasowanie po CZASIE, nie po numerze wiersza), buduje
+  protokół od nowa z danymi przyrządów dla tych chwil i oznacza punkty w wynikach i zestawieniu
+  **na nowo** (stare oznaczenia zdjęte). Punkt z PZ przypisany jak w kroku 2; punkt bez pary w PZ
+  (powtórzenie) zostaje w protokole, tylko bez wyszarzania przyrządów. Zła liczba wierszy w grupie =
+  błąd i protokół bez zmian. Warunki środowiskowe (krok 4) trzeba wpisać ponownie.
 - **Krok 6 · Arkusze porównawcze** (`generuj_porownanie.py`, folder `Etap_6_porownanie/` — tu protokoły
   do porównania i tu powstają arkusze, jak w kroku 5): „mega protokół”
   (zlecenie 243, `protokół CC-04_1`) ma między blokami **przekładki** — wiersze bez numeru, w których

@@ -40,6 +40,9 @@ KROKI = [
     ("przygotowanie", "Przygotowanie",       "Sprawdz pliki wejsciowe przed uruchomieniem"),
     ("analiza",       "1 · Analiza logow",   "Logi z przyrzadow  ->  wyniki/<serial>_wynik.xlsx"),
     ("obs",           "2 · Obserwacja",      "TXT multimetru  ->  arkusz obserwacji + protokol"),
+    ("obs_popr",      "2b · Protokół z obserwacji",
+     "Punkty poprawione recznie w obserwacji (5 wierszy: wypelnienie + pogrubienie)  ->  "
+     "protokol od nowa, z danymi przyrzadow dla tych punktow"),
     ("ark",           "3 · Arkusze i Word",  "Protokol  ->  kopie arkuszy Excel + swiadectwa Word"),
     ("srod",          "4 · Warunki środowiskowe",
      "Pom. nr 9  ->  Strona 3 protokolu: t i RH pomieszczenia dla kazdego punktu"),

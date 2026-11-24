@@ -2754,6 +2754,31 @@ def _znajdz_5_wierszy(wyniki_rows, target_times):
     return matched
 
 
+# Krok 2b (protokol z poprawionej obserwacji) przestawia na True: punkty sa inne niz
+# przy pierwszym przebiegu kroku 2, wiec stare oznaczenia (kolor, pogrubienie, numer
+# punktu) trzeba zdjac — inaczej zostalyby punkty, ktore operator odrzucil.
+CZYSC_STARE_OZNACZENIA = False
+_BEZ_WYPELNIENIA = PatternFill(fill_type=None)
+
+
+def _wyczysc_oznaczenia_punktow(ws, n_cols, marker_col, pogrubienie=True):
+    """Zdejmuje oznaczenia punktow z tabeli (wiersze 2+): wypelnienie, pogrubienie, numer."""
+    for r in range(2, ws.max_row + 1):
+        for col in range(1, n_cols + 1):
+            cell = ws.cell(row=r, column=col)
+            if cell.fill is not None and cell.fill.fill_type:
+                cell.fill = _BEZ_WYPELNIENIA
+            if pogrubienie and cell.font is not None and cell.font.b:
+                f = cell.font
+                cell.font = Font(name=f.name, size=f.size, italic=f.italic,
+                                 underline=f.underline, strike=f.strike, color=f.color,
+                                 bold=False)
+        m = ws.cell(row=r, column=marker_col)
+        if m.value is not None or (m.fill is not None and m.fill.fill_type):
+            m.value = None
+            m.fill = _BEZ_WYPELNIENIA
+
+
 def _oznacz_wyniki_xlsx(path, wiersze_wg_punktu, powody=None):
     """
     Koloruje w pliku wynikow (krok 1) wiersze wybrane przez obserwacje.
@@ -2778,6 +2803,8 @@ def _oznacz_wyniki_xlsx(path, wiersze_wg_punktu, powody=None):
         ws = wb.active
         n_cols = _szerokosc_tabeli_wynikow(ws)
         marker_col = n_cols + 2          # jedna kolumna odstepu, jak w zestawieniu
+        if CZYSC_STARE_OZNACZENIA:
+            _wyczysc_oznaczenia_punktow(ws, n_cols, marker_col, pogrubienie=True)
         ws.cell(row=1, column=marker_col).value = "Nr punktu"
 
         ile_wierszy = 0
@@ -4182,6 +4209,8 @@ def oznacz_zestawienie_punkty(rep_groups, rows, prefiks=None):
         return
 
     marker_col = n_col + 2            # kolumna na numer punktu (1 kolumna odstepu)
+    if CZYSC_STARE_OZNACZENIA:
+        _wyczysc_oznaczenia_punktow(ws, n_col, marker_col, pogrubienie=False)
     ws.cell(row=1, column=marker_col).value = "Nr punktu"
     czasy_zest = [dt for dt, _ in czas_rows]
     oznaczone = 0
@@ -4375,6 +4404,227 @@ def kopiuj_foto_punktow(rep_groups, rows):
 # =============================================================================
 # MAIN
 # =============================================================================
+
+# =============================================================================
+# KROK 2b — PROTOKOL Z POPRAWIONEJ OBSERWACJI
+# =============================================================================
+# Operator poprawia wybor punktow recznie w arkuszu obserwacji: 5 wierszy
+# reprezentantow punktu oznacza wypelnieniem i POGRUBIENIEM (jak skrypt: ciemna
+# zielen + bold; kolor dowolny — zwykle 'zielony, akcent 6, jasniejszy 40%'),
+# a niechciany wybor skryptu zdejmuje (bez pogrubienia). Krok 2b czyta te
+# oznaczenia i buduje protokol od nowa — z danymi przyrzadow dla TYCH punktow.
+
+# Reprezentanci jednego punktu leza w jednym segmencie nastaw, co ok. 1 min —
+# przerwa wieksza niz ta zaczyna kolejny punkt.
+MAKS_PRZERWA_REPREZENTANTOW = datetime.timedelta(minutes=10)
+_KOLORY_OSTRZEZENIA = {'F4B183'}   # pomaranczowy reprezentant kroku 2 (kryterium niespelnione)
+
+
+def _kolor_hex(fill):
+    fg = fill.fgColor if fill is not None else None
+    if fg is not None and fg.type == 'rgb' and isinstance(fg.rgb, str):
+        return fg.rgb[-6:].upper()
+    return None
+
+
+def _wiersz_oznaczony(cell):
+    """Reprezentant punktu: komorka A wypelniona (nie na bialo) i pogrubiona."""
+    f, font = getattr(cell, 'fill', None), getattr(cell, 'font', None)
+    if f is None or f.fill_type in (None, 'none') or not (font is not None and font.b):
+        return False
+    fg = f.fgColor
+    if fg.type == 'rgb' and isinstance(fg.rgb, str) and fg.rgb[-6:].upper() == 'FFFFFF':
+        return False
+    if fg.type == 'theme' and fg.theme == 0 and not (fg.tint or 0):
+        return False                               # 'Tlo 1' bez odcienia = bialy
+    return True
+
+
+def punkty_z_obserwacji(ws, data):
+    """
+    Grupy reprezentantow oznaczonych w obserwacji -> (grupy, problemy).
+
+    grupy: [(indeksy_danych[5], powod)] chronologicznie; indeks = pozycja w `data`
+    (wiersz TXT), znaleziona po CZASIE z kol. A, nie po numerze wiersza — wstawione
+    czy usuniete recznie wiersze nie przesuwaja punktow.
+    problemy: opisy grup, ktore nie maja dokladnie 5 wierszy albo nie pasuja do TXT.
+    """
+    po_czasie = {}
+    for i, d in enumerate(data):
+        if d[0] is not None:
+            po_czasie.setdefault(d[0], i)
+    oznaczone, problemy = [], []
+    for row in ws.iter_rows(min_row=2, max_col=1):
+        cell = row[0]
+        if not _wiersz_oznaczony(cell):
+            continue
+        v = cell.value
+        dt = v if isinstance(v, datetime.datetime) else (_s_to_dt(str(v)) if v else None)
+        idx = po_czasie.get(dt) if dt is not None else None
+        if idx is None:
+            problemy.append(f"wiersz {cell.row} ({v}) — brak takiego czasu w plikach TXT "
+                            f"(obserwacja z innego pomiaru?)")
+            continue
+        oznaczone.append((idx, cell.row, _kolor_hex(getattr(cell, 'fill', None))))
+    oznaczone.sort()
+
+    grupy_surowe = []
+    for idx, r, kolor in oznaczone:
+        if grupy_surowe:
+            p_idx = grupy_surowe[-1][-1][0]
+            ten_sam_segment = (data[p_idx][1], data[p_idx][2]) == (data[idx][1], data[idx][2])
+            if ten_sam_segment and data[idx][0] - data[p_idx][0] <= MAKS_PRZERWA_REPREZENTANTOW:
+                grupy_surowe[-1].append((idx, r, kolor))
+                continue
+        grupy_surowe.append([(idx, r, kolor)])
+
+    grupy = []
+    for nr, g in enumerate(grupy_surowe, 1):
+        wiersze = [r for _i, r, _k in g]
+        if len(g) != 5:
+            problemy.append(f"punkt {nr} (wiersze {wiersze[0]}–{wiersze[-1]}, nastawa "
+                            f"{data[g[0][0]][1]}/{data[g[0][0]][2]}): {len(g)} wierszy "
+                            f"pogrubionych zamiast 5")
+            continue
+        ostrz = any(k in _KOLORY_OSTRZEZENIA for _i, _r, k in g)
+        grupy.append(([i for i, _r, _k in g],
+                      "punkt pomaranczowy w obserwacji (kryterium niespelnione)" if ostrz else None))
+    return grupy, problemy
+
+
+def przypisz_punkty_pz(data, grupy, punkty_pz, idx_t_odcz, idx_rh_odcz):
+    """
+    Punkt z PZ dla kazdej grupy (albo None) — jak w _wybierz_okna_wg_pz: kandydaci po
+    nastawie w tolerancji TOL_PUNKT_*, wybor najblizszy ODCZYTOWI komory. Grupa bez
+    punktu z PZ zostaje w protokole (wybral ja operator) — tylko nie wyszarza przyrzadow.
+    """
+    wynik = [None] * len(grupy)
+    uzyte = set()
+    for punkt in punkty_pz or []:
+        t_exp, rh_exp = punkt
+        najlepsza = None
+        for g_i, (idx, _p) in enumerate(grupy):
+            if g_i in uzyte:
+                continue
+            b, c = data[idx[0]][1], data[idx[0]][2]
+            if b is None or abs(b - t_exp) > TOL_PUNKT_T:
+                continue
+            if rh_exp is not None and (c is None or abs(c - rh_exp) > TOL_PUNKT_RH):
+                continue
+            t_f = _mediana_odczytow(data, idx[0], idx[-1] + 1, idx_t_odcz)
+            rh_f = _mediana_odczytow(data, idx[0], idx[-1] + 1, idx_rh_odcz)
+            dyst = abs((t_f if t_f is not None else b) - t_exp)
+            if rh_exp is not None:
+                rh_p = rh_f if rh_f is not None else c
+                if rh_p is not None:
+                    dyst += abs(rh_p - rh_exp) / 10.0
+            if najlepsza is None or dyst < najlepsza[0] - 1e-9:
+                najlepsza = (dyst, g_i)
+        if najlepsza is not None:
+            uzyte.add(najlepsza[1])
+            wynik[najlepsza[1]] = punkt
+    return wynik
+
+
+def nazwa_obserwacji(measurement_id, file_type):
+    """Plik obserwacji kroku 2 dla pomiaru (ta sama nazwa, ktora krok 2 nadaje)."""
+    if file_type == 'CC04':
+        return CC04_TEMPLATE.replace('szablon', measurement_id, 1)
+    return TEMPLATE.replace('xxx', measurement_id, 1)
+
+
+def main_z_obserwacji():
+    """Krok 2b: protokol od nowa z punktow oznaczonych recznie w obserwacji."""
+    global CZYSC_STARE_OZNACZENIA
+    txt_files = resolve_txt_files()
+    measurement_id = parse_measurement_id(os.path.basename(txt_files[0]))
+    raw_lines = open_txt(txt_files[0])
+    file_type = detect_file_type(raw_lines)
+    obs_name = nazwa_obserwacji(measurement_id, file_type)
+    obs_path = os.path.join(FOLDER, obs_name)
+    print(f"Numer pomiaru : {measurement_id}  ({file_type})")
+    print(f"Pliki TXT     : {', '.join(os.path.basename(p) for p in txt_files)}")
+    print(f"Obserwacja    : {obs_name}")
+    if not os.path.exists(obs_path):
+        print(f"[BLAD] Brak obserwacji '{obs_name}' — najpierw krok 2 dla tego pomiaru.")
+        return 1
+    if cc_excel.plik_blokady(obs_path):
+        print(f"[UWAGA] '{obs_name}' jest otwarta w Excelu — czytam ostatnio ZAPISANA wersje. "
+              f"Niezapisane poprawki nie wejda do protokolu.")
+
+    if file_type == 'CC04':
+        sensor_names, rows = combine_txt(txt_files, parse_txt_cc04)
+        przetworniki = [(k, t, len(CC04_KOLUMNY) + j, None)
+                        for j, (k, t) in enumerate(kanaly_przetwornikow(raw_lines))]
+        przetworniki += dolacz_przetworniki_z_plikow(rows, _sciezki_plikow_przetwornikow())
+        data = _prepare_data_cc04(rows)
+        idx_t_odcz, idx_rh_odcz = 8, 9
+    else:
+        sensor_name, rows = combine_txt(txt_files, parse_txt)
+        sensor_names = [sensor_name]
+        przetworniki = dolacz_przetworniki_z_plikow(rows, _sciezki_plikow_przetwornikow())
+        data = _prepare_data(rows)
+        idx_t_odcz, idx_rh_odcz = 5, 6
+    print(f"Wierszy danych: {len(rows)}")
+
+    wb = openpyxl.load_workbook(obs_path, read_only=True)
+    try:
+        grupy, problemy = punkty_z_obserwacji(wb.worksheets[0], data)
+    finally:
+        wb.close()
+    if problemy:
+        print(f"\n[BLAD] Oznaczenia w obserwacji do poprawienia ({len(problemy)}):")
+        for p in problemy:
+            print(f"    • {p}")
+        print("  Kazdy punkt = 5 wierszy z wypelnieniem i POGRUBIENIEM w kolumnie A. "
+              "Protokol NIE zostal zmieniony.")
+        return 1
+    if not grupy:
+        print("[BLAD] W obserwacji nie ma oznaczonych punktow (wypelnienie + pogrubienie).")
+        return 1
+
+    print("\nWczytywanie danych przyrzadow (PZ + Zestawienie)...")
+    pz_mapa, pz_lista = pz_dane.wczytaj_pz(PZ_FOLDER)
+    punkty_pz = pz_dane.wczytaj_punkty(PZ_FOLDER) if WYBIERAJ_PUNKTY_WG_PZ else []
+    zest = pz_dane.wczytaj_zestawienie(ZESTAWIENIE_PLIK)
+    przypisane = przypisz_punkty_pz(data, grupy, punkty_pz, idx_t_odcz, idx_rh_odcz)
+
+    print(f"\nPunkty z obserwacji ({len(grupy)}):")
+    for nr, ((idx, powod), pz) in enumerate(zip(grupy, przypisane), 1):
+        d0 = data[idx[0]]
+        t_f = _mediana_odczytow(data, idx[0], idx[-1] + 1, idx_t_odcz)
+        rh_f = _mediana_odczytow(data, idx[0], idx[-1] + 1, idx_rh_odcz)
+        opis_pz = ("bez punktu z PZ (powtorzenie albo spoza zamowienia) — przyrzady "
+                   "nie sa wyszarzane" if pz is None else
+                   f"PZ {pz[0]:g}" + (f"/{pz[1]:g}" if pz[1] is not None else " (t)"))
+        print(f"  {nr:>2}. {d0[0]:%Y-%m-%d %H:%M}–{data[idx[-1]][0]:%H:%M}  nastawa "
+              f"{d0[1]}/{d0[2]}  odczyt komory {t_f}/{rh_f}  -> {opis_pz}"
+              + ("  [pomaranczowy]" if powod else ""))
+    if punkty_pz:
+        brak = [p for p in punkty_pz if p not in przypisane]
+        if brak:
+            print("  Punkty z PZ bez punktu w tej obserwacji (inny wsad?): "
+                  + ", ".join(f"{t:g}" + (f"/{rh:g}" if rh is not None else "") for t, rh in brak))
+
+    segments = [(idx, powod, pz) for (idx, powod), pz in zip(grupy, przypisane)]
+    kanaly_slotow = (przypisz_kanaly_pliku(kanaly_z_naglowka(raw_lines),
+                                           kanaly_przetwornikow(raw_lines))
+                     if file_type == 'CC04' else None)
+    prefiks = prefiks_zlecenia(measurement_id, file_type)
+    CZYSC_STARE_OZNACZENIA = True
+    del _PLIKI_ZAZNACZONE[:]
+    generuj_protokol(segments, rows, measurement_id, file_type,
+                     sensor_names=sensor_names, pz_mapa=pz_mapa, zest=zest,
+                     pz_lista=pz_lista, kanaly_slotow=kanaly_slotow,
+                     przetworniki=przetworniki,
+                     multimetr=multimetr_z_naglowka(raw_lines))
+    oznacz_zestawienie_punkty(segments, rows, prefiks=prefiks)
+    print("\n  Opracowanie plikow wynikow (podpis, nazwa zlecenia)...")
+    opracuj_pliki_wynikow(prefiks, pz_mapa=pz_mapa, obs_type=file_type)
+    print("\nGotowe — protokol zbudowany z punktow oznaczonych w obserwacji. "
+          "Warunki srodowiskowe (krok 4) trzeba wpisac ponownie.")
+    return 0
+
 
 def main():
     txt_files = resolve_txt_files()

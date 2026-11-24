@@ -56,6 +56,8 @@ def zasob(rel):
 URUCHAMIALNE = {
     "analiza": ("1 · Analiza logow",  "analiza",    "analizuj_excele.py"),
     "obs":     ("2 · Obserwacja",     "obserwacje", "generuj_obserwacje.py"),
+    # Protokol od nowa z punktow poprawionych recznie w obserwacji (TXT jak w kroku 2).
+    "obs_popr": ("2b · Protokół z obserwacji", "protokol_obs", "protokol_z_obserwacji.py"),
     "ark":     ("3 · Arkusze i Word", "arkusze",    "generuj_arkusze.py"),
     # Osobny krok, uruchamiany wlasnym przyciskiem
     # na swojej stronie, gdy trzeba dopisac warunki do gotowego protokolu.
@@ -273,6 +275,7 @@ class Okno(QMainWindow):
         self.stos.addWidget(self._strona_przygotowanie())
         self.stos.addWidget(self._strona_analiza())
         self.stos.addWidget(self._strona_obserwacja())
+        self.stos.addWidget(self._strona_obserwacja_poprawiona())
         self.stos.addWidget(self._strona_arkusze())
         self.stos.addWidget(self._strona_warunki())
         self.stos.addWidget(self._strona_swiadectwa())
@@ -282,17 +285,23 @@ class Okno(QMainWindow):
 
     def _przelacz(self, nr):
         self.stos.setCurrentIndex(nr)
-        if nr == 0:
+        # Strony po kluczu kroku, nie po numerze — nowy krok w srodku listy
+        # nie przestawia odswiezania pozostalych.
+        klucze = [k for k, _e, _o in C.KROKI] + ["zaawansowane"]
+        klucz = klucze[nr] if 0 <= nr < len(klucze) else None
+        if klucz == "przygotowanie":
             for wiersz in self.kontrolne:
                 wiersz.odswiez()
-        elif nr == 1:
+        elif klucz == "analiza":
             # Folder wejsciowy mogl sie zmienic w ustawieniach — przeladuj liste,
             # zachowujac dotychczasowy wybor plikow.
             self.lista_logow.odswiez(zachowaj=self.wartosci.get("ANL_PLIKI") or [])
-        elif nr == 2:
+        elif klucz == "obs":
             self.lista_txt.odswiez()
             self.lista_przetw.odswiez()
-        elif nr == 6:
+        elif klucz == "obs_popr":
+            self._odswiez_obserwacje_poprawiona()
+        elif klucz == "porown":
             self.lista_porown.odswiez()
 
     def _przewijalna(self):
@@ -556,6 +565,53 @@ class Okno(QMainWindow):
         kl.addWidget(self._zbuduj_pole(C.WG_ENV["PRZETWORNIKI"]))
         return karta
 
+    # ── strona: protokol z poprawionej obserwacji (krok 2b) ───────────────
+    def _strona_obserwacja_poprawiona(self):
+        strona, lay = self._strona_kroku("obs_popr")
+        karta, kl = self._karta("Jak oznaczyc punkty w obserwacji")
+        o = QLabel(
+            "1. Otworz obserwacje z kroku 2 i popraw wybor punktow tak jak zwykle: "
+            "kazdy punkt to 5 wierszy reprezentantow z WYPELNIENIEM i POGRUBIENIEM "
+            "(kolor dowolny, np. zielony jak skrypt).\n"
+            "2. Z punktow, ktorych nie chcesz w protokole, zdejmij pogrubienie "
+            "(albo wypelnienie).\n"
+            "3. Zapisz obserwacje i uruchom ten krok. Protokol powstaje OD NOWA "
+            "(poprzedni trafia do kopii zapasowych): punkty w kolejnosci czasu, dane "
+            "przyrzadow dla tych chwil, oznaczenia w wynikach i zestawieniu na nowo. "
+            "Warunki srodowiskowe (krok 4) wpisz potem ponownie.\n"
+            "Pliki TXT — te zaznaczone w kroku 2.")
+        o.setObjectName("OpisPola")
+        o.setWordWrap(True)
+        kl.addWidget(o)
+        kl.addWidget(self._linia())
+        self.lbl_obs_popr = QLabel("—")
+        self.lbl_obs_popr.setObjectName("OpisPola")
+        self.lbl_obs_popr.setWordWrap(True)
+        kl.addWidget(self.lbl_obs_popr)
+        lay.addWidget(karta)
+        lay.addStretch(1)
+        return strona
+
+    def obserwacja_wybranego_pomiaru(self):
+        """(nazwa obserwacji, nazwa protokolu) dla TXT zaznaczonych w kroku 2 albo (None, None)."""
+        pliki = self.pliki_nadpisywane_przez_krok2()
+        obs = next((n for n in pliki if "obserwacje" in n.lower()
+                    and not re.search(r"_\d+\.xlsx$", n)), None)
+        prot = next((n for n in pliki if "protok" in n.lower()
+                     and not re.search(r"_\d+\.xlsx$", n)), None)
+        return obs, prot
+
+    def _odswiez_obserwacje_poprawiona(self):
+        txt = self.lista_txt.zaznaczone() if hasattr(self, "lista_txt") else []
+        obs, prot = self.obserwacja_wybranego_pomiaru()
+        if not txt:
+            tekst = "Pliki TXT: nie zaznaczono (wybierz je w kroku 2)."
+        else:
+            tekst = (f"Pliki TXT: {', '.join(txt)}\n"
+                     f"Obserwacja: {obs or '— brak (najpierw krok 2)'}\n"
+                     f"Protokol do przebudowy: {prot or '— powstanie nowy'}")
+        self.lbl_obs_popr.setText(tekst)
+
     # ── strona: arkusze ──────────────────────────────────────────────────
     def _strona_arkusze(self):
         strona, lay = self._strona_kroku("ark")
@@ -783,6 +839,16 @@ class Okno(QMainWindow):
                     p.append(f"Nie znaleziono pliku: {pole.ust.etykieta} "
                              f"→ '{pole.wartosc() or '(nie wybrano)'}'")
 
+        if "obs_popr" in kroki:
+            if not self.lista_txt.zaznaczone():
+                p.append("Nie zaznaczono plikow TXT (krok 2) — krok 2b czyta te same pliki.")
+            else:
+                obs, _prot = self.obserwacja_wybranego_pomiaru()
+                if not obs:
+                    p.append("Brak obserwacji dla zaznaczonych plikow TXT — najpierw krok 2.")
+                elif os.path.exists(os.path.join(self.folder, "~$" + obs)):
+                    p.append(f"'{obs}' jest otwarta w Excelu — ZAPISZ ja przed uruchomieniem "
+                             f"(krok czyta ostatnio zapisana wersje).")
         if "ark" in kroki:
             for env in ("CC_PROTOKOL", "CC_SZABLON"):
                 pole = self.pola.get(env)
