@@ -53,7 +53,7 @@
 <section id="przeglad">
 <h2>Przegląd</h2>
 <!-- AUTO:statystyki -->
-<div class="stats"><div class="stat"><b>16</b><span>modułów Python</span></div><div class="stat"><b>19 504</b><span>linii kodu</span></div><div class="stat"><b>668</b><span>funkcji</span></div><div class="stat"><b>99</b><span>ustawień w panelu</span></div><div class="stat"><b>970</b><span>testów (53 plików)</span></div><div class="stat"><b>7</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 24.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<div class="stats"><div class="stat"><b>16</b><span>modułów Python</span></div><div class="stat"><b>19 638</b><span>linii kodu</span></div><div class="stat"><b>672</b><span>funkcji</span></div><div class="stat"><b>101</b><span>ustawień w panelu</span></div><div class="stat"><b>972</b><span>testów (53 plików)</span></div><div class="stat"><b>7</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 24.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
 <!-- /AUTO:statystyki -->
 <p>Python 3 + PySide6 (panel), openpyxl (zapis bez Excela), xlwings / pywin32 (Excel COM — przeliczanie formuł, linki,
 wstawianie wierszy), python-docx (świadectwa), pandas (parsery logów), pypdf (PZ). Jeden plik <code>ProtokolCC.exe</code> (PyInstaller).</p>
@@ -272,15 +272,15 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <table><thead><tr><th>Plik</th><th class="r">Linie</th><th class="r">Funkcje</th><th>Rola</th></tr></thead><tbody>
 <tr><td><code>analizuj_excele.py</code></td><td class='r'>1950</td><td class='r'>57</td><td>Universal Excel/CSV parser for temperature &amp; humidity data loggers.</td></tr>
 <tr><td><code>app_entry.py</code></td><td class='r'>101</td><td class='r'>3</td><td>punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe).</td></tr>
-<tr><td><code>app_gui.py</code></td><td class='r'>1272</td><td class='r'>56</td><td>panel sterujacy calym obiegiem wzorcowania (PySide6).</td></tr>
-<tr><td><code>cc_config.py</code></td><td class='r'>749</td><td class='r'>16</td><td>jedno zrodlo prawdy o ustawieniach calego obiegu.</td></tr>
+<tr><td><code>app_gui.py</code></td><td class='r'>1311</td><td class='r'>57</td><td>panel sterujacy calym obiegiem wzorcowania (PySide6).</td></tr>
+<tr><td><code>cc_config.py</code></td><td class='r'>765</td><td class='r'>16</td><td>jedno zrodlo prawdy o ustawieniach calego obiegu.</td></tr>
 <tr><td><code>cc_excel.py</code></td><td class='r'>360</td><td class='r'>19</td><td>wlasne instancje Excela: uruchomienie i PEWNE zamkniecie.</td></tr>
 <tr><td><code>cc_kopia.py</code></td><td class='r'>57</td><td class='r'>2</td><td>kopia zapasowa pliku PRZED jego nadpisaniem.</td></tr>
 <tr><td><code>cc_szablon_przetwornika.py</code></td><td class='r'>536</td><td class='r'>21</td><td>szablon arkusza obliczeniowego dla PRZETWORNIKA.</td></tr>
-<tr><td><code>cc_widgets.py</code></td><td class='r'>1390</td><td class='r'>79</td><td>elementy interfejsu panelu (app_gui.py).</td></tr>
+<tr><td><code>cc_widgets.py</code></td><td class='r'>1391</td><td class='r'>79</td><td>elementy interfejsu panelu (app_gui.py).</td></tr>
 <tr><td><code>cc_widok.py</code></td><td class='r'>145</td><td class='r'>4</td><td>jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx.</td></tr>
 <tr><td><code>generuj_arkusze.py</code></td><td class='r'>5315</td><td class='r'>163</td><td>Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu.</td></tr>
-<tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4875</td><td class='r'>148</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
+<tr><td><code>generuj_obserwacje.py</code></td><td class='r'>4953</td><td class='r'>151</td><td>Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</td></tr>
 <tr><td><code>generuj_porownanie.py</code></td><td class='r'>557</td><td class='r'>19</td><td>KROK 6: arkusze obliczeniowe porownawcze.</td></tr>
 <tr><td><code>generuj_swiadectwa.py</code></td><td class='r'>369</td><td class='r'>15</td><td>krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych.</td></tr>
 <tr><td><code>protokol_z_obserwacji.py</code></td><td class='r'>25</td><td class='r'>1</td><td>KROK 2b: protokol z poprawionej obserwacji.</td></tr>
@@ -360,7 +360,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>37</td><td><code>_run_worker</code></td><td></td></tr>
 <tr><td class='r muted'>61</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>app_gui.py</code> — 56 funkcji, 1272 linii <span class='muted'>· panel sterujacy calym obiegiem wzorcowania (PySide6).</span></summary>
+<details><summary><code>app_gui.py</code> — 57 funkcji, 1311 linii <span class='muted'>· panel sterujacy calym obiegiem wzorcowania (PySide6).</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>51</td><td><code>zasob</code></td><td></td></tr>
 <tr><td class='r muted'>87</td><td><code>__init__</code></td><td></td></tr>
@@ -369,74 +369,75 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>180</td><td><code>_wybierz_folder</code></td><td></td></tr>
 <tr><td class='r muted'>187</td><td><code>_folder_logow</code></td><td>Folder wejsciowy kroku 1 — wzgledny liczony od folderu roboczego.</td></tr>
 <tr><td class='r muted'>192</td><td><code>_odswiez_folder</code></td><td>Po zmianie folderu przeladowuje wszystkie listy plikow i kontrolki.</td></tr>
-<tr><td class='r muted'>205</td><td><code>_listwa</code></td><td></td></tr>
-<tr><td class='r muted'>265</td><td><code>_status</code></td><td></td></tr>
-<tr><td class='r muted'>273</td><td><code>_strony</code></td><td></td></tr>
-<tr><td class='r muted'>286</td><td><code>_przelacz</code></td><td></td></tr>
-<tr><td class='r muted'>307</td><td><code>_przewijalna</code></td><td>Zwraca (scroll, layout) — kazda strona kroku jest przewijalna.</td></tr>
-<tr><td class='r muted'>320</td><td><code>_karta</code></td><td></td></tr>
-<tr><td class='r muted'>330</td><td><code>_podpis</code></td><td></td></tr>
-<tr><td class='r muted'>335</td><td><code>_linia</code></td><td></td></tr>
-<tr><td class='r muted'>341</td><td><code>_naglowek_kroku</code></td><td>Szapka strony kroku: nazwa, opis i PRZYCISK URUCHOMIENIA.</td></tr>
-<tr><td class='r muted'>379</td><td><code>_strona_kroku</code></td><td>Zwraca (strona, layout_tresci). Szapka nie przewija sie z trescia.</td></tr>
-<tr><td class='r muted'>391</td><td><code>_zbuduj_pole</code></td><td>Tworzy Pole, rejestruje je i podpina zapis ustawien.</td></tr>
-<tr><td class='r muted'>399</td><td><code>_dodaj_pola</code></td><td>Wstawia karty pogrupowane wg `grupa`, zachowujac kolejnosc rejestru.</td></tr>
-<tr><td class='r muted'>416</td><td><code>_strona_przygotowanie</code></td><td></td></tr>
-<tr><td class='r muted'>434</td><td><code>sciezka</code></td><td></td></tr>
-<tr><td class='r muted'>438</td><td><code>plik_czujnika</code></td><td></td></tr>
-<tr><td class='r muted'>494</td><td><code>_strona_analiza</code></td><td></td></tr>
-<tr><td class='r muted'>516</td><td><code>_strona_obserwacja</code></td><td></td></tr>
-<tr><td class='r muted'>547</td><td><code>_karta_przetwornikow</code></td><td>Podpunkt kroku 2 — przetworniki (wyjscie pradowe/napieciowe): plik(i)</td></tr>
-<tr><td class='r muted'>569</td><td><code>_strona_obserwacja_poprawiona</code></td><td></td></tr>
-<tr><td class='r muted'>595</td><td><code>obserwacja_wybranego_pomiaru</code></td><td>(nazwa obserwacji, nazwa protokolu) dla TXT zaznaczonych w kroku 2 albo (None, None).</td></tr>
-<tr><td class='r muted'>604</td><td><code>_odswiez_obserwacje_poprawiona</code></td><td></td></tr>
-<tr><td class='r muted'>616</td><td><code>_strona_arkusze</code></td><td></td></tr>
-<tr><td class='r muted'>623</td><td><code>_strona_warunki</code></td><td></td></tr>
-<tr><td class='r muted'>633</td><td><code>_strona_swiadectwa</code></td><td></td></tr>
-<tr><td class='r muted'>640</td><td><code>_folder_porownania</code></td><td>Folder kroku 6 — protokoly do porownania i arkusze porownawcze (tworzony od razu).</td></tr>
-<tr><td class='r muted'>650</td><td><code>_strona_porownanie</code></td><td></td></tr>
-<tr><td class='r muted'>674</td><td><code>_strona_zaawansowane</code></td><td></td></tr>
-<tr><td class='r muted'>707</td><td><code>_przywroc_domyslne</code></td><td></td></tr>
-<tr><td class='r muted'>727</td><td><code>_dol</code></td><td></td></tr>
-<tr><td class='r muted'>765</td><td><code>_zapisz_log</code></td><td></td></tr>
-<tr><td class='r muted'>780</td><td><code>_zmiana</code></td><td></td></tr>
-<tr><td class='r muted'>787</td><td><code>_zbierz</code></td><td></td></tr>
-<tr><td class='r muted'>795</td><td><code>_zapisz</code></td><td></td></tr>
-<tr><td class='r muted'>802</td><td><code>_problemy</code></td><td>Lista czytelnych zastrzezen; pusta = wszystko na miejscu.</td></tr>
-<tr><td class='r muted'>915</td><td><code>pliki_nadpisywane_przez_krok2</code></td><td>Protokol i arkusz obserwacji, ktore krok 2 utworzy OD NOWA dla wybranego</td></tr>
-<tr><td class='r muted'>935</td><td><code>_potwierdz_nadpisanie_protokolu</code></td><td>Krok 2 tworzy protokol i obserwacje OD NOWA. Dwa razy przepadlo przez to</td></tr>
-<tr><td class='r muted'>954</td><td><code>_problemy_zawartosci</code></td><td>Sprawdza, czy wybrane pliki SA tym, za co sie podaja.</td></tr>
-<tr><td class='r muted'>989</td><td><code>_uruchom</code></td><td></td></tr>
-<tr><td class='r muted'>1018</td><td><code>_nastepny</code></td><td></td></tr>
-<tr><td class='r muted'>1060</td><td><code>_wyjscie</code></td><td></td></tr>
-<tr><td class='r muted'>1064</td><td><code>_blad_startu</code></td><td></td></tr>
-<tr><td class='r muted'>1068</td><td><code>_koniec</code></td><td></td></tr>
-<tr><td class='r muted'>1092</td><td><code>_przerwij</code></td><td></td></tr>
-<tr><td class='r muted'>1100</td><td><code>_zajety</code></td><td></td></tr>
-<tr><td class='r muted'>1108</td><td><code>closeEvent</code></td><td></td></tr>
-<tr><td class='r muted'>1122</td><td><code>_qss</code></td><td></td></tr>
-<tr><td class='r muted'>1225</td><td><code>_podepnij_raportowanie_bledow</code></td><td>Kieruje nieobsluzone wyjatki do logu panelu.</td></tr>
-<tr><td class='r muted'>1236</td><td><code>hak</code></td><td></td></tr>
-<tr><td class='r muted'>1255</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>206</td><td><code>_listwa</code></td><td></td></tr>
+<tr><td class='r muted'>266</td><td><code>_status</code></td><td></td></tr>
+<tr><td class='r muted'>274</td><td><code>_strony</code></td><td></td></tr>
+<tr><td class='r muted'>287</td><td><code>_przelacz</code></td><td></td></tr>
+<tr><td class='r muted'>309</td><td><code>_przewijalna</code></td><td>Zwraca (scroll, layout) — kazda strona kroku jest przewijalna.</td></tr>
+<tr><td class='r muted'>322</td><td><code>_karta</code></td><td></td></tr>
+<tr><td class='r muted'>332</td><td><code>_podpis</code></td><td></td></tr>
+<tr><td class='r muted'>337</td><td><code>_linia</code></td><td></td></tr>
+<tr><td class='r muted'>343</td><td><code>_naglowek_kroku</code></td><td>Szapka strony kroku: nazwa, opis i PRZYCISK URUCHOMIENIA.</td></tr>
+<tr><td class='r muted'>381</td><td><code>_strona_kroku</code></td><td>Zwraca (strona, layout_tresci). Szapka nie przewija sie z trescia.</td></tr>
+<tr><td class='r muted'>393</td><td><code>_zbuduj_pole</code></td><td>Tworzy Pole, rejestruje je i podpina zapis ustawien.</td></tr>
+<tr><td class='r muted'>401</td><td><code>_dodaj_pola</code></td><td>Wstawia karty pogrupowane wg `grupa`, zachowujac kolejnosc rejestru.</td></tr>
+<tr><td class='r muted'>418</td><td><code>_strona_przygotowanie</code></td><td></td></tr>
+<tr><td class='r muted'>436</td><td><code>sciezka</code></td><td></td></tr>
+<tr><td class='r muted'>440</td><td><code>plik_czujnika</code></td><td></td></tr>
+<tr><td class='r muted'>496</td><td><code>_strona_analiza</code></td><td></td></tr>
+<tr><td class='r muted'>518</td><td><code>_strona_obserwacja</code></td><td></td></tr>
+<tr><td class='r muted'>549</td><td><code>_karta_przetwornikow</code></td><td>Podpunkt kroku 2 — przetworniki (wyjscie pradowe/napieciowe): plik(i)</td></tr>
+<tr><td class='r muted'>571</td><td><code>_strona_obserwacja_poprawiona</code></td><td></td></tr>
+<tr><td class='r muted'>618</td><td><code>_prefiks_obserwacji</code></td><td>&#x27;243_LA_TH_2026 - obserwacje.xlsx&#x27; -&gt; &#x27;243&#x27; albo None.</td></tr>
+<tr><td class='r muted'>624</td><td><code>obserwacja_wybranego_pomiaru</code></td><td>(nazwa obserwacji, nazwa protokolu do przebudowy) dla wyboru na stronie 2b.</td></tr>
+<tr><td class='r muted'>639</td><td><code>_odswiez_obserwacje_poprawiona</code></td><td></td></tr>
+<tr><td class='r muted'>652</td><td><code>_strona_arkusze</code></td><td></td></tr>
+<tr><td class='r muted'>659</td><td><code>_strona_warunki</code></td><td></td></tr>
+<tr><td class='r muted'>669</td><td><code>_strona_swiadectwa</code></td><td></td></tr>
+<tr><td class='r muted'>676</td><td><code>_folder_porownania</code></td><td>Folder kroku 6 — protokoly do porownania i arkusze porownawcze (tworzony od razu).</td></tr>
+<tr><td class='r muted'>686</td><td><code>_strona_porownanie</code></td><td></td></tr>
+<tr><td class='r muted'>710</td><td><code>_strona_zaawansowane</code></td><td></td></tr>
+<tr><td class='r muted'>743</td><td><code>_przywroc_domyslne</code></td><td></td></tr>
+<tr><td class='r muted'>763</td><td><code>_dol</code></td><td></td></tr>
+<tr><td class='r muted'>801</td><td><code>_zapisz_log</code></td><td></td></tr>
+<tr><td class='r muted'>816</td><td><code>_zmiana</code></td><td></td></tr>
+<tr><td class='r muted'>823</td><td><code>_zbierz</code></td><td></td></tr>
+<tr><td class='r muted'>832</td><td><code>_zapisz</code></td><td></td></tr>
+<tr><td class='r muted'>839</td><td><code>_problemy</code></td><td>Lista czytelnych zastrzezen; pusta = wszystko na miejscu.</td></tr>
+<tr><td class='r muted'>954</td><td><code>pliki_nadpisywane_przez_krok2</code></td><td>Protokol i arkusz obserwacji, ktore krok 2 utworzy OD NOWA dla wybranego</td></tr>
+<tr><td class='r muted'>974</td><td><code>_potwierdz_nadpisanie_protokolu</code></td><td>Krok 2 tworzy protokol i obserwacje OD NOWA. Dwa razy przepadlo przez to</td></tr>
+<tr><td class='r muted'>993</td><td><code>_problemy_zawartosci</code></td><td>Sprawdza, czy wybrane pliki SA tym, za co sie podaja.</td></tr>
+<tr><td class='r muted'>1028</td><td><code>_uruchom</code></td><td></td></tr>
+<tr><td class='r muted'>1057</td><td><code>_nastepny</code></td><td></td></tr>
+<tr><td class='r muted'>1099</td><td><code>_wyjscie</code></td><td></td></tr>
+<tr><td class='r muted'>1103</td><td><code>_blad_startu</code></td><td></td></tr>
+<tr><td class='r muted'>1107</td><td><code>_koniec</code></td><td></td></tr>
+<tr><td class='r muted'>1131</td><td><code>_przerwij</code></td><td></td></tr>
+<tr><td class='r muted'>1139</td><td><code>_zajety</code></td><td></td></tr>
+<tr><td class='r muted'>1147</td><td><code>closeEvent</code></td><td></td></tr>
+<tr><td class='r muted'>1161</td><td><code>_qss</code></td><td></td></tr>
+<tr><td class='r muted'>1264</td><td><code>_podepnij_raportowanie_bledow</code></td><td>Kieruje nieobsluzone wyjatki do logu panelu.</td></tr>
+<tr><td class='r muted'>1275</td><td><code>hak</code></td><td></td></tr>
+<tr><td class='r muted'>1294</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>cc_config.py</code> — 16 funkcji, 749 linii <span class='muted'>· jedno zrodlo prawdy o ustawieniach calego obiegu.</span></summary>
+<details><summary><code>cc_config.py</code> — 16 funkcji, 765 linii <span class='muted'>· jedno zrodlo prawdy o ustawieniach calego obiegu.</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>84</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>107</td><td><code>do_env</code></td><td>Zamienia wartosc na tekst przekazywany do podprocesu.</td></tr>
-<tr><td class='r muted'>118</td><td><code>_U</code></td><td></td></tr>
-<tr><td class='r muted'>614</td><td><code>dla_kroku</code></td><td>Ustawienia danego kroku; opcjonalnie tylko danego poziomu.</td></tr>
-<tr><td class='r muted'>620</td><td><code>domyslne</code></td><td>Slownik env -&gt; wartosc domyslna.</td></tr>
-<tr><td class='r muted'>628</td><td><code>wczytaj</code></td><td>Wczytuje zapisane ustawienia, uzupelniajac braki wartosciami domyslnymi.</td></tr>
-<tr><td class='r muted'>652</td><td><code>zapisz</code></td><td>Zapisuje ustawienia. Zwraca None przy sukcesie albo tekst bledu.</td></tr>
-<tr><td class='r muted'>662</td><td><code>do_env</code></td><td>Slownik zmiennych srodowiskowych dla podprocesu-workera.</td></tr>
-<tr><td class='r muted'>679</td><td><code>flaga</code></td><td></td></tr>
-<tr><td class='r muted'>684</td><td><code>liczba</code></td><td></td></tr>
-<tr><td class='r muted'>694</td><td><code>calk</code></td><td></td></tr>
-<tr><td class='r muted'>704</td><td><code>tekst</code></td><td></td></tr>
-<tr><td class='r muted'>709</td><td><code>minuty</code></td><td>Zwraca timedelta. domyslna_td to timedelta uzywana, gdy zmiennej brak.</td></tr>
-<tr><td class='r muted'>720</td><td><code>lista</code></td><td>Lista tekstow rozdzielonych srednikiem.</td></tr>
-<tr><td class='r muted'>728</td><td><code>tabela</code></td><td>Lista wierszy (lista list) zapisana w env jako JSON.</td></tr>
-<tr><td class='r muted'>740</td><td><code>sciezka</code></td><td>Sciezka do pliku/folderu. Wartosc wzgledna rozwijana jest wzgledem `baza`</td></tr>
+<tr><td class='r muted'>110</td><td><code>do_env</code></td><td>Zamienia wartosc na tekst przekazywany do podprocesu.</td></tr>
+<tr><td class='r muted'>121</td><td><code>_U</code></td><td></td></tr>
+<tr><td class='r muted'>630</td><td><code>dla_kroku</code></td><td>Ustawienia danego kroku; opcjonalnie tylko danego poziomu.</td></tr>
+<tr><td class='r muted'>636</td><td><code>domyslne</code></td><td>Slownik env -&gt; wartosc domyslna.</td></tr>
+<tr><td class='r muted'>644</td><td><code>wczytaj</code></td><td>Wczytuje zapisane ustawienia, uzupelniajac braki wartosciami domyslnymi.</td></tr>
+<tr><td class='r muted'>668</td><td><code>zapisz</code></td><td>Zapisuje ustawienia. Zwraca None przy sukcesie albo tekst bledu.</td></tr>
+<tr><td class='r muted'>678</td><td><code>do_env</code></td><td>Slownik zmiennych srodowiskowych dla podprocesu-workera.</td></tr>
+<tr><td class='r muted'>695</td><td><code>flaga</code></td><td></td></tr>
+<tr><td class='r muted'>700</td><td><code>liczba</code></td><td></td></tr>
+<tr><td class='r muted'>710</td><td><code>calk</code></td><td></td></tr>
+<tr><td class='r muted'>720</td><td><code>tekst</code></td><td></td></tr>
+<tr><td class='r muted'>725</td><td><code>minuty</code></td><td>Zwraca timedelta. domyslna_td to timedelta uzywana, gdy zmiennej brak.</td></tr>
+<tr><td class='r muted'>736</td><td><code>lista</code></td><td>Lista tekstow rozdzielonych srednikiem.</td></tr>
+<tr><td class='r muted'>744</td><td><code>tabela</code></td><td>Lista wierszy (lista list) zapisana w env jako JSON.</td></tr>
+<tr><td class='r muted'>756</td><td><code>sciezka</code></td><td>Sciezka do pliku/folderu. Wartosc wzgledna rozwijana jest wzgledem `baza`</td></tr>
 </tbody></table></details>
 <details><summary><code>cc_excel.py</code> — 19 funkcji, 360 linii <span class='muted'>· wlasne instancje Excela: uruchomienie i PEWNE zamkniecie.</span></summary>
 <table class="fn"><tbody>
@@ -489,7 +490,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>426</td><td><code>_tylko_tekst</code></td><td>Komorka z jednym akapitem i jednym runem `tekst` (format pierwszego runu).</td></tr>
 <tr><td class='r muted'>439</td><td><code>zbuduj_word_th</code></td><td>Szablon swiadectwa wyswietlacz + wyjscie z wydanego swiadectwa `wzor_docx`.</td></tr>
 </tbody></table></details>
-<details><summary><code>cc_widgets.py</code> — 79 funkcji, 1390 linii <span class='muted'>· elementy interfejsu panelu (app_gui.py).</span></summary>
+<details><summary><code>cc_widgets.py</code> — 79 funkcji, 1391 linii <span class='muted'>· elementy interfejsu panelu (app_gui.py).</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>48</td><td><code>ludzki_rozmiar</code></td><td>&#x27;18,3 MB&#x27; — rozmiar pliku w czytelnej postaci.</td></tr>
 <tr><td class='r muted'>58</td><td><code>ile_temu</code></td><td>&#x27;dzis 09:27&#x27; / &#x27;wczoraj&#x27; / &#x27;12 dni temu&#x27; — wiek pliku po ludzku.</td></tr>
@@ -518,58 +519,58 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>478</td><td><code>_wybierz_kolor</code></td><td></td></tr>
 <tr><td class='r muted'>484</td><td><code>_odswiez_probke</code></td><td></td></tr>
 <tr><td class='r muted'>490</td><td><code>odswiez_pliki</code></td><td>Dla typu &#x27;plik&#x27; — przeladowuje liste z aktualnego folderu roboczego.</td></tr>
-<tr><td class='r muted'>528</td><td><code>brak_pliku</code></td><td>True, gdy wybrany plik nie istnieje (typ &#x27;plik&#x27;/&#x27;folder&#x27;).</td></tr>
-<tr><td class='r muted'>539</td><td><code>wartosc</code></td><td></td></tr>
-<tr><td class='r muted'>563</td><td><code>ustaw</code></td><td></td></tr>
-<tr><td class='r muted'>611</td><td><code>mousePressEvent</code></td><td></td></tr>
-<tr><td class='r muted'>633</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>684</td><td><code>_ustaw_wszystkim</code></td><td></td></tr>
-<tr><td class='r muted'>691</td><td><code>zaznacz_wszystko</code></td><td></td></tr>
-<tr><td class='r muted'>694</td><td><code>odznacz_wszystko</code></td><td></td></tr>
-<tr><td class='r muted'>697</td><td><code>_po_zmianie</code></td><td></td></tr>
-<tr><td class='r muted'>702</td><td><code>_odswiez_wyglad</code></td><td>Zaznaczony wiersz ma byc widoczny na pierwszy rzut oka: pogrubienie,</td></tr>
-<tr><td class='r muted'>730</td><td><code>_odswiez_podsumowanie</code></td><td></td></tr>
-<tr><td class='r muted'>743</td><td><code>odswiez</code></td><td>Przeladowuje liste; `zachowaj` to nazwy do ponownego zaznaczenia</td></tr>
-<tr><td class='r muted'>778</td><td><code>zaznaczone</code></td><td></td></tr>
-<tr><td class='r muted'>783</td><td><code>ustaw_zaznaczone</code></td><td></td></tr>
-<tr><td class='r muted'>803</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>810</td><td><code>dopisz</code></td><td></td></tr>
-<tr><td class='r muted'>818</td><td><code>_format</code></td><td></td></tr>
-<tr><td class='r muted'>844</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>875</td><td><code>_skanuj</code></td><td></td></tr>
-<tr><td class='r muted'>889</td><td><code>zapamietaj_stan</code></td><td>Migawka PRZED uruchomieniem — do niej porownamy stan po zakonczeniu.</td></tr>
-<tr><td class='r muted'>893</td><td><code>pokaz_zmiany</code></td><td></td></tr>
-<tr><td class='r muted'>916</td><td><code>_dodaj</code></td><td></td></tr>
-<tr><td class='r muted'>940</td><td><code>_otworz</code></td><td></td></tr>
-<tr><td class='r muted'>959</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>968</td><td><code>dodaj</code></td><td></td></tr>
-<tr><td class='r muted'>972</td><td><code>karty</code></td><td></td></tr>
-<tr><td class='r muted'>975</td><td><code>_ile_kolumn</code></td><td></td></tr>
-<tr><td class='r muted'>981</td><td><code>_ustaw_uklad</code></td><td></td></tr>
-<tr><td class='r muted'>993</td><td><code>resizeEvent</code></td><td></td></tr>
-<tr><td class='r muted'>1011</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>1060</td><td><code>_otworz</code></td><td></td></tr>
-<tr><td class='r muted'>1068</td><td><code>odswiez</code></td><td></td></tr>
-<tr><td class='r muted'>1098</td><td><code>_ustaw</code></td><td></td></tr>
-<tr><td class='r muted'>1125</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>1152</td><td><code>et</code></td><td></td></tr>
-<tr><td class='r muted'>1160</td><td><code>linia</code></td><td></td></tr>
-<tr><td class='r muted'>1168</td><td><code>lista</code></td><td></td></tr>
-<tr><td class='r muted'>1175</td><td><code>zakres</code></td><td></td></tr>
-<tr><td class='r muted'>1228</td><td><code>_odswiez_tytul</code></td><td></td></tr>
-<tr><td class='r muted'>1232</td><td><code>_odswiez_symbole</code></td><td></td></tr>
-<tr><td class='r muted'>1244</td><td><code>szablony_w_folderze</code></td><td>Szablony arkuszy obliczeniowych w folderze roboczym (&#x27;xxx_….xlsx&#x27;).</td></tr>
-<tr><td class='r muted'>1255</td><td><code>odswiez_szablony</code></td><td>Lista: pozycja domyslna (pusta wartosc) + szablony z folderu (+ wybrany, gdy go brak).</td></tr>
-<tr><td class='r muted'>1271</td><td><code>_pola</code></td><td></td></tr>
-<tr><td class='r muted'>1276</td><td><code>wartosc</code></td><td></td></tr>
-<tr><td class='r muted'>1281</td><td><code>ustaw</code></td><td></td></tr>
-<tr><td class='r muted'>1310</td><td><code>__init__</code></td><td></td></tr>
-<tr><td class='r muted'>1334</td><td><code>_dodaj_klik</code></td><td>Nowa karta = kopia poprzedniej (multimetr, sygnal, zakresy, szablon) —</td></tr>
-<tr><td class='r muted'>1353</td><td><code>dodaj</code></td><td></td></tr>
-<tr><td class='r muted'>1364</td><td><code>_usun</code></td><td></td></tr>
-<tr><td class='r muted'>1374</td><td><code>odswiez_szablony</code></td><td></td></tr>
-<tr><td class='r muted'>1378</td><td><code>wartosc</code></td><td>Wiersze kart z wpisanym numerem fabrycznym (puste karty sa pomijane).</td></tr>
-<tr><td class='r muted'>1382</td><td><code>ustaw</code></td><td></td></tr>
+<tr><td class='r muted'>529</td><td><code>brak_pliku</code></td><td>True, gdy wybrany plik nie istnieje (typ &#x27;plik&#x27;/&#x27;folder&#x27;).</td></tr>
+<tr><td class='r muted'>540</td><td><code>wartosc</code></td><td></td></tr>
+<tr><td class='r muted'>564</td><td><code>ustaw</code></td><td></td></tr>
+<tr><td class='r muted'>612</td><td><code>mousePressEvent</code></td><td></td></tr>
+<tr><td class='r muted'>634</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>685</td><td><code>_ustaw_wszystkim</code></td><td></td></tr>
+<tr><td class='r muted'>692</td><td><code>zaznacz_wszystko</code></td><td></td></tr>
+<tr><td class='r muted'>695</td><td><code>odznacz_wszystko</code></td><td></td></tr>
+<tr><td class='r muted'>698</td><td><code>_po_zmianie</code></td><td></td></tr>
+<tr><td class='r muted'>703</td><td><code>_odswiez_wyglad</code></td><td>Zaznaczony wiersz ma byc widoczny na pierwszy rzut oka: pogrubienie,</td></tr>
+<tr><td class='r muted'>731</td><td><code>_odswiez_podsumowanie</code></td><td></td></tr>
+<tr><td class='r muted'>744</td><td><code>odswiez</code></td><td>Przeladowuje liste; `zachowaj` to nazwy do ponownego zaznaczenia</td></tr>
+<tr><td class='r muted'>779</td><td><code>zaznaczone</code></td><td></td></tr>
+<tr><td class='r muted'>784</td><td><code>ustaw_zaznaczone</code></td><td></td></tr>
+<tr><td class='r muted'>804</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>811</td><td><code>dopisz</code></td><td></td></tr>
+<tr><td class='r muted'>819</td><td><code>_format</code></td><td></td></tr>
+<tr><td class='r muted'>845</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>876</td><td><code>_skanuj</code></td><td></td></tr>
+<tr><td class='r muted'>890</td><td><code>zapamietaj_stan</code></td><td>Migawka PRZED uruchomieniem — do niej porownamy stan po zakonczeniu.</td></tr>
+<tr><td class='r muted'>894</td><td><code>pokaz_zmiany</code></td><td></td></tr>
+<tr><td class='r muted'>917</td><td><code>_dodaj</code></td><td></td></tr>
+<tr><td class='r muted'>941</td><td><code>_otworz</code></td><td></td></tr>
+<tr><td class='r muted'>960</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>969</td><td><code>dodaj</code></td><td></td></tr>
+<tr><td class='r muted'>973</td><td><code>karty</code></td><td></td></tr>
+<tr><td class='r muted'>976</td><td><code>_ile_kolumn</code></td><td></td></tr>
+<tr><td class='r muted'>982</td><td><code>_ustaw_uklad</code></td><td></td></tr>
+<tr><td class='r muted'>994</td><td><code>resizeEvent</code></td><td></td></tr>
+<tr><td class='r muted'>1012</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>1061</td><td><code>_otworz</code></td><td></td></tr>
+<tr><td class='r muted'>1069</td><td><code>odswiez</code></td><td></td></tr>
+<tr><td class='r muted'>1099</td><td><code>_ustaw</code></td><td></td></tr>
+<tr><td class='r muted'>1126</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>1153</td><td><code>et</code></td><td></td></tr>
+<tr><td class='r muted'>1161</td><td><code>linia</code></td><td></td></tr>
+<tr><td class='r muted'>1169</td><td><code>lista</code></td><td></td></tr>
+<tr><td class='r muted'>1176</td><td><code>zakres</code></td><td></td></tr>
+<tr><td class='r muted'>1229</td><td><code>_odswiez_tytul</code></td><td></td></tr>
+<tr><td class='r muted'>1233</td><td><code>_odswiez_symbole</code></td><td></td></tr>
+<tr><td class='r muted'>1245</td><td><code>szablony_w_folderze</code></td><td>Szablony arkuszy obliczeniowych w folderze roboczym (&#x27;xxx_….xlsx&#x27;).</td></tr>
+<tr><td class='r muted'>1256</td><td><code>odswiez_szablony</code></td><td>Lista: pozycja domyslna (pusta wartosc) + szablony z folderu (+ wybrany, gdy go brak).</td></tr>
+<tr><td class='r muted'>1272</td><td><code>_pola</code></td><td></td></tr>
+<tr><td class='r muted'>1277</td><td><code>wartosc</code></td><td></td></tr>
+<tr><td class='r muted'>1282</td><td><code>ustaw</code></td><td></td></tr>
+<tr><td class='r muted'>1311</td><td><code>__init__</code></td><td></td></tr>
+<tr><td class='r muted'>1335</td><td><code>_dodaj_klik</code></td><td>Nowa karta = kopia poprzedniej (multimetr, sygnal, zakresy, szablon) —</td></tr>
+<tr><td class='r muted'>1354</td><td><code>dodaj</code></td><td></td></tr>
+<tr><td class='r muted'>1365</td><td><code>_usun</code></td><td></td></tr>
+<tr><td class='r muted'>1375</td><td><code>odswiez_szablony</code></td><td></td></tr>
+<tr><td class='r muted'>1379</td><td><code>wartosc</code></td><td>Wiersze kart z wpisanym numerem fabrycznym (puste karty sa pomijane).</td></tr>
+<tr><td class='r muted'>1383</td><td><code>ustaw</code></td><td></td></tr>
 </tbody></table></details>
 <details><summary><code>cc_widok.py</code> — 4 funkcji, 145 linii <span class='muted'>· jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx.</span></summary>
 <table class="fn"><tbody>
@@ -744,7 +745,7 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>5238</td><td><code>_wyczysc_autorecover_folder</code></td><td>Usuwa stare pliki autoodzyskiwania Excela z %AppData%\Microsoft\Excel,</td></tr>
 <tr><td class='r muted'>5286</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
-<details><summary><code>generuj_obserwacje.py</code> — 148 funkcji, 4875 linii <span class='muted'>· Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</span></summary>
+<details><summary><code>generuj_obserwacje.py</code> — 151 funkcji, 4953 linii <span class='muted'>· Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi.</span></summary>
 <table class="fn"><tbody>
 <tr><td class='r muted'>205</td><td><code>parse_measurement_id</code></td><td>Zwraca część nazwy pliku po &#x27;YYYY-MM-DD HH.MM &#x27; (np. &#x27;119_141_147_149_151_164&#x27;).</td></tr>
 <tr><td class='r muted'>214</td><td><code>open_txt</code></td><td>Otwiera plik TXT próbując kolejnych kodowań.</td></tr>
@@ -887,13 +888,16 @@ Szablony i pliki robocze leżą obok exe w folderze roboczym, nie w środku. Skr
 <tr><td class='r muted'>4311</td><td><code>_najblizsze_zdjecie</code></td><td>Zwraca (czas, sciezka, odchylka) zdjecia najblizszego czasowi `cel`.</td></tr>
 <tr><td class='r muted'>4325</td><td><code>_nazwa_folderu_punktu</code></td><td>Nazwa podfolderu punktu, np. &#x27;punkt_01_50,0C&#x27; albo &#x27;punkt_07_23,0C_60RH&#x27;.</td></tr>
 <tr><td class='r muted'>4338</td><td><code>kopiuj_foto_punktow</code></td><td>Kopiuje zdjecia odpowiadajace WYBRANYM punktom: dla kazdego z 5 wierszy</td></tr>
-<tr><td class='r muted'>4423</td><td><code>_kolor_hex</code></td><td></td></tr>
-<tr><td class='r muted'>4430</td><td><code>_wiersz_oznaczony</code></td><td>Reprezentant punktu: komorka A wypelniona (nie na bialo) i pogrubiona.</td></tr>
-<tr><td class='r muted'>4443</td><td><code>punkty_z_obserwacji</code></td><td>Grupy reprezentantow oznaczonych w obserwacji -&gt; (grupy, problemy).</td></tr>
-<tr><td class='r muted'>4495</td><td><code>przypisz_punkty_pz</code></td><td>Punkt z PZ dla kazdej grupy (albo None) — jak w _wybierz_okna_wg_pz: kandydaci po</td></tr>
-<tr><td class='r muted'>4529</td><td><code>nazwa_obserwacji</code></td><td>Plik obserwacji kroku 2 dla pomiaru (ta sama nazwa, ktora krok 2 nadaje).</td></tr>
-<tr><td class='r muted'>4536</td><td><code>main_z_obserwacji</code></td><td>Krok 2b: protokol od nowa z punktow oznaczonych recznie w obserwacji.</td></tr>
-<tr><td class='r muted'>4629</td><td><code>main</code></td><td></td></tr>
+<tr><td class='r muted'>4427</td><td><code>_kolor_hex</code></td><td></td></tr>
+<tr><td class='r muted'>4434</td><td><code>_wiersz_oznaczony</code></td><td>Reprezentant punktu: komorka A wypelniona (nie na bialo) i pogrubiona.</td></tr>
+<tr><td class='r muted'>4447</td><td><code>punkty_z_obserwacji</code></td><td>Grupy reprezentantow oznaczonych w obserwacji -&gt; (grupy, problemy).</td></tr>
+<tr><td class='r muted'>4499</td><td><code>przypisz_punkty_pz</code></td><td>Punkt z PZ dla kazdej grupy (albo None) — jak w _wybierz_okna_wg_pz: kandydaci po</td></tr>
+<tr><td class='r muted'>4533</td><td><code>nazwa_obserwacji</code></td><td>Plik obserwacji kroku 2 dla pomiaru (ta sama nazwa, ktora krok 2 nadaje).</td></tr>
+<tr><td class='r muted'>4540</td><td><code>numer_pomiaru_z_obserwacji</code></td><td>&#x27;243_LA_TH_2026 - obserwacje.xlsx&#x27; -&gt; &#x27;243&#x27; (tak nazywa obserwacje krok 2).</td></tr>
+<tr><td class='r muted'>4546</td><td><code>zakres_czasu_obserwacji</code></td><td>(pierwszy, ostatni) czas z kol. A obserwacji albo (None, None).</td></tr>
+<tr><td class='r muted'>4561</td><td><code>txt_dla_obserwacji</code></td><td>Pliki TXT z folderu, z ktorych powstala obserwacja: czas ich pomiarow zachodzi</td></tr>
+<tr><td class='r muted'>4580</td><td><code>main_z_obserwacji</code></td><td>Krok 2b: protokol od nowa z punktow oznaczonych recznie w obserwacji.</td></tr>
+<tr><td class='r muted'>4707</td><td><code>main</code></td><td></td></tr>
 </tbody></table></details>
 <details><summary><code>generuj_porownanie.py</code> — 19 funkcji, 557 linii <span class='muted'>· KROK 6: arkusze obliczeniowe porownawcze.</span></summary>
 <table class="fn"><tbody>

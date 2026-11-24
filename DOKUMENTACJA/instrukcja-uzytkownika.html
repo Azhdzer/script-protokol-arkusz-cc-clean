@@ -68,7 +68,7 @@
   <h1>Generator arkuszy i protokołów<br>wzorcowania CC / CC‑04</h1>
   <div class="st">Instrukcja użytkownika i opis działania — od logów przyrządów do świadectw wzorcowania.</div>
   <!-- AUTO:statystyki -->
-<div class="stats"><div class="stat"><b>16</b><span>modułów Python</span></div><div class="stat"><b>19 504</b><span>linii kodu</span></div><div class="stat"><b>668</b><span>funkcji</span></div><div class="stat"><b>99</b><span>ustawień w panelu</span></div><div class="stat"><b>970</b><span>testów (53 plików)</span></div><div class="stat"><b>7</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 24.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
+<div class="stats"><div class="stat"><b>16</b><span>modułów Python</span></div><div class="stat"><b>19 638</b><span>linii kodu</span></div><div class="stat"><b>672</b><span>funkcji</span></div><div class="stat"><b>101</b><span>ustawień w panelu</span></div><div class="stat"><b>972</b><span>testów (53 plików)</span></div><div class="stat"><b>7</b><span>kroków obiegu</span></div></div><p class="muted small">Stan na 24.11.2026 (generowane z kodu: <code>aktualizuj_dokumentacje.py</code>).</p>
 <!-- /AUTO:statystyki -->
   <div class="meta">
     <b>Wersja 2.0</b> · listopad 2026 · opracował Artsiom Azhdzer<br>
@@ -741,6 +741,11 @@ flowchart TD
 <tr><td><span class='muted'>Wykrywanie suszenia</span><br><b>Suszenie — RH ponizej</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_SUSZ_RH_MAX</code></td><td>50.0</td><td></td></tr>
 <tr><td><span class='muted'>Zdjecia</span><br><b>Folder docelowy zdjec</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_FOTO_CEL</code></td><td>foto</td><td>Tu trafiaja skopiowane zdjecia, w podfolderach &#x27;punkt_NN_&lt;nastawa&gt;&#x27;. Sciezka wzgledna liczona od folderu roboczego.</td></tr>
 <tr><td><span class='muted'>Zdjecia</span><br><b>Tolerancja czasu zdjecia</b> <span class="tag z">zaawansowane</span></td><td><code>OBS_FOTO_TOL</code></td><td>1 min</td><td>Max odchylka czasu zdjecia od wiersza pomiarowego.</td></tr>
+</tbody></table>
+<h3 id="ust-obs_popr">2b · Protokół z obserwacji <span class="muted">— Punkty poprawione recznie w obserwacji (5 wierszy: wypelnienie + pogrubienie)  -&gt;  protokol od nowa, z danymi przyrzadow dla tych punktow</span></h3>
+<table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Obserwacja z poprawionymi punktami</b></td><td><code>POPR_OBSERWACJA</code></td><td>—</td><td>Arkusz obserwacji z kroku 2, w ktorym poprawiles punkty. Z jego nazwy bierze sie numer pomiaru, a wiec i protokol, ktory zostanie przebudowany.</td></tr>
+<tr><td><span class='muted'>Dane wejsciowe</span><br><b>Pliki TXT multimetru</b></td><td><code>POPR_TXT</code></td><td>—</td><td>Nic nie zaznaczone = pliki TXT dobierane automatycznie po czasie obserwacji (te, z ktorych powstala). Zaznacz recznie tylko w razie watpliwosci.</td></tr>
 </tbody></table>
 <h3 id="ust-ark">3 · Arkusze i Word <span class="muted">— Protokol  -&gt;  kopie arkuszy Excel + swiadectwa Word</span></h3>
 <table class="ust"><thead><tr><th>Grupa / ustawienie</th><th>Zmienna</th><th>Domyślnie</th><th>Opis</th></tr></thead><tbody>

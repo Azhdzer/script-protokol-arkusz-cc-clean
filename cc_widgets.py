@@ -500,7 +500,8 @@ class Pole(QWidget):
             pliki = sorted(
                 f for f in os.listdir(folder)
                 if f.lower().endswith(tuple(self.ust.wzorzec or (".xlsx",)))
-                and not f.startswith("~$"))
+                and not f.startswith("~$")
+                and (not self.ust.zawiera or self.ust.zawiera.lower() in f.lower()))
         except OSError:
             pliki = []
         self._kontrolka.blockSignals(True)

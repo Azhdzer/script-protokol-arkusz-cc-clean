@@ -66,12 +66,12 @@ class TestBudowaOkna(BazaOkna):
         # CC_FOLDER ma wlasne miejsce w naglowku; OBS_TXT_FILES i ANL_PLIKI to
         # listy plikow z zaznaczaniem (ListaPlikow), nie zwykle pola formularza.
         oczekiwane = set(C.WG_ENV) - {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI",
-                                      "POR_PROTOKOLY"}
+                                      "POR_PROTOKOLY", "POPR_TXT"}
         self.assertEqual(set(self.okno.pola), oczekiwane)
 
     def test_listy_plikow_sa_podpiete_do_ustawien(self):
         """Kazda lista z zaznaczaniem musi odpowiadac wpisowi w rejestrze."""
-        for env in ("OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI", "POR_PROTOKOLY"):
+        for env in ("OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI", "POR_PROTOKOLY", "POPR_TXT"):
             with self.subTest(env=env):
                 self.assertIn(env, C.WG_ENV)
                 self.assertEqual(C.WG_ENV[env].typ, "pliki")
@@ -118,7 +118,8 @@ class TestBudowaOkna(BazaOkna):
         """
         strony = {k: i for i, (k, _e, _o) in enumerate(C.KROKI)}
         # CC_FOLDER ma wlasne miejsce w naglowku, listy plikow to osobne widgety.
-        bez_pola = {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI", "POR_PROTOKOLY"}
+        bez_pola = {"CC_FOLDER", "OBS_TXT_FILES", "ANL_PLIKI", "OBS_PRZETW_PLIKI", "POR_PROTOKOLY",
+                    "POPR_TXT"}
         for u in C.USTAWIENIA:
             if u.poziom != C.PODSTAWOWY or u.env in bez_pola:
                 continue

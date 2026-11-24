@@ -42,6 +42,10 @@ KONTRAKT = {
          "['a.xls', 'b.xls']", "[]"),
     ],
     "generuj_obserwacje": [
+        # --- krok 2b: protokol z poprawionej obserwacji ---
+        ("POPR_OBSERWACJA", "m.OBSERWACJA_POPR", "243_LA_TH_2026 - obserwacje.xlsx",
+         "243_LA_TH_2026 - obserwacje.xlsx", ""),
+        ("POPR_TXT", "m.TXT_POPR", "a.txt;b.txt", "['a.txt', 'b.txt']", "[]"),
         # --- wyglad plikow (wspolne z krokiem 3) ---
         ("GEN_TAB_RATIO", "m.TAB_RATIO_ZAKLADEK", "0.5", "0.5", "0.85"),
         # --- pliki i podpisy ---

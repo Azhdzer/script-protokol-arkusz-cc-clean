@@ -122,6 +122,19 @@ class TestPunktyPZ(unittest.TestCase):
         self.assertEqual(wynik, [(60, 25), None, (70, None)])
 
 
+class TestWyborObserwacji(unittest.TestCase):
+
+    def test_numer_pomiaru_z_nazwy_obserwacji(self):
+        self.assertEqual(G.numer_pomiaru_z_obserwacji("243_LA_TH_2026 - obserwacje.xlsx"), "243")
+        self.assertEqual(G.numer_pomiaru_z_obserwacji(
+            "242, 245, 256_LA_TH_2026 - obserwacje CC.xlsx"), "242, 245, 256")
+        self.assertIsNone(G.numer_pomiaru_z_obserwacji("obserwacje.xlsx"))
+
+    def test_nazwa_protokolu_jak_w_kroku_2(self):
+        nr = G.numer_pomiaru_z_obserwacji(G.nazwa_obserwacji("243", "CC04"))
+        self.assertEqual(nr, "243")
+
+
 class TestCzyszczenieOznaczen(unittest.TestCase):
 
     def test_stare_oznaczenia_zdjete_naglowek_i_podpis_zostaja(self):

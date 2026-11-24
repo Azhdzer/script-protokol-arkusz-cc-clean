@@ -4417,6 +4417,10 @@ def kopiuj_foto_punktow(rep_groups, rows):
 # Reprezentanci jednego punktu leza w jednym segmencie nastaw, co ok. 1 min —
 # przerwa wieksza niz ta zaczyna kolejny punkt.
 MAKS_PRZERWA_REPREZENTANTOW = datetime.timedelta(minutes=10)
+# Wybor z panelu (strona 2b). Pusta obserwacja = ta z TXT zaznaczonych w kroku 2;
+# puste TXT = dobrane po czasie obserwacji.
+OBSERWACJA_POPR = C.tekst("POPR_OBSERWACJA", "")
+TXT_POPR = C.lista("POPR_TXT", [])
 _KOLORY_OSTRZEZENIA = {'F4B183'}   # pomaranczowy reprezentant kroku 2 (kryterium niespelnione)
 
 
@@ -4533,15 +4537,89 @@ def nazwa_obserwacji(measurement_id, file_type):
     return TEMPLATE.replace('xxx', measurement_id, 1)
 
 
+def numer_pomiaru_z_obserwacji(nazwa):
+    """'243_LA_TH_2026 - obserwacje.xlsx' -> '243' (tak nazywa obserwacje krok 2)."""
+    m = re.match(r"^(.+?)_LA_TH_", os.path.basename(str(nazwa)))
+    return m.group(1) if m else None
+
+
+def zakres_czasu_obserwacji(path):
+    """(pierwszy, ostatni) czas z kol. A obserwacji albo (None, None)."""
+    wb = openpyxl.load_workbook(path, read_only=True)
+    try:
+        czasy = []
+        for row in wb.worksheets[0].iter_rows(min_row=2, max_col=1, values_only=True):
+            v = row[0]
+            dt = v if isinstance(v, datetime.datetime) else (_s_to_dt(str(v)) if v else None)
+            if dt is not None:
+                czasy.append(dt)
+        return (min(czasy), max(czasy)) if czasy else (None, None)
+    finally:
+        wb.close()
+
+
+def txt_dla_obserwacji(t0, t1):
+    """
+    Pliki TXT z folderu, z ktorych powstala obserwacja: czas ich pomiarow zachodzi
+    na zakres [t0, t1] obserwacji. Pliki nie-pomiarowe (logi) sa pomijane.
+    """
+    wynik = []
+    for nazwa in _dostepne_txt():
+        p = os.path.join(FOLDER, nazwa)
+        try:
+            parse = parse_txt_cc04 if detect_file_type(open_txt(p)) == 'CC04' else parse_txt
+            _h, rows = parse(p)
+            czasy = [d for d in (_s_to_dt(r[0]) for r in rows if r and r[0]) if d is not None]
+        except Exception:
+            continue
+        if czasy and min(czasy) <= t1 and max(czasy) >= t0:
+            wynik.append(p)
+    return sorted(wynik, key=lambda p: os.path.basename(p).lower())
+
+
 def main_z_obserwacji():
     """Krok 2b: protokol od nowa z punktow oznaczonych recznie w obserwacji."""
     global CZYSC_STARE_OZNACZENIA
-    txt_files = resolve_txt_files()
-    measurement_id = parse_measurement_id(os.path.basename(txt_files[0]))
-    raw_lines = open_txt(txt_files[0])
-    file_type = detect_file_type(raw_lines)
-    obs_name = nazwa_obserwacji(measurement_id, file_type)
-    obs_path = os.path.join(FOLDER, obs_name)
+    if OBSERWACJA_POPR:
+        obs_name = os.path.basename(OBSERWACJA_POPR)
+        obs_path = (OBSERWACJA_POPR if os.path.isabs(OBSERWACJA_POPR)
+                    else os.path.join(FOLDER, OBSERWACJA_POPR))
+        measurement_id = numer_pomiaru_z_obserwacji(obs_name)
+        if not measurement_id:
+            print(f"[BLAD] Z nazwy '{obs_name}' nie da sie odczytac numeru pomiaru "
+                  f"(oczekiwano '<nr>_LA_TH_...').")
+            return 1
+        if not os.path.exists(obs_path):
+            print(f"[BLAD] Brak obserwacji '{obs_name}'.")
+            return 1
+        if TXT_POPR:
+            txt_files = sorted((_znajdz_txt(n) or os.path.join(FOLDER, n) for n in TXT_POPR),
+                               key=lambda p: os.path.basename(p).lower())
+        else:
+            t0, t1 = zakres_czasu_obserwacji(obs_path)
+            if t0 is None:
+                print(f"[BLAD] '{obs_name}': brak czasow w kolumnie A.")
+                return 1
+            txt_files = txt_dla_obserwacji(t0, t1)
+            if not txt_files:
+                print(f"[BLAD] Zaden plik TXT w folderze nie obejmuje czasu obserwacji "
+                      f"({t0:%Y-%m-%d %H:%M} – {t1:%Y-%m-%d %H:%M}). Zaznacz pliki recznie.")
+                return 1
+            print(f"Pliki TXT dobrane po czasie obserwacji ({t0:%Y-%m-%d %H:%M} – "
+                  f"{t1:%Y-%m-%d %H:%M}).")
+        brak = [p for p in txt_files if not os.path.exists(p)]
+        if brak:
+            print(f"[BLAD] Brak plikow TXT: {', '.join(os.path.basename(p) for p in brak)}")
+            return 1
+        raw_lines = open_txt(txt_files[0])
+        file_type = detect_file_type(raw_lines)
+    else:
+        txt_files = resolve_txt_files()
+        measurement_id = parse_measurement_id(os.path.basename(txt_files[0]))
+        raw_lines = open_txt(txt_files[0])
+        file_type = detect_file_type(raw_lines)
+        obs_name = nazwa_obserwacji(measurement_id, file_type)
+        obs_path = os.path.join(FOLDER, obs_name)
     print(f"Numer pomiaru : {measurement_id}  ({file_type})")
     print(f"Pliki TXT     : {', '.join(os.path.basename(p) for p in txt_files)}")
     print(f"Obserwacja    : {obs_name}")

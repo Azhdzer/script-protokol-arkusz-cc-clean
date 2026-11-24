@@ -74,7 +74,7 @@ Okno prowadzi przez obieg krok po kroku (lewa listwa), a każdy krok ma własny 
 | **Przygotowanie** | Lista kontrolna plików wejściowych z ich **wiekiem** — `Wzory.xls` sprzed wielu dni dostaje pomarańczowe „ZAKTUALIZUJ przed uruchomieniem”. |
 | **1 · Analiza logów** | Zaznaczanie plików z `excel_do_analizy/` (wybór zapamiętywany, nowe pliki niezaznaczone). |
 | **2 · Obserwacja** | Zaznaczanie plików TXT multimetru; podpisy, szablony, PZ, filtr, zdjęcia; **2a · Przetworniki** — pliki 1586A i karty przetworników. |
-| **2b · Protokół z obserwacji** | Instrukcja oznaczania, podgląd: które TXT, która obserwacja, który protokół zostanie przebudowany. |
+| **2b · Protokół z obserwacji** | Wybór obserwacji (lista tylko z plikami „obserwacje”), pliki TXT (puste = dobrane po czasie obserwacji), podgląd protokołu do przebudowy, instrukcja oznaczania. |
 | **3 · Arkusze i Word** | Protokół, szablony, etapy, numer i numeracja świadectw, higrometr K18, podpisy, czujniki komór, szablony Word. |
 | **4 · Warunki środowiskowe** | Protokół i czujnik pomieszczenia. |
 | **5 · Świadectwa z arkuszy** | Folder arkuszy, numer początkowy, numeracja. |
@@ -147,21 +147,21 @@ Rozdzielczość K/L: z Zestawienia (producent+typ), a gdy brak — z wahania cyf
 |---|---:|---:|---|
 | `analizuj_excele.py` | 1950 | 57 | Universal Excel/CSV parser for temperature & humidity data loggers. |
 | `app_entry.py` | 101 | 3 | punkt wejscia zamrozonej aplikacji (PyInstaller, jeden .exe). |
-| `app_gui.py` | 1272 | 56 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
-| `cc_config.py` | 749 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
+| `app_gui.py` | 1311 | 57 | panel sterujacy calym obiegiem wzorcowania (PySide6). |
+| `cc_config.py` | 765 | 16 | jedno zrodlo prawdy o ustawieniach calego obiegu. |
 | `cc_excel.py` | 360 | 19 | wlasne instancje Excela: uruchomienie i PEWNE zamkniecie. |
 | `cc_kopia.py` | 57 | 2 | kopia zapasowa pliku PRZED jego nadpisaniem. |
 | `cc_szablon_przetwornika.py` | 536 | 21 | szablon arkusza obliczeniowego dla PRZETWORNIKA. |
-| `cc_widgets.py` | 1390 | 79 | elementy interfejsu panelu (app_gui.py). |
+| `cc_widgets.py` | 1391 | 79 | elementy interfejsu panelu (app_gui.py). |
 | `cc_widok.py` | 145 | 4 | jedno miejsce, w ktorym ustalamy WYGLAD OKNA gotowego pliku .xlsx. |
 | `generuj_arkusze.py` | 5315 | 163 | Automatyczne tworzenie kopii arkuszy obliczeniowych na podstawie pliku protokołu. |
-| `generuj_obserwacje.py` | 4875 | 148 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
+| `generuj_obserwacje.py` | 4953 | 151 | Tworzy arkusz obserwacji CC na podstawie pliku TXT z danymi pomiarowymi. |
 | `generuj_porownanie.py` | 557 | 19 | KROK 6: arkusze obliczeniowe porownawcze. |
 | `generuj_swiadectwa.py` | 369 | 15 | krok 5: swiadectwa Word z GOTOWYCH arkuszy obliczeniowych. |
 | `protokol_z_obserwacji.py` | 25 | 1 | KROK 2b: protokol z poprawionej obserwacji. |
 | `pz_dane.py` | 1626 | 61 | wspolny modul do wczytywania danych przyrzadow z: |
 | `wypelnij_warunki.py` | 177 | 4 | krok 4: warunki srodowiskowe w protokole. |
-| `testy/` | — | 970 testów | 53 plików `test_*.py` (unittest) |
+| `testy/` | — | 972 testów | 53 plików `test_*.py` (unittest) |
 <!-- /AUTO:moduly_md -->
 
 ## 📥 Obsługiwane formaty loggerów (`analizuj_excele.py`)
@@ -223,7 +223,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1     # -> dist\ProtokolCC.exe
 $env:CC_TESTY_SZYBKIE=1; .venv\Scripts\python.exe -m unittest discover -s testy -t testy
 ```
 
-**970 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
+**972 testów** na czystym `unittest` (bez dodatkowych zależności), w tym pełny
 obieg 1 → 2 → 3 na prawdziwym pomiarze 188. Wszystko dzieje się w
 `testy/_piaskownica/` — testy nie dotykają plików projektu. Szczegóły:
 [`testy/README.md`](testy/README.md).
@@ -340,7 +340,9 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
   gdy krok 2 wybrał punkty nie tak (np. 61,2/25 i 61/59 poza tolerancją nastaw, 70,2 zamiast 70,3 —
   zlecenie 243), operator poprawia wybór w obserwacji jak zwykle: **5 wierszy z wypełnieniem i
   pogrubieniem** (kolor dowolny — także kolor motywu „zielony, akcent 6”), a z odrzuconych zdejmuje
-  pogrubienie. Krok 2b czyta te oznaczenia (dopasowanie po CZASIE, nie po numerze wiersza), buduje
+  pogrubienie. Obserwację wybiera się na stronie 2b (numer pomiaru i protokół — z jej nazwy), pliki TXT
+  zaznacza się albo zostawia puste — wtedy dobierane są te, których czas obejmuje obserwację.
+  Krok 2b czyta oznaczenia (dopasowanie po CZASIE, nie po numerze wiersza), buduje
   protokół od nowa z danymi przyrządów dla tych chwil i oznacza punkty w wynikach i zestawieniu
   **na nowo** (stare oznaczenia zdjęte). Punkt z PZ przypisany jak w kroku 2; punkt bez pary w PZ
   (powtórzenie) zostaje w protokole, tylko bez wyszarzania przyrządów. Zła liczba wierszy w grupie =

@@ -198,6 +198,7 @@ class Okno(QMainWindow):
         self.lista_przetw.odswiez(zachowaj=self.wartosci.get("OBS_PRZETW_PLIKI") or [])
         self.lista_logow.odswiez(zachowaj=self.wartosci.get("ANL_PLIKI") or [])
         self.lista_porown.odswiez(zachowaj=self.wartosci.get("POR_PROTOKOLY") or [])
+        self.lista_txt_popr.odswiez(zachowaj=self.wartosci.get("POPR_TXT") or [])
         for wiersz in self.kontrolne:
             wiersz.odswiez()
 
@@ -300,6 +301,7 @@ class Okno(QMainWindow):
             self.lista_txt.odswiez()
             self.lista_przetw.odswiez()
         elif klucz == "obs_popr":
+            self.lista_txt_popr.odswiez()
             self._odswiez_obserwacje_poprawiona()
         elif klucz == "porown":
             self.lista_porown.odswiez()
@@ -568,7 +570,34 @@ class Okno(QMainWindow):
     # ── strona: protokol z poprawionej obserwacji (krok 2b) ───────────────
     def _strona_obserwacja_poprawiona(self):
         strona, lay = self._strona_kroku("obs_popr")
-        karta, kl = self._karta("Jak oznaczyc punkty w obserwacji")
+
+        karta, kl = self._karta("Dane wejsciowe")
+        pole_obs = self._zbuduj_pole(C.WG_ENV["POPR_OBSERWACJA"])
+        pole_obs.zmienione.connect(lambda *_: self._odswiez_obserwacje_poprawiona())
+        kl.addWidget(pole_obs)
+        kl.addWidget(self._linia())
+        u_txt = C.WG_ENV["POPR_TXT"]
+        et = QLabel(u_txt.etykieta)
+        et.setObjectName("EtykietaPola")
+        op = QLabel(u_txt.opis)
+        op.setObjectName("OpisPola")
+        op.setWordWrap(True)
+        kl.addWidget(et)
+        kl.addWidget(op)
+        self.lista_txt_popr = ListaPlikow(
+            tuple(u_txt.wzorzec), lambda: self.folder,
+            opis_wielu="zostana sklejone chronologicznie")
+        self.lista_txt_popr.zmienione.connect(self._zmiana)
+        self.lista_txt_popr.zmienione.connect(self._odswiez_obserwacje_poprawiona)
+        kl.addWidget(self.lista_txt_popr)
+        kl.addWidget(self._linia())
+        self.lbl_obs_popr = QLabel("—")
+        self.lbl_obs_popr.setObjectName("OpisPola")
+        self.lbl_obs_popr.setWordWrap(True)
+        kl.addWidget(self.lbl_obs_popr)
+        lay.addWidget(karta)
+
+        karta2, kl2 = self._karta("Jak oznaczyc punkty w obserwacji")
         o = QLabel(
             "1. Otworz obserwacje z kroku 2 i popraw wybor punktow tak jak zwykle: "
             "kazdy punkt to 5 wierszy reprezentantow z WYPELNIENIEM i POGRUBIENIEM "
@@ -578,39 +607,46 @@ class Okno(QMainWindow):
             "3. Zapisz obserwacje i uruchom ten krok. Protokol powstaje OD NOWA "
             "(poprzedni trafia do kopii zapasowych): punkty w kolejnosci czasu, dane "
             "przyrzadow dla tych chwil, oznaczenia w wynikach i zestawieniu na nowo. "
-            "Warunki srodowiskowe (krok 4) wpisz potem ponownie.\n"
-            "Pliki TXT — te zaznaczone w kroku 2.")
+            "Warunki srodowiskowe (krok 4) wpisz potem ponownie.")
         o.setObjectName("OpisPola")
         o.setWordWrap(True)
-        kl.addWidget(o)
-        kl.addWidget(self._linia())
-        self.lbl_obs_popr = QLabel("—")
-        self.lbl_obs_popr.setObjectName("OpisPola")
-        self.lbl_obs_popr.setWordWrap(True)
-        kl.addWidget(self.lbl_obs_popr)
-        lay.addWidget(karta)
+        kl2.addWidget(o)
+        lay.addWidget(karta2)
         lay.addStretch(1)
         return strona
 
+    def _prefiks_obserwacji(self):
+        """'243_LA_TH_2026 - obserwacje.xlsx' -> '243' albo None."""
+        obs = str(self.wartosci.get("POPR_OBSERWACJA") or "")
+        m = re.match(r"^(.+?)_LA_TH_", os.path.basename(obs))
+        return m.group(1) if m else None
+
     def obserwacja_wybranego_pomiaru(self):
-        """(nazwa obserwacji, nazwa protokolu) dla TXT zaznaczonych w kroku 2 albo (None, None)."""
-        pliki = self.pliki_nadpisywane_przez_krok2()
-        obs = next((n for n in pliki if "obserwacje" in n.lower()
-                    and not re.search(r"_\d+\.xlsx$", n)), None)
-        prot = next((n for n in pliki if "protok" in n.lower()
-                     and not re.search(r"_\d+\.xlsx$", n)), None)
+        """(nazwa obserwacji, nazwa protokolu do przebudowy) dla wyboru na stronie 2b."""
+        obs = str(self.wartosci.get("POPR_OBSERWACJA") or "") or None
+        nr = self._prefiks_obserwacji()
+        prot = None
+        if nr:
+            try:
+                nazwy = sorted(os.listdir(self.folder))
+            except OSError:
+                nazwy = []
+            prot = next((n for n in nazwy if n.startswith(f"{nr}_LA_TH_")
+                         and "protok" in n.lower() and n.lower().endswith(".xlsx")
+                         and not re.search(r"_[^_ ]+\.xlsx$", n.split(" - ")[-1])), None)
         return obs, prot
 
-    def _odswiez_obserwacje_poprawiona(self):
-        txt = self.lista_txt.zaznaczone() if hasattr(self, "lista_txt") else []
+    def _odswiez_obserwacje_poprawiona(self, *_):
+        # self.wartosci jest juz aktualne: _zmiana (podpieta wczesniej) zbiera wartosci
+        # przed tym odswiezeniem.
+        if not hasattr(self, "lbl_obs_popr"):
+            return
         obs, prot = self.obserwacja_wybranego_pomiaru()
-        if not txt:
-            tekst = "Pliki TXT: nie zaznaczono (wybierz je w kroku 2)."
-        else:
-            tekst = (f"Pliki TXT: {', '.join(txt)}\n"
-                     f"Obserwacja: {obs or '— brak (najpierw krok 2)'}\n"
-                     f"Protokol do przebudowy: {prot or '— powstanie nowy'}")
-        self.lbl_obs_popr.setText(tekst)
+        txt = self.lista_txt_popr.zaznaczone()
+        self.lbl_obs_popr.setText(
+            f"Obserwacja: {obs or '— nie wybrano'}\n"
+            f"Pliki TXT: {', '.join(txt) if txt else 'dobrane automatycznie po czasie obserwacji'}\n"
+            f"Protokol do przebudowy: {prot or ('— powstanie nowy' if obs else '—')}")
 
     # ── strona: arkusze ──────────────────────────────────────────────────
     def _strona_arkusze(self):
@@ -714,7 +750,7 @@ class Okno(QMainWindow):
             return
         dom = C.domyslne()
         zachowaj = ("CC_FOLDER", "OBS_TXT_FILES", "OBS_PRZETW_PLIKI", "PRZETWORNIKI",
-                    "POR_PROTOKOLY")
+                    "POR_PROTOKOLY", "POPR_TXT", "POPR_OBSERWACJA")
         for env, pole in self.pola.items():
             if env in zachowaj:
                 continue
@@ -791,6 +827,7 @@ class Okno(QMainWindow):
         self.wartosci["OBS_PRZETW_PLIKI"] = self.lista_przetw.zaznaczone()
         self.wartosci["ANL_PLIKI"] = self.lista_logow.zaznaczone()
         self.wartosci["POR_PROTOKOLY"] = self.lista_porown.zaznaczone()
+        self.wartosci["POPR_TXT"] = self.lista_txt_popr.zaznaczone()
 
     def _zapisz(self):
         self._zbierz()
@@ -840,15 +877,17 @@ class Okno(QMainWindow):
                              f"→ '{pole.wartosc() or '(nie wybrano)'}'")
 
         if "obs_popr" in kroki:
-            if not self.lista_txt.zaznaczone():
-                p.append("Nie zaznaczono plikow TXT (krok 2) — krok 2b czyta te same pliki.")
-            else:
-                obs, _prot = self.obserwacja_wybranego_pomiaru()
-                if not obs:
-                    p.append("Brak obserwacji dla zaznaczonych plikow TXT — najpierw krok 2.")
-                elif os.path.exists(os.path.join(self.folder, "~$" + obs)):
-                    p.append(f"'{obs}' jest otwarta w Excelu — ZAPISZ ja przed uruchomieniem "
-                             f"(krok czyta ostatnio zapisana wersje).")
+            obs, _prot = self.obserwacja_wybranego_pomiaru()
+            if not obs:
+                p.append("Nie wybrano obserwacji (krok 2b).")
+            elif not os.path.exists(os.path.join(self.folder, obs)):
+                p.append(f"Nie znaleziono obserwacji: '{obs}'.")
+            elif not self._prefiks_obserwacji():
+                p.append(f"'{obs}' — z nazwy nie da sie odczytac numeru pomiaru "
+                         f"(oczekiwano '<nr>_LA_TH_...').")
+            elif os.path.exists(os.path.join(self.folder, "~$" + obs)):
+                p.append(f"'{obs}' jest otwarta w Excelu — ZAPISZ ja przed uruchomieniem "
+                         f"(krok czyta ostatnio zapisana wersje).")
         if "ark" in kroki:
             for env in ("CC_PROTOKOL", "CC_SZABLON"):
                 pole = self.pola.get(env)

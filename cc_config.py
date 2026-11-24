@@ -79,12 +79,12 @@ class Ust:
 
     __slots__ = ("env", "etykieta", "typ", "domyslna", "krok", "poziom",
                  "grupa", "opis", "wzorzec", "minimum", "maksimum", "krok_wart",
-                 "przyrostek", "kolumny", "podpowiedz")
+                 "przyrostek", "kolumny", "podpowiedz", "zawiera")
 
     def __init__(self, env, etykieta, typ, domyslna, krok, poziom=PODSTAWOWY,
                  grupa="Ogolne", opis="", wzorzec=None, minimum=None,
                  maksimum=None, krok_wart=None, przyrostek="", kolumny=None,
-                 podpowiedz=None):
+                 podpowiedz=None, zawiera=None):
         self.env = env
         self.etykieta = etykieta
         self.typ = typ
@@ -103,6 +103,9 @@ class Ust:
         # jeszcze nie wybrano — bez tego lista rozwijana wskazalaby pierwszy plik
         # alfabetycznie, czyli zwykle nie ten, o ktory chodzi.
         self.podpowiedz = podpowiedz
+        # Typ "plik": lista tylko z plikami, ktorych nazwa zawiera ten fragment
+        # (np. 'obserwacje') — w folderze roboczym leza dziesiatki arkuszy.
+        self.zawiera = zawiera
 
     def do_env(self, wartosc):
         """Zamienia wartosc na tekst przekazywany do podprocesu."""
@@ -343,6 +346,19 @@ _OBSERWACJA = [
     _U("OBS_FOTO_TOL", "Tolerancja czasu zdjecia", "minuty", 1, "obs",
        poziom=ZAAWANSOWANY, grupa="Zdjecia", minimum=1, maksimum=120,
        opis="Max odchylka czasu zdjecia od wiersza pomiarowego."),
+]
+
+# ── KROK 2b — protokol_z_obserwacji.py (generuj_obserwacje.main_z_obserwacji) ──
+_OBSERWACJA_POPRAWIONA = [
+    _U("POPR_OBSERWACJA", "Obserwacja z poprawionymi punktami", "plik", "", "obs_popr",
+       grupa="Dane wejsciowe", wzorzec=(".xlsx", ".xlsm"), zawiera="obserwacje",
+       podpowiedz="obserwacje",
+       opis="Arkusz obserwacji z kroku 2, w ktorym poprawiles punkty. Z jego nazwy "
+            "bierze sie numer pomiaru, a wiec i protokol, ktory zostanie przebudowany."),
+    _U("POPR_TXT", "Pliki TXT multimetru", "pliki", [], "obs_popr",
+       grupa="Dane wejsciowe", wzorzec=(".txt",),
+       opis="Nic nie zaznaczone = pliki TXT dobierane automatycznie po czasie "
+            "obserwacji (te, z ktorych powstala). Zaznacz recznie tylko w razie watpliwosci."),
 ]
 
 # ── KROK 3 — generuj_arkusze.py ──────────────────────────────────────────────
@@ -607,7 +623,7 @@ _POROWNANIE = [
             "pomijana."),
 ]
 
-USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _ARKUSZE + _WARUNKI + _SWIADECTWA + _POROWNANIE
+USTAWIENIA = _WSPOLNE + _ANALIZA + _OBSERWACJA + _OBSERWACJA_POPRAWIONA + _ARKUSZE + _WARUNKI + _SWIADECTWA + _POROWNANIE
 WG_ENV = {u.env: u for u in USTAWIENIA}
 
 
