@@ -2174,12 +2174,40 @@ def _numer_do_nazwy(rekord):
     return ewid if ewid and ewid != "-" else fabr
 
 
-def generuj_nazwe_pliku(szablon_nazwa, wartosc_O, wartosc_E, nr_przyrzadu=None):
+def _ewid_do_nazwy(rekord):
+    """
+    Nr ewidencyjny dopisywany na KONCU nazwy kopii ('... - 1 - 84186135 - 2122-DW-T.xlsx'):
+    Strona 2 kol. F, a gdy pusta — z PZ (po nr fabrycznym), jak na swiadectwie.
+    '' gdy brak nr ewidencyjnego albo gdy to on stoi juz w nazwie zamiast nr fabrycznego.
+    """
+    fabr = _cell_to_str(rekord.get("E")).strip()
+    if not fabr or fabr == "-":
+        return ""
+    ewid = _cell_to_str(rekord.get("F")).strip()
+    if not ewid or ewid == "-":
+        try:
+            _pzdev = _pz_mapa_arkusze().get(pz_dane.normalizuj_serial(fabr))
+        except Exception:
+            _pzdev = None
+        ewid = str((_pzdev.nr_ewid if _pzdev else "") or "").strip()
+    if not ewid or ewid == "-" or pz_dane.normalizuj_serial(ewid) == pz_dane.normalizuj_serial(fabr):
+        return ""
+    return ewid
+
+
+def nazwa_kopii(szablon_nazwa, rekord, nr_przyrzadu=None):
+    """Nazwa kopii przyrzadu: zlecenie, pozycja, nr fabryczny i (gdy jest) nr ewidencyjny."""
+    return generuj_nazwe_pliku(szablon_nazwa, rekord["O"], _numer_do_nazwy(rekord),
+                               nr_przyrzadu=nr_przyrzadu, nr_ewid=_ewid_do_nazwy(rekord))
+
+
+def generuj_nazwe_pliku(szablon_nazwa, wartosc_O, wartosc_E, nr_przyrzadu=None, nr_ewid=None):
     """
     Zastępuje w nazwie pliku szablonu:
       'xxx'      → wartosc_O        (numer zlecenia)
       '- N -'    → numer przyrzadu  (gdy podano nr_przyrzadu)
       'RH (CC)'  → wartosc_E        (nr fabryczny przyrzadu)
+                   + ' - nr_ewid'  (gdy podano nr ewidencyjny)
 
     Numer przyrzadu stoi w nazwie tuz PRZED nr fabrycznym ('... - 1 - RH (CC).xlsx')
     i musi odpowiadac pozycji przyrzadu w protokole (Przyrzady wzorcowane 1, 2, 3...).
@@ -2192,7 +2220,8 @@ def generuj_nazwe_pliku(szablon_nazwa, wartosc_O, wartosc_E, nr_przyrzadu=None):
         nazwa = re.sub(r'-\s*\d+\s*-\s*(?=RH\s*\(CC\))',
                        f'- {nr_przyrzadu} - ', nazwa, count=1)
     nazwa = nazwa.replace("xxx", wartosc_O, 1)
-    nazwa = nazwa.replace("RH (CC)", wartosc_E, 1)
+    wstaw = f"{wartosc_E} - {nr_ewid}" if nr_ewid else wartosc_E
+    nazwa = nazwa.replace("RH (CC)", wstaw, 1)
     return nazwa
 
 
@@ -2210,7 +2239,9 @@ def _parsuj_nazwe_pliku(nowa_nazwa):
               -> ('133', '2026', '1010223', 'ILAJ 5.4_11#21')
     Prefiks         : czesc przed '_LA_TH_'
     Rok             : 4 cyfry po '_LA_TH_'
-    Numer fabryczny : ostatni segment po ' - ' (bez rozszerzenia)
+    Numer fabryczny : segment po numerze przyrzadu (' - 1 - '); po nim moze stac
+                      jeszcze nr ewidencyjny ('... - 1 - 84186135 - 2122-DW-T.xlsx').
+                      Bez numeru przyrzadu w nazwie — ostatni segment po ' - '.
     Typ             : pierwszy segment po roku (model/typ przyrzadu pomiarowego)
     """
     nazwa = os.path.splitext(nowa_nazwa)[0]
@@ -2219,6 +2250,9 @@ def _parsuj_nazwe_pliku(nowa_nazwa):
         rok = reszta[:4]
         czesci_po_roku = [p.strip() for p in reszta[4:].split(" - ") if p.strip()]
         typ = czesci_po_roku[0] if czesci_po_roku else ""
+        poz = next((i for i, p in enumerate(czesci_po_roku[:-1]) if p.isdigit()), None)
+        if poz is not None:
+            return prefiks, rok, czesci_po_roku[poz + 1], typ
     else:
         prefiks = nazwa.split("_")[0]
         rok = str(datetime.datetime.now().year)
@@ -4878,8 +4912,8 @@ def utworz_kopie(folder, szablon_plik, dane, dane_zakladek, dane_ef, ark_wyniki,
         # numer przyrzadu = jego pozycja w protokole (Przyrzady wzorcowane 1, 2, 3...).
         # Bierzemy go z rekordu, bo po odfiltrowaniu przyrzadow bez pomiarow
         # indeks w petli nie odpowiada juz pozycji na Stronie 2.
-        nowa_nazwa = generuj_nazwe_pliku(szablon_plik, rekord["O"], _numer_do_nazwy(rekord),
-                                         nr_przyrzadu=rekord.get("_nr_przyrzadu", j + 1))
+        nowa_nazwa = nazwa_kopii(szablon_plik, rekord,
+                                 nr_przyrzadu=rekord.get("_nr_przyrzadu", j + 1))
         sciezka_kopii = os.path.join(folder_kopii, _bezpieczna_nazwa_pliku(nowa_nazwa))
         if os.path.exists(sciezka_kopii):
             print(f"  [UWAGA] Plik już istnieje, nadpisuję: {nowa_nazwa}")
@@ -5123,8 +5157,8 @@ def _main_impl():
         print("ETAP Excel pominięty (GENERUJ_EXCEL=False)")
         print(SEP)
 
-        nazwy = [generuj_nazwe_pliku(SZABLON_PLIK, rekord["O"], _numer_do_nazwy(rekord),
-                                     nr_przyrzadu=rekord.get("_nr_przyrzadu", j + 1))
+        nazwy = [nazwa_kopii(SZABLON_PLIK, rekord,
+                             nr_przyrzadu=rekord.get("_nr_przyrzadu", j + 1))
                  for j, rekord in enumerate(dane_s2)]
         brakujace = [nazwa for nazwa in nazwy if not os.path.exists(os.path.join(FOLDER, nazwa))]
         if brakujace:

@@ -40,7 +40,8 @@ NR_SW_WG_EWID = C.flaga("SW_NR_SW_WG_EWID", False)
 
 # Pliki w folderze, ktore nie sa arkuszami obliczeniowymi przyrzadow.
 _RE_NIE_ARKUSZ = re.compile(r'protok|obserwac|opracowanie|zestawienie', re.I)
-_RE_NR_PRZYRZADU = re.compile(r' - (\d+) - [^-]+$')
+# Pierwszy ' - N - ' w nazwie; po nr fabrycznym moze stac jeszcze nr ewidencyjny.
+_RE_NR_PRZYRZADU = re.compile(r' - (\d+) - ')
 
 
 def _nazwy_arkuszy(sciezka):

@@ -291,6 +291,11 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Nr ewidencyjny w nazwie arkusza obliczeniowego** (krok 3 i 6): po nr fabrycznym dopisywany jest
+  nr ewidencyjny — `243_LA_TH_2026 - … - 1 - 84186135 - 2122-DW-T.xlsx` (Strona 2 kol. F, a gdy pusta —
+  z PZ). Bez nr ewidencyjnego albo gdy jest taki sam jak fabryczny — nazwa jak dotąd. Nr fabryczny
+  i numer przyrządu odczytywane z nazwy (G6, PZ, krok 5) działają dla nowych i starych nazw.
+  Testy: [`testy/test_nazwa_kopii_ewid.py`](testy/test_nazwa_kopii_ewid.py).
 - **Przyrząd z wyświetlaczem i wyjściem analogowym = jeden arkusz** (zlecenie 239, VAISALA PTU303
   D4850103): gdy na Stronie 2 są dwa wiersze z tym samym nr fabrycznym — jeden z rozdzielczością odczytu
   (wyświetlacz, °C/%), drugi ze skalowaniem (wyjście V/mA) — krok 3 robi jeden arkusz z szablonu
