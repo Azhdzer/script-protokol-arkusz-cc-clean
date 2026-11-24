@@ -291,6 +291,12 @@ oraz `test_obieg.py::test_3_pasek_zakladek_widoczny_w_kazdym_pliku`.
 
 ## 🆕 Ostatnie usprawnienia
 
+- **Krok 5: data wzorcowania z protokołu, nie z K4 arkusza** (zlecenie 243): zakładka trafia na blok
+  Strony 3 po swoich odczytach (E/F przyrządu i Rs wzorca w C), a data i warunki środowiskowe są z tego
+  bloku. W arkuszach składanych ręcznie K4 bywało złe (dane z 17.11 z K4 = 11.11 albo 18.11) i 17.11
+  znikał ze świadectwa. K4 zostaje tylko dla zakładek bez pasującego bloku; w logu `[Data]` przy każdej
+  zmianie. Krok 5 czyta też protokoły z przekładkami (`_mega`) i Stronę 2 bez numerów w kolumnie A.
+  Testy: [`testy/test_swiadectwa_daty_z_protokolu.py`](testy/test_swiadectwa_daty_z_protokolu.py).
 - **Nr ewidencyjny w nazwie arkusza obliczeniowego** (krok 3 i 6): po nr fabrycznym dopisywany jest
   nr ewidencyjny — `243_LA_TH_2026 - … - 1 - 84186135 - 2122-DW-T.xlsx` (Strona 2 kol. F, a gdy pusta —
   z PZ). Bez nr ewidencyjnego albo gdy jest taki sam jak fabryczny — nazwa jak dotąd. Nr fabryczny

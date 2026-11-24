@@ -10,7 +10,10 @@ swiadectwa tak samo jak krok 3 (te same funkcje z generuj_arkusze):
   * wyniki kalibracji — z arkusza (zakladki punktow po przeliczeniu w Excelu),
   * producent / typ / nr fabryczny / zlecenie — z arkusza (E5, E6, nazwa pliku),
   * nr ewidencyjny, uzytkownik, zleceniodawca, zasilanie — z PZ (folder PZ albo ten folder),
-  * data wzorcowania — z K4 zakladek,
+  * data wzorcowania — z PROTOKOLU: zakladka trafia na blok Strony 3 po swoich odczytach
+    (E/F przyrzadu i Rs wzorca w C); gdy zadnego bloku nie ma — z K4 zakladki.
+    Arkusze skladane recznie z kilku pomiarow miewaja w K4 date innego dnia
+    (zlecenie 243: punkty z 17.11 z K4 = 18.11 — 17.11 znikal ze swiadectwa),
   * warunki srodowiskowe — z protokolow z tego folderu i z folderu glownego (tego samego
     zlecenia): zakladka trafia na blok Strony 3 o tej samej dacie i nastawie, najpierw
     z protokolu, w ktorym jest przyrzad, a t/RH pomieszczenia sa brane z F/G protokolu
@@ -32,6 +35,8 @@ import cc_kopia
 import pz_dane
 # Te same funkcje i stale co w kroku 3 — swiadectwo ma byc identyczne.
 import generuj_arkusze as A
+# Uklad Strony 3 z przekladkami (protokoly 'mega' z kroku 6).
+from generuj_porownanie import bloki_i_przekladki, wartosc_pomiaru
 
 FOLDER = A.FOLDER
 FOLDER_ARKUSZY = C.sciezka("SW_FOLDER", "Etap_5_ark_obl_to_word", FOLDER)
@@ -111,8 +116,9 @@ def sciezki_protokolow(nazwy_arkuszy):
 def odczytaj_arkusz(sciezka):
     """
     Dane przyrzadu z arkusza: {'E5', 'E6', 'G6', 'przetwornik', 'zakladki': [...]}.
-    Zakladki punktow (bez 'Wyniki'): {'nazwa', 'K4_val'}. Przetwornik — komorki z jego
-    zakladki (K10 'Przetwornik'), jak je wpisal krok 3.
+    Zakladki punktow (bez 'Wyniki'): {'nazwa', 'K4_val', 'E', 'F', 'C'} — E/F to odczyty
+    przyrzadu (E15:F19), C — wzorca (C15:C19); po nich zakladka trafia na blok protokolu.
+    Przetwornik — komorki z jego zakladki (K10 'Przetwornik'), jak je wpisal krok 3.
     """
     wb = openpyxl.load_workbook(sciezka, read_only=True, data_only=True)
     try:
@@ -120,7 +126,11 @@ def odczytaj_arkusz(sciezka):
         dane = {"zakladki": [], "przetwornik": None, "E5": None, "E6": None, "G6": None}
         for i, n in enumerate(zakladki):
             ws = wb[n]
-            dane["zakladki"].append({"nazwa": n, "K4_val": ws["K4"].value})
+            wiersze = list(ws.iter_rows(min_row=15, max_row=19,
+                                        min_col=3, max_col=6, values_only=True))
+            dane["zakladki"].append({"nazwa": n, "K4_val": ws["K4"].value,
+                                     "C": [w[0] for w in wiersze], "E": [w[2] for w in wiersze],
+                                     "F": [w[3] for w in wiersze]})
             if i == 0:
                 for k in ("E5", "E6", "G6"):
                     dane[k] = ws[k].value
@@ -137,19 +147,21 @@ def odczytaj_arkusz(sciezka):
 def bloki_protokolu(sciezka):
     """
     Bloki Strony 3 protokolu: nastawy (B, C), data i godziny (E), t/RH pomieszczenia
-    (F/G) — tak jak czyta je krok 4.
+    (F/G) — tak jak czyta je krok 4 — oraz odczyty: 'odczyty' {nr fabryczny: (E[5], F[5])}
+    kazdego przyrzadu ze Strony 2 i 'wzorce' (kolumny K..O: Rs multimetrow, tdp).
+    Wiersze-przekladki miedzy blokami (protokol 'mega') sa pomijane.
     """
-    wb = openpyxl.load_workbook(sciezka, read_only=True, data_only=True)
+    wb = openpyxl.load_workbook(sciezka, data_only=True)
     try:
-        seriale = _seriale_strony2(wb)
+        kolumny = _kolumny_przyrzadow(wb, A._czy_protokol_cc04(sciezka))
+        seriale = frozenset(kolumny)
         ws = wb[A.ARKUSZ_STRONA3]
-        wynik, nr = [], 0
-        while True:
-            r0 = A.START_ROW_S3 + nr * A.BLOK_S3
-            if ws.cell(row=r0, column=1).value in (None, ""):
-                return wynik
+        wynik = []
+        for nr, (rodzaj, r0) in enumerate(r for r in bloki_i_przekladki(ws) if r[0] == "blok"):
+            kolumna = lambda k: [ws.cell(row=r0 + i, column=k).value for i in range(A.BLOK_S3)]
             wynik.append({
-                "protokol": os.path.basename(sciezka), "nr": nr + 1, "seriale": seriale,
+                "protokol": os.path.basename(sciezka), "nr": ws.cell(row=r0, column=1).value or nr + 1,
+                "seriale": seriale,
                 "t": pz_dane._do_float(ws.cell(row=r0, column=2).value),
                 "rh": pz_dane._do_float(ws.cell(row=r0, column=3).value),
                 "data": A._parse_date_s3(ws.cell(row=r0 + 1, column=5).value),
@@ -157,8 +169,10 @@ def bloki_protokolu(sciezka):
                 "koniec": ws.cell(row=r0 + 3, column=5).value,
                 "fg": [(ws.cell(row=r0 + k, column=6).value, ws.cell(row=r0 + k, column=7).value)
                        for k in (2, 3)],
+                "odczyty": {s: (kolumna(k), kolumna(k + 1)) for s, k in kolumny.items()},
+                "wzorce": [kolumna(k) for k in range(11, 16)],
             })
-            nr += 1
+        return wynik
     finally:
         wb.close()
 
@@ -168,17 +182,63 @@ def _klucz_seriala(serial):
     return pz_dane.normalizuj_serial(A._bezpieczna_nazwa_pliku(str(serial)))
 
 
-def _seriale_strony2(wb):
-    """Znormalizowane nr fabryczne przyrzadow ze Strony 2 (kolumna E) — kto byl w protokole."""
+def _kolumny_przyrzadow(wb, cc04=False):
+    """
+    {znormalizowany nr fabryczny: kolumna odczytow t na Stronie 3} przyrzadow ze Strony 2
+    (kolumna E) — kto byl w protokole i gdzie sa jego odczyty.
+    """
     if A.ARKUSZ_STRONA2 not in wb.sheetnames:
-        return frozenset()
-    ws, wynik, row = wb[A.ARKUSZ_STRONA2], set(), A.START_ROW_S2
-    while ws.cell(row=row, column=1).value not in (None, ""):
+        return {}
+    ws, wynik, row = wb[A.ARKUSZ_STRONA2], {}, A.START_ROW_S2
+    kol0 = A.START_COL_E_S3 + (A.PRZESUNIECIE_STARTU_KOL_CC04 if cc04 else 0)
+    # Koniec listy = wiersz pusty w A/B/D/E/F/O (jak w kroku 6) — kolumna 'Nr' (A)
+    # bywa niewypelniona (243 protokol CC-04_3), wiec sama nie konczy listy.
+    while any(A._cell_to_str(ws.cell(row=row, column=c).value) for c in (1, 2, 4, 5, 6, 15)):
         serial = A._cell_to_str(ws.cell(row=row, column=5).value)
         if serial:
-            wynik.add(_klucz_seriala(serial))
+            wynik.setdefault(_klucz_seriala(serial), kol0 + (row - A.START_ROW_S2) * A.KROK_COL_EF)
         row += 1
-    return frozenset(wynik)
+    return wynik
+
+
+def _seriale_strony2(wb):
+    """Znormalizowane nr fabryczne przyrzadow ze Strony 2 (kolumna E) — kto byl w protokole."""
+    return frozenset(_kolumny_przyrzadow(wb))
+
+
+def _liczba(v):
+    v = wartosc_pomiaru(v)
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _te_same_odczyty(zakladka, protokol, minimum=1):
+    """Kazda liczba zakladki jest w protokolu na tej samej pozycji (puste w zakladce pomijane)."""
+    pary = [(_liczba(a), _liczba(b)) for a, b in zip(zakladka or (), protokol or ())]
+    pary = [(a, b) for a, b in pary if a is not None]
+    return len(pary) >= minimum and all(b is not None and abs(a - b) < 1e-6 for a, b in pary)
+
+
+def bloki_po_odczytach(zakladka, bloki, serial):
+    """
+    Bloki protokolow z tymi samymi odczytami co zakladka: E/F przyrzadu (o tym nr
+    fabrycznym) i Rs wzorca (C zakladki = ktoras z kolumn K..O bloku). Niezalezne od K4.
+    """
+    if not serial or not zakladka.get("E"):
+        return []
+    klucz = _klucz_seriala(serial)
+    c = zakladka.get("C")
+    z_c = any(_liczba(v) is not None for v in c or ())
+    wynik = []
+    for b in bloki:
+        od = (b.get("odczyty") or {}).get(klucz)
+        if not od or not _te_same_odczyty(zakladka["E"], od[0], minimum=3):
+            continue
+        if not _te_same_odczyty(zakladka.get("F"), od[1], minimum=0):
+            continue
+        if z_c and not any(_te_same_odczyty(c, w) for w in b.get("wzorce") or ()):
+            continue
+        wynik.append(b)
+    return wynik
 
 
 def dopasuj_blok(zakladka, bloki, serial=None):
@@ -188,7 +248,14 @@ def dopasuj_blok(zakladka, bloki, serial=None):
     Z podanym nr fabrycznym najpierw protokoly, w ktorych przyrzad jest na Stronie 2
     (zlecenie rozbite na kilka protokolow z tymi samymi punktami tego samego dnia);
     gdy go nie ma w zadnym — dowolny protokol z tym punktem.
+
+    Najpierw po ODCZYTACH (bloki_po_odczytach) — wtedy K4 zakladki nie musi sie zgadzac;
+    z kilku takich blokow (ten sam pomiar w kilku protokolach) — ten z data z K4.
     """
+    po_odczytach = bloki_po_odczytach(zakladka, bloki, serial)
+    if po_odczytach:
+        k4 = A._parse_date_s3(zakladka.get("K4_val"))
+        return min(po_odczytach, key=lambda b: b["data"] != k4)
     if serial:
         klucz = _klucz_seriala(serial)
         swoje = [b for b in bloki if klucz in b.get("seriale", ())]
@@ -210,6 +277,17 @@ def dopasuj_blok(zakladka, bloki, serial=None):
             continue
         pasujace.append((abs(b["t"] - t) + (abs(rh - rh_b) / 10.0 if rh is not None else 0), b))
     return min(pasujace, key=lambda x: x[0])[1] if pasujace else None
+
+
+def _data_z_protokolu(zakladka, blok):
+    """Data wzorcowania zakladki = data bloku protokolu (K4 tylko gdy bloku nie ma)."""
+    if blok.get("data") is None or A._parse_date_s3(zakladka.get("K4_val")) == blok["data"]:
+        return
+    nowa = blok["data"].strftime("%d.%m.%Y")
+    stara = A._parse_date_s3(zakladka.get("K4_val"))
+    print(f"    [Data] '{zakladka['nazwa']}': z protokolu {nowa} ({blok['protokol']}, punkt {blok['nr']}), "
+          f"w K4 arkusza {stara.strftime('%d.%m.%Y') if stara else 'brak'}.")
+    zakladka["K4_val"] = nowa
 
 
 def th_bloku(blok, dane_miesiaca):
@@ -331,6 +409,7 @@ def main():
                 if blok is None:
                     bez_bloku.append(zd["nazwa"])
                     continue
+                _data_z_protokolu(zd, blok)
                 th = th_bloku(blok, dane_miesiaca)
                 print(f"    [Srodowisko] '{zd['nazwa']}' -> {blok['protokol']}, punkt {blok['nr']}: "
                       + (", ".join(f"{t}/{rh}" for t, rh in th) or "BRAK danych czujnika"))
